@@ -6,7 +6,7 @@ import { Button } from '../ui/Button'
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/produtos': 'Produtos',
-  '/categorias': 'Categorias',
+  '/categorias': 'Cadastros',
   '/clientes': 'Clientes',
   '/estoque': 'Estoque',
   '/vendas': 'Vendas',

@@ -3,22 +3,25 @@ import { useMemo, useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Table } from '../../components/ui/Table'
-import { findProductForSale, friendlyCatalogError } from '../../lib/catalog'
+import { finalizeSale, findProductForSale, friendlyCatalogError } from '../../lib/catalog'
 import { formatCurrency } from '../../lib/utils'
+import type { PaymentMethod, Product } from '../../types/database'
+import { useAuth } from '../../hooks/useAuth'
 
 interface SaleLine {
   id: string
-  name: string
-  reference?: string | null
-  barcode: string
+  product: Product
   quantity: number
   unitPrice: number
 }
 
 export function SaleForm() {
+  const { user } = useAuth()
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<SaleLine[]>([])
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('dinheiro')
   const [loading, setLoading] = useState(false)
+  const [finishing, setFinishing] = useState(false)
   const [error, setError] = useState('')
   const total = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
@@ -53,9 +56,7 @@ export function SaleForm() {
           ...current,
           {
             id: product.id,
-            name: product.name,
-            reference: product.reference,
-            barcode: product.barcode ?? '',
+            product,
             quantity: 1,
             unitPrice: product.sale_price,
           },
@@ -73,8 +74,26 @@ export function SaleForm() {
     setItems((current) => current.filter((item) => item.id !== id))
   }
 
-  function finishSale() {
-    console.info('Preparado para salvar venda, itens e baixa de estoque no Supabase.', items)
+  async function finishSale() {
+    setFinishing(true)
+    setError('')
+
+    try {
+      await finalizeSale(
+        items.map((item) => ({
+          product: item.product,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+        paymentMethod,
+        user,
+      )
+      setItems([])
+    } catch (err) {
+      setError(friendlyCatalogError(err))
+    } finally {
+      setFinishing(false)
+    }
   }
 
   return (
@@ -84,7 +103,7 @@ export function SaleForm() {
           <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
           <Input
             className="pl-9"
-            placeholder="Buscar por nome, referência ou código de barras"
+            placeholder="Buscar por nome ou código de barras"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
@@ -108,9 +127,26 @@ export function SaleForm() {
         data={items}
         emptyMessage="Nenhum item adicionado."
         columns={[
-          { key: 'name', header: 'Produto', render: (item) => item.name },
-          { key: 'reference', header: 'Ref.', render: (item) => item.reference ?? '-' },
-          { key: 'barcode', header: 'Código', render: (item) => item.barcode },
+          {
+            key: 'name',
+            header: 'Produto',
+            render: (item) => (
+              <div>
+                <p className="font-medium text-gray-950">{item.product.name}</p>
+                <p className="text-xs text-gray-500">
+                  {[
+                    item.product.brand?.name,
+                    item.product.clothing_type?.name,
+                    item.product.size?.name,
+                    item.product.color?.name,
+                  ]
+                    .filter(Boolean)
+                    .join(' • ') || '-'}
+                </p>
+              </div>
+            ),
+          },
+          { key: 'barcode', header: 'Código', render: (item) => item.product.barcode ?? '-' },
           { key: 'quantity', header: 'Qtd.', render: (item) => item.quantity },
           { key: 'unit', header: 'Unitário', render: (item) => formatCurrency(item.unitPrice) },
           { key: 'total', header: 'Total', render: (item) => formatCurrency(item.quantity * item.unitPrice) },
@@ -129,19 +165,23 @@ export function SaleForm() {
       <div className="grid gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 md:grid-cols-[1fr_220px_180px] md:items-end">
         <label className="block space-y-1.5">
           <span className="text-sm font-medium text-gray-700">Forma de pagamento</span>
-          <select className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm">
-            <option>Dinheiro</option>
-            <option>Pix</option>
-            <option>Cartão de crédito</option>
-            <option>Cartão de débito</option>
+          <select
+            className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm"
+            value={paymentMethod}
+            onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+          >
+            <option value="dinheiro">Dinheiro</option>
+            <option value="pix">Pix</option>
+            <option value="cartao_credito">Cartão de crédito</option>
+            <option value="cartao_debito">Cartão de débito</option>
           </select>
         </label>
         <div>
           <p className="text-sm text-gray-500">Total da venda</p>
           <p className="text-2xl font-semibold text-gray-950">{formatCurrency(total)}</p>
         </div>
-        <Button onClick={finishSale} disabled={items.length === 0}>
-          Finalizar venda
+        <Button onClick={() => void finishSale()} disabled={items.length === 0 || finishing}>
+          {finishing ? 'Finalizando...' : 'Finalizar venda'}
         </Button>
       </div>
     </div>

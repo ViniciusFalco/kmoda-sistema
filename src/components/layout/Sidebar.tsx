@@ -15,7 +15,7 @@ import { cn } from '../../lib/utils'
 const menuItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Produtos', path: '/produtos', icon: Package },
-  { label: 'Categorias', path: '/categorias', icon: Tags },
+  { label: 'Cadastros', path: '/categorias', icon: Tags },
   { label: 'Clientes', path: '/clientes', icon: Users },
   { label: 'Estoque', path: '/estoque', icon: Boxes },
   { label: 'Vendas', path: '/vendas', icon: ShoppingBag },

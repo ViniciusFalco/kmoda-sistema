@@ -1,4 +1,5 @@
 import { Edit, Trash2 } from 'lucide-react'
+import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Table } from '../../components/ui/Table'
 import { formatCurrency } from '../../lib/utils'
@@ -18,19 +19,27 @@ export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) 
         {
           key: 'name',
           header: 'Nome',
-          render: (product) => (
-            <div>
-              <p className="font-medium text-gray-950">{product.name}</p>
-              <p className="text-xs text-gray-500">{product.barcode ?? 'Sem código'}</p>
-            </div>
-          ),
+          render: (product) => <p className="font-medium text-gray-950">{product.name}</p>,
         },
-        { key: 'brand', header: 'Marca', render: (product) => product.brand ?? '-' },
-        { key: 'reference', header: 'Referência', render: (product) => product.reference ?? '-' },
         { key: 'barcode', header: 'Código de barras', render: (product) => product.barcode ?? '-' },
-        { key: 'category', header: 'Categoria', render: (product) => product.category?.name ?? '-' },
-        { key: 'size', header: 'Tam.', render: (product) => product.size ?? '-' },
-        { key: 'color', header: 'Cor', render: (product) => product.color ?? '-' },
+        { key: 'brand', header: 'Marca', render: (product) => product.brand?.name ?? '-' },
+        { key: 'type', header: 'Tipo', render: (product) => product.clothing_type?.name ?? '-' },
+        { key: 'size', header: 'Tamanho', render: (product) => product.size?.name ?? '-' },
+        {
+          key: 'color',
+          header: 'Cor',
+          render: (product) =>
+            product.color ? (
+              <span className="inline-flex items-center gap-2">
+                {product.color.hex ? (
+                  <span className="h-3 w-3 rounded-full border border-gray-200" style={{ backgroundColor: product.color.hex }} />
+                ) : null}
+                {product.color.name}
+              </span>
+            ) : (
+              '-'
+            ),
+        },
         { key: 'price', header: 'Venda', render: (product) => formatCurrency(product.sale_price) },
         {
           key: 'stock',
@@ -45,9 +54,7 @@ export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) 
           key: 'status',
           header: 'Status',
           render: (product) => (
-            <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
-              {product.active ? 'Ativo' : 'Inativo'}
-            </span>
+            <Badge variant={product.active ? 'success' : 'neutral'}>{product.active ? 'Ativo' : 'Inativo'}</Badge>
           ),
         },
         {

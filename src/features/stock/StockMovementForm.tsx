@@ -1,75 +1,40 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
-import { listProducts } from '../../lib/catalog'
-import type { Product } from '../../types/database'
+import { SearchableSelect } from '../../components/ui/SearchableSelect'
+import type { Product, StockMovementReason, StockMovementType } from '../../types/database'
 
-interface StockMovementFormProps {
-  onSubmit: () => void
+export interface StockMovementFormValues {
+  product_id: string
+  type: StockMovementType
+  reason: StockMovementReason
+  quantity: string
+  notes: string
 }
 
-export function StockMovementForm({ onSubmit }: StockMovementFormProps) {
-  const [productQuery, setProductQuery] = useState('')
-  const [suggestions, setSuggestions] = useState<Product[]>([])
+interface StockMovementFormProps {
+  products: Product[]
+  submitting?: boolean
+  onSubmit: (values: StockMovementFormValues) => Promise<void> | void
+}
 
-  useEffect(() => {
-    let active = true
-
-    async function searchProducts() {
-      if (productQuery.trim().length < 2) {
-        return
-      }
-
-      try {
-        const products = await listProducts({ query: productQuery })
-        if (active) {
-          setSuggestions(products.slice(0, 8))
-        }
-      } catch {
-        if (active) {
-          setSuggestions([])
-        }
-      }
-    }
-
-    void searchProducts()
-
-    return () => {
-      active = false
-    }
-  }, [productQuery])
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+export function StockMovementForm({ products, submitting = false, onSubmit }: StockMovementFormProps) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    onSubmit()
+    const form = new FormData(event.currentTarget)
+    await onSubmit({
+      product_id: String(form.get('product_id') ?? ''),
+      type: String(form.get('type') ?? 'entrada') as StockMovementType,
+      reason: String(form.get('reason') ?? 'compra') as StockMovementReason,
+      quantity: String(form.get('quantity') ?? '1'),
+      notes: String(form.get('notes') ?? ''),
+    })
+    event.currentTarget.reset()
   }
 
   return (
-    <form className="grid gap-4 lg:grid-cols-5" onSubmit={handleSubmit}>
-      <div>
-        <Input
-          label="Produto"
-          name="product"
-          placeholder="Nome, referência ou código de barras"
-          list="stock-product-options"
-          value={productQuery}
-          onChange={(event) => {
-            setProductQuery(event.target.value)
-            if (event.target.value.trim().length < 2) {
-              setSuggestions([])
-            }
-          }}
-          required
-        />
-        <datalist id="stock-product-options">
-          {suggestions.map((product) => (
-            <option
-              key={product.id}
-              value={product.barcode ?? product.reference ?? product.name}
-            >{`${product.name}${product.reference ? ` - ${product.reference}` : ''}`}</option>
-          ))}
-        </datalist>
-      </div>
+    <form className="grid gap-4 xl:grid-cols-[2fr_140px_170px_120px_1fr_auto]" onSubmit={handleSubmit}>
+      <ProductField products={products} />
       <label className="block space-y-1.5">
         <span className="text-sm font-medium text-gray-700">Tipo</span>
         <select name="type" className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm">
@@ -89,11 +54,42 @@ export function StockMovementForm({ onSubmit }: StockMovementFormProps) {
         </select>
       </label>
       <Input label="Quantidade" name="quantity" type="number" min="1" defaultValue="1" required />
+      <Input label="Observação" name="notes" />
       <div className="flex items-end">
-        <Button type="submit" className="w-full">
-          Registrar
+        <Button type="submit" className="w-full" disabled={submitting}>
+          {submitting ? 'Salvando...' : 'Registrar'}
         </Button>
       </div>
     </form>
+  )
+}
+
+function ProductField({ products }: { products: Product[] }) {
+  const [value, setValue] = useState('')
+  const options = products.map((product) => ({
+    value: product.id,
+    label: product.name,
+    meta: [
+      product.barcode,
+      product.brand?.name,
+      product.clothing_type?.name,
+      product.size?.name,
+      product.color?.name,
+    ]
+      .filter(Boolean)
+      .join(' • '),
+  }))
+
+  return (
+    <>
+      <input type="hidden" name="product_id" value={value} required />
+        <SearchableSelect
+          label="Produto"
+          placeholder="Buscar por nome ou código de barras"
+          value={value}
+          options={options}
+          onChange={setValue}
+        />
+    </>
   )
 }

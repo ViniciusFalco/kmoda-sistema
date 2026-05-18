@@ -29,27 +29,71 @@ export interface Category {
   updated_at: string
 }
 
+export interface Brand {
+  id: string
+  name: string
+  description?: string | null
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ClothingType {
+  id: string
+  name: string
+  description?: string | null
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Size {
+  id: string
+  name: string
+  sort_order?: number | null
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Color {
+  id: string
+  name: string
+  hex?: string | null
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type RegistryKind = 'brands' | 'clothing_types' | 'sizes' | 'colors'
+export type RegistryItem = Brand | ClothingType | Size | Color
+
 export interface Product {
   id: string
   user_id?: string | null
   name: string
-  brand?: string | null
-  reference?: string | null
   barcode?: string | null
-  category_id?: string | null
+  brand_id?: string | null
+  clothing_type_id?: string | null
+  size_id?: string | null
+  color_id?: string | null
+  reference?: string | null
   cost_price: number
   sale_price: number
   suggested_price?: number | null
   stock_quantity: number
   min_stock: number
-  size?: string | null
-  color?: string | null
   description?: string | null
   active: boolean
   created_at: string
   updated_at: string
-  category?: Category | null
+  brand?: Brand | null
+  clothing_type?: ClothingType | null
+  size?: Size | null
+  color?: Color | null
 }
+
+export type ProductWithRelations = Product
 
 export interface Customer {
   id: string

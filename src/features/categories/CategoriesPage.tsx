@@ -1,36 +1,50 @@
-import { Edit, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
-import { EmptyState } from '../../components/ui/EmptyState'
-import { Modal } from '../../components/ui/Modal'
-import { Table } from '../../components/ui/Table'
 import {
-  createCategory,
-  deleteCategory,
+  createRegistryItem,
+  deleteRegistryItem,
   friendlyCatalogError,
-  listCategories,
-  updateCategory,
+  listRegistryItems,
+  updateRegistryItem,
+  type RegistryInput,
 } from '../../lib/catalog'
-import type { Category } from '../../types/database'
-import { useAuth } from '../../hooks/useAuth'
-import { CategoryForm, type CategoryFormValues } from './CategoryForm'
+import type { Brand, ClothingType, Color, RegistryItem, RegistryKind, Size } from '../../types/database'
+import { RegistryTab } from './RegistryTab'
+
+type TabKey = 'brands' | 'clothing_types' | 'sizes' | 'colors'
+
+const tabs: Array<{ key: TabKey; label: string; createLabel: string }> = [
+  { key: 'brands', label: 'Marcas', createLabel: 'Nova marca' },
+  { key: 'clothing_types', label: 'Tipos de roupa', createLabel: 'Novo tipo' },
+  { key: 'sizes', label: 'Tamanhos', createLabel: 'Novo tamanho' },
+  { key: 'colors', label: 'Cores', createLabel: 'Nova cor' },
+]
 
 export function CategoriesPage() {
-  const { user } = useAuth()
-  const [categories, setCategories] = useState<Category[]>([])
+  const [activeTab, setActiveTab] = useState<TabKey>('brands')
+  const [brands, setBrands] = useState<Brand[]>([])
+  const [clothingTypes, setClothingTypes] = useState<ClothingType[]>([])
+  const [sizes, setSizes] = useState<Size[]>([])
+  const [colors, setColors] = useState<Color[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
 
-  const loadCategories = useCallback(async () => {
+  const loadRegistries = useCallback(async () => {
     setLoading(true)
     setError('')
 
     try {
-      setCategories(await listCategories())
+      const [brandRows, typeRows, sizeRows, colorRows] = await Promise.all([
+        listRegistryItems('brands'),
+        listRegistryItems('clothing_types'),
+        listRegistryItems('sizes'),
+        listRegistryItems('colors'),
+      ])
+      setBrands(brandRows)
+      setClothingTypes(typeRows)
+      setSizes(sizeRows)
+      setColors(colorRows)
     } catch (err) {
       setError(friendlyCatalogError(err))
     } finally {
@@ -41,11 +55,20 @@ export function CategoriesPage() {
   useEffect(() => {
     let active = true
 
-    async function loadInitialCategories() {
+    async function loadInitial() {
       try {
-        const rows = await listCategories()
+        const [brandRows, typeRows, sizeRows, colorRows] = await Promise.all([
+          listRegistryItems('brands'),
+          listRegistryItems('clothing_types'),
+          listRegistryItems('sizes'),
+          listRegistryItems('colors'),
+        ])
         if (active) {
-          setCategories(rows)
+          setBrands(brandRows)
+          setClothingTypes(typeRows)
+          setSizes(sizeRows)
+          setColors(colorRows)
+          setError('')
         }
       } catch (err) {
         if (active) {
@@ -58,37 +81,20 @@ export function CategoriesPage() {
       }
     }
 
-    void loadInitialCategories()
+    void loadInitial()
 
     return () => {
       active = false
     }
   }, [])
 
-  function openCreateModal() {
-    setEditingCategory(null)
-    setModalOpen(true)
-  }
-
-  function openEditModal(category: Category) {
-    setEditingCategory(category)
-    setModalOpen(true)
-  }
-
-  async function handleSubmit(values: CategoryFormValues) {
+  async function handleCreate(kind: RegistryKind, values: RegistryInput) {
     setSubmitting(true)
     setError('')
 
     try {
-      if (editingCategory) {
-        await updateCategory(editingCategory.id, values)
-      } else {
-        await createCategory(values, user)
-      }
-
-      setModalOpen(false)
-      setEditingCategory(null)
-      await loadCategories()
+      await createRegistryItem(kind, values)
+      await loadRegistries()
     } catch (err) {
       setError(friendlyCatalogError(err))
     } finally {
@@ -96,8 +102,22 @@ export function CategoriesPage() {
     }
   }
 
-  async function handleDelete(category: Category) {
-    const confirmed = window.confirm(`Excluir a categoria "${category.name}"?`)
+  async function handleUpdate(kind: RegistryKind, id: string, values: RegistryInput) {
+    setSubmitting(true)
+    setError('')
+
+    try {
+      await updateRegistryItem(kind, id, values)
+      await loadRegistries()
+    } catch (err) {
+      setError(friendlyCatalogError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDelete(kind: RegistryKind, item: RegistryItem) {
+    const confirmed = window.confirm(`Excluir "${item.name}"?`)
     if (!confirmed) {
       return
     }
@@ -105,87 +125,87 @@ export function CategoriesPage() {
     setError('')
 
     try {
-      await deleteCategory(category.id)
-      await loadCategories()
+      await deleteRegistryItem(kind, item.id)
+      await loadRegistries()
     } catch (err) {
       setError(friendlyCatalogError(err))
     }
   }
 
-  return (
-    <Card
-      title="Categorias"
-      description="Organize produtos e prepare relacionamentos no Supabase."
-      action={
-        <Button onClick={openCreateModal}>
-          <Plus className="h-4 w-4" />
-          Nova categoria
-        </Button>
-      }
-    >
-      {error ? (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
+  const activeConfig = tabs.find((tab) => tab.key === activeTab) ?? tabs[0]
 
-      {loading ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-          Carregando categorias...
-        </div>
-      ) : categories.length === 0 ? (
-        <EmptyState
-          title="Nenhuma categoria cadastrada."
-          description="Crie a primeira categoria para organizar os produtos da loja."
-          action={<Button onClick={openCreateModal}>Nova categoria</Button>}
+  return (
+    <Card title="Cadastros" description="Marcas, tipos, tamanhos e cores usados no cadastro rápido de produtos.">
+      <div className="mb-5 flex flex-wrap gap-2 border-b border-gray-100 pb-4">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+              activeTab === tab.key
+                ? 'bg-gray-900 text-white'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-950'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'brands' ? (
+        <RegistryTab
+          kind="brands"
+          title={activeConfig.label}
+          createLabel={activeConfig.createLabel}
+          items={brands}
+          loading={loading}
+          submitting={submitting}
+          error={error}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
+        />
+      ) : activeTab === 'clothing_types' ? (
+        <RegistryTab
+          kind="clothing_types"
+          title={activeConfig.label}
+          createLabel={activeConfig.createLabel}
+          items={clothingTypes}
+          loading={loading}
+          submitting={submitting}
+          error={error}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
+        />
+      ) : activeTab === 'sizes' ? (
+        <RegistryTab
+          kind="sizes"
+          title={activeConfig.label}
+          createLabel={activeConfig.createLabel}
+          items={sizes}
+          loading={loading}
+          submitting={submitting}
+          error={error}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
         />
       ) : (
-        <Table
-          data={categories}
-          columns={[
-            { key: 'name', header: 'Nome', render: (category) => category.name },
-            { key: 'description', header: 'Descrição', render: (category) => category.description ?? '-' },
-            {
-              key: 'actions',
-              header: 'Ações',
-              render: (category) => (
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    aria-label="Editar categoria"
-                    onClick={() => openEditModal(category)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Excluir categoria"
-                    onClick={() => void handleDelete(category)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ),
-            },
-          ]}
+        <RegistryTab
+          kind="colors"
+          title={activeConfig.label}
+          createLabel={activeConfig.createLabel}
+          items={colors}
+          loading={loading}
+          submitting={submitting}
+          error={error}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
         />
       )}
-
-      <Modal
-        open={modalOpen}
-        title={editingCategory ? 'Editar categoria' : 'Nova categoria'}
-        onClose={() => setModalOpen(false)}
-      >
-        <CategoryForm
-          key={editingCategory?.id ?? 'new-category'}
-          category={editingCategory}
-          submitting={submitting}
-          onCancel={() => setModalOpen(false)}
-          onSubmit={handleSubmit}
-        />
-      </Modal>
     </Card>
   )
 }
