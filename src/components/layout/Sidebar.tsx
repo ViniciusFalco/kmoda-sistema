@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   Package,
   Settings,
-  ShoppingBag,
   Tags,
   Users,
 } from 'lucide-react'
@@ -17,9 +16,8 @@ const menuItems = [
   { label: 'Produtos', path: '/produtos', icon: Package },
   { label: 'Cadastros', path: '/categorias', icon: Tags },
   { label: 'Clientes', path: '/clientes', icon: Users },
+  { label: 'Caixa', path: '/caixa', icon: CreditCard },
   { label: 'Estoque', path: '/estoque', icon: Boxes },
-  { label: 'Vendas', path: '/vendas', icon: ShoppingBag },
-  { label: 'Fluxo de Caixa', path: '/caixa', icon: CreditCard },
   { label: 'Configurações', path: '/configuracoes', icon: Settings },
 ]
 

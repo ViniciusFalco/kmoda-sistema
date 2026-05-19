@@ -5,9 +5,7 @@ import { CashPage } from '../features/cash/CashPage'
 import { CategoriesPage } from '../features/categories/CategoriesPage'
 import { CustomersPage } from '../features/customers/CustomersPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
-import { OrdersPage } from '../features/orders/OrdersPage'
 import { ProductsPage } from '../features/products/ProductsPage'
-import { SalesPage } from '../features/sales/SalesPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
 import { StockPage } from '../features/stock/StockPage'
 import { AuthProvider } from '../hooks/useAuth'
@@ -23,12 +21,12 @@ export function AppRoutes() {
             <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/encomendas" element={<OrdersPage />} />
+              <Route path="/encomendas" element={<Navigate to="/dashboard" replace />} />
               <Route path="/produtos" element={<ProductsPage />} />
               <Route path="/categorias" element={<CategoriesPage />} />
               <Route path="/clientes" element={<CustomersPage />} />
               <Route path="/estoque" element={<StockPage />} />
-              <Route path="/vendas" element={<SalesPage />} />
+              <Route path="/vendas" element={<Navigate to="/caixa" replace />} />
               <Route path="/caixa" element={<CashPage />} />
               <Route path="/configuracoes" element={<SettingsPage />} />
             </Route>

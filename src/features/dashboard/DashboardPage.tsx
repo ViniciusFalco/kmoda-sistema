@@ -1,4 +1,4 @@
-import { Barcode, Boxes, PackagePlus, Receipt, ShoppingCart, Truck, Wallet } from 'lucide-react'
+import { Barcode, Boxes, PackagePlus, Receipt, ShoppingCart, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ActionCard } from '../../components/ui/ActionCard'
@@ -187,17 +187,16 @@ export function DashboardPage() {
         />
         <ActionCard
           title="Realizar venda"
-          description="Monte uma venda e dê baixa no estoque"
+          description="Abra o caixa e registre uma nova venda"
           icon={<ShoppingCart className="h-6 w-6" />}
-          onClick={() => navigate('/vendas')}
+          onClick={() => navigate('/caixa?acao=nova-venda')}
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <SummaryCard label="Vendas de hoje" value={formatCurrency(0)} icon={<Receipt className="h-5 w-5" />} />
         <SummaryCard label="Saldo do caixa" value={formatCurrency(0)} icon={<Wallet className="h-5 w-5" />} />
         <SummaryCard label="Estoque baixo" value={String(lowStockCount)} icon={<Boxes className="h-5 w-5" />} />
-        <SummaryCard label="Encomendas pendentes" value="2" icon={<Truck className="h-5 w-5" />} />
       </div>
 
       <Card title="Últimas movimentações" description="Resumo operacional do dia.">

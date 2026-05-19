@@ -63,7 +63,6 @@ export function StockMovementForm({
         >
           <option value="cadastro_inicial">Cadastro inicial</option>
           <option value="compra">Compra</option>
-          <option value="venda">Venda</option>
           <option value="ajuste_manual">Ajuste manual</option>
           <option value="troca">Troca</option>
           <option value="perda">Perda</option>

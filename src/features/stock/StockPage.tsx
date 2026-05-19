@@ -1,4 +1,4 @@
-import { ClipboardList, PackageMinus, PackagePlus, Search, SlidersHorizontal } from 'lucide-react'
+import { ClipboardList, PackagePlus, Search, SlidersHorizontal } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -11,6 +11,7 @@ import {
   listProducts,
   listStockMovements,
 } from '../../lib/catalog'
+import { formatDateBR } from '../../lib/utils'
 import type { Product, StockMovement, StockMovementReason, StockMovementType } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import { StockMovementForm, type StockMovementFormValues } from './StockMovementForm'
@@ -136,7 +137,7 @@ export function StockPage() {
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div>
             <h1 className="text-xl font-semibold text-gray-950">Estoque</h1>
-            <p className="mt-1 text-sm text-gray-500">Consulte peças e registre entradas, saídas ou ajustes.</p>
+            <p className="mt-1 text-sm text-gray-500">Consulte peças e registre entradas, perdas, trocas ou ajustes controlados.</p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Button onClick={() => setMovementPreset({ title: 'Entrada de produto', type: 'entrada', reason: 'compra' })}>
@@ -145,17 +146,17 @@ export function StockPage() {
             </Button>
             <Button
               variant="secondary"
-              onClick={() => setMovementPreset({ title: 'Saída de produto', type: 'saida', reason: 'venda' })}
-            >
-              <PackageMinus className="h-4 w-4" />
-              Saída
-            </Button>
-            <Button
-              variant="secondary"
               onClick={() => setMovementPreset({ title: 'Ajuste manual', type: 'entrada', reason: 'ajuste_manual' })}
             >
               <SlidersHorizontal className="h-4 w-4" />
               Ajuste
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setMovementPreset({ title: 'Registrar perda', type: 'saida', reason: 'perda' })}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Perda
             </Button>
             <Button variant="secondary" onClick={() => document.getElementById('stock-search')?.focus()}>
               <Search className="h-4 w-4" />
@@ -248,8 +249,18 @@ export function StockPage() {
                 ),
               },
               { key: 'type', header: 'Tipo', render: (movement) => (movement.type === 'entrada' ? 'Entrada' : 'Saída') },
-              { key: 'reason', header: 'Motivo', render: (movement) => movement.reason.replace('_', ' ') },
+              {
+                key: 'reason',
+                header: 'Motivo',
+                render: (movement) => (movement.reason === 'venda' ? 'Venda pelo caixa' : movement.reason.replace('_', ' ')),
+              },
               { key: 'quantity', header: 'Qtd.', render: (movement) => movement.quantity },
+              { key: 'date', header: 'Data', render: (movement) => formatDateBR(movement.created_at) },
+              {
+                key: 'cash',
+                header: 'Lançamento',
+                render: (movement) => movement.cash_movement?.movement_code ?? movement.sale_id?.slice(0, 8).toUpperCase() ?? '-',
+              },
               { key: 'notes', header: 'Observação', render: (movement) => movement.notes ?? '-' },
             ]}
           />
@@ -264,7 +275,7 @@ export function StockPage() {
       >
         <div className="mb-4 flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
           <ClipboardList className="h-4 w-4 text-gray-500" />
-          Selecione o produto, confirme a quantidade e registre a movimentação.
+          Selecione o produto, confirme a quantidade e registre a movimentação. Vendas devem ser registradas pelo Caixa.
         </div>
         <StockMovementForm
           products={products}

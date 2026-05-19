@@ -6,9 +6,7 @@ import {
   Palette,
   Ruler,
   Settings,
-  ShoppingBag,
   Tags,
-  Truck,
   Users,
   X,
 } from 'lucide-react'
@@ -19,10 +17,8 @@ import { Button } from '../ui/Button'
 
 const mainItems = [
   { label: 'Início', path: '/dashboard', icon: Home },
-  { label: 'Vendas', path: '/vendas', icon: ShoppingBag },
-  { label: 'Estoque', path: '/estoque', icon: Boxes },
   { label: 'Caixa', path: '/caixa', icon: CreditCard },
-  { label: 'Encomendas', path: '/encomendas', icon: Truck },
+  { label: 'Estoque', path: '/estoque', icon: Boxes },
 ]
 
 const registryItems = [
@@ -66,6 +62,7 @@ export function MenuDrawer({ open, onClose }: MenuDrawerProps) {
           <MenuGroup title="Operação" items={mainItems} onClose={onClose} />
           <MenuGroup title="Cadastros" items={registryItems} onClose={onClose} />
           <div className="mt-6 border-t border-gray-100 pt-4">
+            <p className="mb-2 px-2 text-xs font-semibold uppercase text-gray-400">Outros</p>
             <DrawerLink label="Configurações" path="/configuracoes" icon={Settings} onClose={onClose} />
           </div>
         </nav>

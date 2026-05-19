@@ -1,5 +1,5 @@
 import { Check, Plus, Search } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '../../lib/utils'
 import { Button } from './Button'
 
@@ -36,8 +36,38 @@ export function SearchableSelect({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const [dropdownStyle, setDropdownStyle] = useState({ top: 0, left: 0, width: 0 })
+  const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const selected = options.find((option) => option.value === value)
+
+  useEffect(() => {
+    if (!open || !rootRef.current) {
+      return
+    }
+
+    function updatePosition() {
+      const rect = rootRef.current?.getBoundingClientRect()
+      if (!rect) {
+        return
+      }
+
+      setDropdownStyle({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      })
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [open])
 
   const filteredOptions = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -60,7 +90,7 @@ export function SearchableSelect({
   }
 
   return (
-    <div className="relative space-y-1.5">
+    <div ref={rootRef} className="relative space-y-1.5">
       <span className="text-sm font-medium text-gray-700">{label}</span>
       <div
         className={cn(
@@ -109,7 +139,10 @@ export function SearchableSelect({
       {error ? <span className="text-xs text-red-600">{error}</span> : null}
 
       {open ? (
-        <div className="absolute z-[60] mt-1 max-h-72 w-full overflow-auto rounded-md border border-gray-200 bg-white p-1 text-sm shadow-lg">
+        <div
+          className="fixed z-[90] max-h-72 overflow-y-auto rounded-md border border-gray-200 bg-white p-1 text-sm shadow-xl"
+          style={{ top: dropdownStyle.top, left: dropdownStyle.left, width: dropdownStyle.width }}
+        >
           {filteredOptions.length === 0 ? (
             <div className="px-3 py-3 text-gray-500">Nenhum item encontrado.</div>
           ) : (

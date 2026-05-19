@@ -1,5 +1,5 @@
 export type EntityStatus = 'active' | 'inactive'
-export type PaymentMethod = 'dinheiro' | 'pix' | 'cartao_credito' | 'cartao_debito'
+export type PaymentMethod = 'dinheiro' | 'pix' | 'cartao_credito' | 'cartao_debito' | 'outro'
 export type StockMovementType = 'entrada' | 'saida'
 export type StockMovementReason =
   | 'cadastro_inicial'
@@ -8,7 +8,8 @@ export type StockMovementReason =
   | 'ajuste_manual'
   | 'troca'
   | 'perda'
-export type CashMovementType = 'entrada' | 'saida'
+export type CashMovementType = 'income' | 'expense'
+export type CashMovementOrigin = 'sale' | 'manual_expense' | 'manual_income' | 'stock'
 export type SaleStatus = 'aberta' | 'finalizada' | 'cancelada'
 
 export interface UserProfile {
@@ -118,6 +119,7 @@ export interface Sale {
   created_at: string
   updated_at: string
   customer?: Customer | null
+  sale_items?: SaleItem[]
 }
 
 export interface SaleItem {
@@ -135,23 +137,32 @@ export interface StockMovement {
   id: string
   user_id?: string | null
   product_id: string
+  sale_id?: string | null
+  cash_movement_id?: string | null
   type: StockMovementType
   reason: StockMovementReason
   quantity: number
   notes?: string | null
   created_at: string
   product?: Product | null
+  sale?: Sale | null
+  cash_movement?: CashMovement | null
 }
 
 export interface CashMovement {
   id: string
   user_id?: string | null
+  created_by?: string | null
   sale_id?: string | null
+  movement_code?: string | null
   type: CashMovementType
+  origin?: CashMovementOrigin | null
   description: string
   amount: number
   movement_date: string
-  payment_method: PaymentMethod
+  payment_method?: PaymentMethod | null
   notes?: string | null
   created_at: string
+  updated_at?: string | null
+  sale?: Sale | null
 }

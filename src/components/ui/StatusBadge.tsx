@@ -12,6 +12,8 @@ const statusMap: Record<string, { label: string; variant: 'neutral' | 'success' 
   cancelada: { label: 'Cancelada', variant: 'neutral' },
   entrada: { label: 'Entrada', variant: 'success' },
   saida: { label: 'Saída', variant: 'warning' },
+  income: { label: 'Venda', variant: 'success' },
+  expense: { label: 'Gasto', variant: 'warning' },
 }
 
 export function StatusBadge({ status }: StatusBadgeProps) {

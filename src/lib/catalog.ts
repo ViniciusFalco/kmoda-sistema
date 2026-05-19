@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import type {
   Brand,
   CashMovement,
+  CashMovementType,
   ClothingType,
   Color,
   PaymentMethod,
@@ -14,6 +15,7 @@ import type {
   StockMovementReason,
   StockMovementType,
 } from '../types/database'
+import { todayISODate } from './utils'
 
 type RegistryTableMap = {
   brands: Brand
@@ -55,6 +57,31 @@ function normalizeProduct(product: Product): Product {
     stock_quantity: normalizeNumber(product.stock_quantity),
     min_stock: normalizeNumber(product.min_stock),
     active: Boolean(product.active),
+  }
+}
+
+function normalizeCashMovement(movement: CashMovement): CashMovement {
+  const legacyType = movement.type as CashMovementType | 'entrada' | 'saida'
+  const type: CashMovementType = legacyType === 'entrada' ? 'income' : legacyType === 'saida' ? 'expense' : legacyType
+
+  return {
+    ...movement,
+    type,
+    origin: movement.origin ?? (movement.sale_id ? 'sale' : type === 'income' ? 'manual_income' : 'manual_expense'),
+    amount: Math.abs(normalizeNumber(movement.amount)),
+    sale: movement.sale
+      ? {
+          ...movement.sale,
+          total_amount: normalizeNumber(movement.sale.total_amount),
+          sale_items: movement.sale.sale_items?.map((item) => ({
+            ...item,
+            quantity: normalizeNumber(item.quantity),
+            unit_price: normalizeNumber(item.unit_price),
+            total_price: normalizeNumber(item.total_price),
+            product: item.product ? normalizeProduct(item.product) : null,
+          })),
+        }
+      : null,
   }
 }
 
@@ -364,7 +391,9 @@ export async function listStockMovements() {
           clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
           size:sizes(id, name, sort_order, active, created_at, updated_at),
           color:colors(id, name, hex, active, created_at, updated_at)
-        )
+        ),
+        sale:sales(id, total_amount, payment_method, status, sale_date, created_at, updated_at),
+        cash_movement:cash_movements(id, movement_code, description, amount, movement_date)
       `,
     )
     .order('created_at', { ascending: false })
@@ -386,88 +415,227 @@ export interface SaleLineInput {
   unitPrice: number
 }
 
+export interface CashExpenseInput {
+  description: string
+  amount: number
+  movementDate: string
+  paymentMethod: PaymentMethod
+  notes?: string | null
+  user?: User | null
+}
+
+export interface CashIncomeInput {
+  description: string
+  amount: number
+  movementDate: string
+  paymentMethod: PaymentMethod
+  notes?: string | null
+  user?: User | null
+}
+
+export interface SaleRegistrationInput {
+  items: SaleLineInput[]
+  paymentMethod: PaymentMethod
+  movementDate: string
+  notes?: string | null
+  user?: User | null
+}
+
+export interface CashMovementFilters {
+  type?: CashMovementType | 'all'
+  description?: string
+  minAmount?: number | null
+  maxAmount?: number | null
+  startDate?: string
+  endDate?: string
+  paymentMethod?: PaymentMethod | 'all'
+  page?: number
+  pageSize?: number
+}
+
+export interface CashMovementSearchResult {
+  data: CashMovement[]
+  count: number
+  page: number
+  pageSize: number
+}
+
+const cashMovementSelect = `
+  *,
+  sale:sales(
+    *,
+    sale_items(
+      *,
+      product:products(
+        *,
+        brand:brands(id, name, description, active, created_at, updated_at),
+        clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
+        size:sizes(id, name, sort_order, active, created_at, updated_at),
+        color:colors(id, name, hex, active, created_at, updated_at)
+      )
+    )
+  )
+`
+
+export async function listTodayCashMovements(date = todayISODate()) {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('cash_movements')
+    .select(cashMovementSelect)
+    .eq('movement_date', date)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return ((data ?? []) as CashMovement[]).map(normalizeCashMovement)
+}
+
+export async function searchCashMovements(filters: CashMovementFilters): Promise<CashMovementSearchResult> {
+  const client = getSupabase()
+  const page = filters.page ?? 1
+  const pageSize = filters.pageSize ?? 25
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+
+  let request = client
+    .from('cash_movements')
+    .select(cashMovementSelect, { count: 'exact' })
+    .order('movement_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .range(from, to)
+
+  if (filters.type && filters.type !== 'all') {
+    request = request.eq('type', filters.type)
+  }
+
+  if (filters.description?.trim()) {
+    request = request.ilike('description', `%${filters.description.trim()}%`)
+  }
+
+  if (filters.minAmount !== null && filters.minAmount !== undefined) {
+    request = request.gte('amount', filters.minAmount)
+  }
+
+  if (filters.maxAmount !== null && filters.maxAmount !== undefined) {
+    request = request.lte('amount', filters.maxAmount)
+  }
+
+  if (filters.startDate) {
+    request = request.gte('movement_date', filters.startDate)
+  }
+
+  if (filters.endDate) {
+    request = request.lte('movement_date', filters.endDate)
+  }
+
+  if (filters.paymentMethod && filters.paymentMethod !== 'all') {
+    request = request.eq('payment_method', filters.paymentMethod)
+  }
+
+  const { data, error, count } = await request
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return {
+    data: ((data ?? []) as CashMovement[]).map(normalizeCashMovement),
+    count: count ?? 0,
+    page,
+    pageSize,
+  }
+}
+
+export async function createCashExpense(input: CashExpenseInput) {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('cash_movements')
+    .insert({
+      user_id: input.user?.id ?? null,
+      created_by: input.user?.id ?? null,
+      type: 'expense',
+      origin: 'manual_expense',
+      description: input.description.trim(),
+      amount: Math.abs(input.amount),
+      movement_date: input.movementDate,
+      payment_method: input.paymentMethod,
+      notes: normalizeNullable(input.notes),
+    } as never)
+    .select(cashMovementSelect)
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return normalizeCashMovement(data as CashMovement)
+}
+
+export async function createCashIncome(input: CashIncomeInput) {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('cash_movements')
+    .insert({
+      user_id: input.user?.id ?? null,
+      created_by: input.user?.id ?? null,
+      type: 'income',
+      origin: 'manual_income',
+      description: input.description.trim(),
+      amount: Math.abs(input.amount),
+      movement_date: input.movementDate,
+      payment_method: input.paymentMethod,
+      notes: normalizeNullable(input.notes),
+    } as never)
+    .select(cashMovementSelect)
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return normalizeCashMovement(data as CashMovement)
+}
+
+export async function registerSaleWithCashAndStock(input: SaleRegistrationInput) {
+  if (input.items.length === 0) {
+    throw new Error('Adicione pelo menos um item para registrar a venda.')
+  }
+
+  const client = getSupabase()
+  const rpcItems = input.items.map((item) => ({
+    product_id: item.product.id,
+    quantity: item.quantity,
+    unit_price: item.unitPrice,
+  }))
+
+  const { data, error } = await client.rpc('register_sale_with_cash_and_stock', {
+    p_items: rpcItems,
+    p_payment_method: input.paymentMethod,
+    p_movement_date: input.movementDate,
+    p_notes: normalizeNullable(input.notes),
+    p_user_id: input.user?.id ?? null,
+  } as never)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data as { sale_id: string; cash_movement_id: string; movement_code: string }
+}
+
 export async function finalizeSale(
   items: SaleLineInput[],
   paymentMethod: PaymentMethod,
   user: User | null,
 ) {
-  if (items.length === 0) {
-    throw new Error('Adicione pelo menos um item para finalizar a venda.')
-  }
-
-  const client = getSupabase()
-  const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
-
-  for (const item of items) {
-    const { data: product, error } = await client
-      .from('products')
-      .select('id, stock_quantity')
-      .eq('id', item.product.id)
-      .single()
-
-    if (error) {
-      throw new Error(error.message)
-    }
-
-    if (Number(product.stock_quantity ?? 0) < item.quantity) {
-      throw new Error(`Estoque insuficiente para ${item.product.name}.`)
-    }
-  }
-
-  const { data: sale, error: saleError } = await client
-    .from('sales')
-    .insert({
-      user_id: user?.id ?? null,
-      total_amount: totalAmount,
-      payment_method: paymentMethod,
-      status: 'finalizada',
-    })
-    .select()
-    .single()
-
-  if (saleError) {
-    throw new Error(saleError.message)
-  }
-
-  const saleItems = items.map((item) => ({
-    sale_id: sale.id,
-    product_id: item.product.id,
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
-    total_price: item.quantity * item.unitPrice,
-  }))
-
-  const { error: itemsError } = await client.from('sale_items').insert(saleItems)
-  if (itemsError) {
-    throw new Error(itemsError.message)
-  }
-
-  for (const item of items) {
-    await createStockMovement({
-      productId: item.product.id,
-      type: 'saida',
-      reason: 'venda',
-      quantity: item.quantity,
-      notes: `Venda ${sale.id}`,
-      user,
-    })
-  }
-
-  const cashMovement: Omit<CashMovement, 'id' | 'created_at'> = {
-    user_id: user?.id ?? null,
-    sale_id: sale.id,
-    type: 'entrada',
-    description: `Venda ${sale.id}`,
-    amount: totalAmount,
-    movement_date: new Date().toISOString().slice(0, 10),
-    payment_method: paymentMethod,
-    notes: null,
-  }
-
-  const { error: cashError } = await client.from('cash_movements').insert(cashMovement)
-  if (cashError) {
-    throw new Error(cashError.message)
-  }
+  await registerSaleWithCashAndStock({
+    items,
+    paymentMethod,
+    movementDate: todayISODate(),
+    user,
+  })
 }
 
 export function friendlyCatalogError(error: unknown) {
