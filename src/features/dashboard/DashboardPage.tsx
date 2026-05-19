@@ -158,8 +158,8 @@ export function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-semibold text-gray-950">Central da loja</h1>
-        <p className="mt-2 text-gray-500">Escolha uma ação para começar.</p>
+        <h1 className="text-3xl  text-center font-semibold text-gray-950">Central da loja</h1>
+        <p className="mt-2 text-gray-500 text-center">Escolha uma ação para começar.</p>
       </div>
 
       {error ? (

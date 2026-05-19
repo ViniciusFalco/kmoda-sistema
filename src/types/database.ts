@@ -10,6 +10,7 @@ export type StockMovementReason =
   | 'perda'
 export type CashMovementType = 'income' | 'expense'
 export type CashMovementOrigin = 'sale' | 'manual_expense' | 'manual_income' | 'stock'
+export type CashSessionStatus = 'open' | 'closed'
 export type SaleStatus = 'aberta' | 'finalizada' | 'cancelada'
 
 export interface UserProfile {
@@ -154,6 +155,7 @@ export interface CashMovement {
   user_id?: string | null
   created_by?: string | null
   sale_id?: string | null
+  cash_session_id?: string | null
   movement_code?: string | null
   type: CashMovementType
   origin?: CashMovementOrigin | null
@@ -165,4 +167,21 @@ export interface CashMovement {
   created_at: string
   updated_at?: string | null
   sale?: Sale | null
+}
+
+export interface CashSession {
+  id: string
+  session_date: string
+  opening_amount: number
+  closing_amount?: number | null
+  expected_amount?: number | null
+  difference_amount?: number | null
+  status: CashSessionStatus
+  opened_at: string
+  closed_at?: string | null
+  opened_by?: string | null
+  closed_by?: string | null
+  notes?: string | null
+  created_at: string
+  updated_at: string
 }

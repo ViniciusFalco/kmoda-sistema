@@ -309,6 +309,7 @@ create table if not exists public.cash_movements (
   user_id uuid references auth.users(id) on delete set null,
   created_by uuid references auth.users(id) on delete set null,
   sale_id uuid references public.sales(id) on delete set null,
+  cash_session_id uuid,
   movement_code text not null,
   type text not null check (type in ('income', 'expense')),
   origin text not null default 'manual_expense' check (origin in ('sale', 'manual_expense', 'manual_income', 'stock')),
@@ -321,6 +322,27 @@ create table if not exists public.cash_movements (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.cash_sessions (
+  id uuid primary key default gen_random_uuid(),
+  session_date date not null,
+  opening_amount numeric(12, 2) not null default 0,
+  closing_amount numeric(12, 2),
+  expected_amount numeric(12, 2),
+  difference_amount numeric(12, 2),
+  status text not null default 'open' check (status in ('open', 'closed')),
+  opened_at timestamptz not null default now(),
+  closed_at timestamptz,
+  opened_by uuid references auth.users(id) on delete set null,
+  closed_by uuid references auth.users(id) on delete set null,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.cash_movements
+add constraint cash_movements_cash_session_id_fkey
+foreign key (cash_session_id) references public.cash_sessions(id) on delete set null;
+
 alter table public.stock_movements
 add column if not exists cash_movement_id uuid references public.cash_movements(id) on delete set null;
 
@@ -328,6 +350,8 @@ alter table public.stock_movements enable row level security;
 alter table public.sales enable row level security;
 alter table public.sale_items enable row level security;
 alter table public.cash_movements enable row level security;
+alter table public.cash_sessions enable row level security;
+alter table public.customers enable row level security;
 
 drop policy if exists "Authenticated users can view stock movements." on public.stock_movements;
 drop policy if exists "Authenticated users can create stock movements." on public.stock_movements;
@@ -356,6 +380,29 @@ create policy "Authenticated users can view cash movements." on public.cash_move
 for select to authenticated using (true);
 create policy "Authenticated users can create cash movements." on public.cash_movements
 for insert to authenticated with check (true);
+
+drop policy if exists "Authenticated users can view customers." on public.customers;
+drop policy if exists "Authenticated users can create customers." on public.customers;
+drop policy if exists "Authenticated users can update customers." on public.customers;
+drop policy if exists "Authenticated users can delete customers." on public.customers;
+create policy "Authenticated users can view customers." on public.customers
+for select to authenticated using (true);
+create policy "Authenticated users can create customers." on public.customers
+for insert to authenticated with check (true);
+create policy "Authenticated users can update customers." on public.customers
+for update to authenticated using (true) with check (true);
+create policy "Authenticated users can delete customers." on public.customers
+for delete to authenticated using (true);
+
+drop policy if exists "Authenticated users can view cash sessions." on public.cash_sessions;
+drop policy if exists "Authenticated users can create cash sessions." on public.cash_sessions;
+drop policy if exists "Authenticated users can update cash sessions." on public.cash_sessions;
+create policy "Authenticated users can view cash sessions." on public.cash_sessions
+for select to authenticated using (true);
+create policy "Authenticated users can create cash sessions." on public.cash_sessions
+for insert to authenticated with check (true);
+create policy "Authenticated users can update cash sessions." on public.cash_sessions
+for update to authenticated using (true) with check (true);
 
 drop trigger if exists profiles_set_updated_at on public.profiles;
 create trigger profiles_set_updated_at before update on public.profiles
@@ -401,6 +448,10 @@ drop trigger if exists cash_movements_set_code on public.cash_movements;
 create trigger cash_movements_set_code before insert on public.cash_movements
 for each row execute function public.set_cash_movement_code();
 
+drop trigger if exists cash_sessions_set_updated_at on public.cash_sessions;
+create trigger cash_sessions_set_updated_at before update on public.cash_sessions
+for each row execute function public.set_updated_at();
+
 create index if not exists products_barcode_idx on public.products (barcode);
 create index if not exists products_reference_idx on public.products (reference);
 create index if not exists products_brand_id_idx on public.products (brand_id);
@@ -416,14 +467,17 @@ create index if not exists stock_movements_cash_movement_id_idx on public.stock_
 create index if not exists cash_movements_movement_date_idx on public.cash_movements (movement_date);
 create index if not exists cash_movements_type_idx on public.cash_movements (type);
 create index if not exists cash_movements_origin_idx on public.cash_movements (origin);
+create index if not exists cash_movements_cash_session_id_idx on public.cash_movements (cash_session_id);
 create unique index if not exists cash_movements_movement_code_key on public.cash_movements (movement_code);
+create unique index if not exists cash_sessions_one_open_per_day_idx on public.cash_sessions (session_date) where status = 'open';
 
 create or replace function public.register_sale_with_cash_and_stock(
   p_items jsonb,
   p_payment_method text,
   p_movement_date date default current_date,
   p_notes text default null,
-  p_user_id uuid default auth.uid()
+  p_user_id uuid default auth.uid(),
+  p_cash_session_id uuid default null
 )
 returns table (
   sale_id uuid,
@@ -473,6 +527,7 @@ begin
   insert into public.cash_movements (
     user_id,
     created_by,
+    cash_session_id,
     sale_id,
     type,
     origin,
@@ -485,6 +540,7 @@ begin
   values (
     coalesce(p_user_id, auth.uid()),
     auth.uid(),
+    p_cash_session_id,
     v_sale_id,
     'income',
     'sale',
@@ -569,4 +625,4 @@ begin
 end;
 $$;
 
-grant execute on function public.register_sale_with_cash_and_stock(jsonb, text, date, text, uuid) to authenticated;
+grant execute on function public.register_sale_with_cash_and_stock(jsonb, text, date, text, uuid, uuid) to authenticated;

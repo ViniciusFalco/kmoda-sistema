@@ -1,5 +1,6 @@
 import { Plus, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -36,6 +37,7 @@ const emptyRegistries: ProductRegistries = {
 }
 
 export function ProductsPage() {
+  const [searchParams] = useSearchParams()
   const { user } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [registries, setRegistries] = useState<ProductRegistries>(emptyRegistries)
@@ -51,6 +53,11 @@ export function ProductsPage() {
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+
+  useEffect(() => {
+    const q = searchParams.get('q') ?? ''
+    setQuery(q)
+  }, [searchParams])
 
   const filters = useMemo(
     () => ({

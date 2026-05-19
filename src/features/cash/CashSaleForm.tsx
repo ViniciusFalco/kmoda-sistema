@@ -30,9 +30,11 @@ interface SaleLine {
 interface CashSaleFormProps {
   onCancel: () => void
   onSaved: () => void
+  cashSessionId?: string | null
+  sessionClosed?: boolean
 }
 
-export function CashSaleForm({ onCancel, onSaved }: CashSaleFormProps) {
+export function CashSaleForm({ onCancel, onSaved, cashSessionId, sessionClosed }: CashSaleFormProps) {
   const { user } = useAuth()
   const [mode, setMode] = useState<EntryMode>('product_sale')
   const [query, setQuery] = useState('')
@@ -165,6 +167,7 @@ export function CashSaleForm({ onCancel, onSaved }: CashSaleFormProps) {
         movementDate,
         notes,
         user,
+        cashSessionId,
       })
       onSaved()
     } catch (err) {
@@ -198,6 +201,7 @@ export function CashSaleForm({ onCancel, onSaved }: CashSaleFormProps) {
         paymentMethod,
         notes,
         user,
+        cashSessionId,
       })
       onSaved()
     } catch (err) {
@@ -359,6 +363,12 @@ export function CashSaleForm({ onCancel, onSaved }: CashSaleFormProps) {
           />
         </div>
       )}
+
+      {sessionClosed ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          O caixa do dia está fechado. O lançamento será registrado sem vínculo com caixa aberto.
+        </div>
+      ) : null}
 
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 

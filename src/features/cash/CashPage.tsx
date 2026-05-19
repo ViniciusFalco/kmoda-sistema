@@ -1,4 +1,4 @@
-import { ArrowDownCircle, ArrowUpCircle, History, Plus, Wallet } from 'lucide-react'
+import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, History, Plus, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Badge } from '../../components/ui/Badge'
@@ -9,16 +9,19 @@ import { Modal } from '../../components/ui/Modal'
 import { SummaryCard } from '../../components/ui/SummaryCard'
 import {
   friendlyCatalogError,
+  getPreviousOpenCashSession,
+  getTodayCashSession,
   listTodayCashMovements,
 } from '../../lib/catalog'
 import { formatCurrencyBRL, formatDateBR, todayISODate } from '../../lib/utils'
-import type { CashMovement } from '../../types/database'
+import type { CashMovement, CashSession } from '../../types/database'
 import { CashExpenseForm } from './CashExpenseForm'
 import { CashHistorySearchModal } from './CashHistorySearchModal'
 import { CashMovementDetailsModal } from './CashMovementDetailsModal'
 import { CashSaleForm } from './CashSaleForm'
+import { CloseCashSessionForm, OpenCashSessionForm } from './CashSessionModals'
 
-type CashModal = 'sale' | 'expense' | 'history' | null
+type CashModal = 'sale' | 'expense' | 'history' | 'open-session' | 'close-session' | null
 
 export function CashPage() {
   const location = useLocation()
@@ -26,6 +29,9 @@ export function CashPage() {
   const [activeModal, setActiveModal] = useState<CashModal>(initialModal)
   const [selectedMovement, setSelectedMovement] = useState<CashMovement | null>(null)
   const [movements, setMovements] = useState<CashMovement[]>([])
+  const [cashSession, setCashSession] = useState<CashSession | null>(null)
+  const [previousOpenSession, setPreviousOpenSession] = useState<CashSession | null>(null)
+  const [showPreviousAlert, setShowPreviousAlert] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -34,7 +40,15 @@ export function CashPage() {
     setError('')
 
     try {
-      setMovements(await listTodayCashMovements(todayISODate()))
+      const [movementRows, todaySession, previousSession] = await Promise.all([
+        listTodayCashMovements(todayISODate()),
+        getTodayCashSession(todayISODate()),
+        getPreviousOpenCashSession(todayISODate()),
+      ])
+      setMovements(movementRows)
+      setCashSession(todaySession)
+      setPreviousOpenSession(previousSession)
+      setShowPreviousAlert(Boolean(previousSession))
     } catch (err) {
       setError(friendlyCatalogError(err))
     } finally {
@@ -47,9 +61,16 @@ export function CashPage() {
 
     async function loadInitial() {
       try {
-        const rows = await listTodayCashMovements(todayISODate())
+        const [rows, todaySession, previousSession] = await Promise.all([
+          listTodayCashMovements(todayISODate()),
+          getTodayCashSession(todayISODate()),
+          getPreviousOpenCashSession(todayISODate()),
+        ])
         if (active) {
           setMovements(rows)
+          setCashSession(todaySession)
+          setPreviousOpenSession(previousSession)
+          setShowPreviousAlert(Boolean(previousSession))
         }
       } catch (err) {
         if (active) {
@@ -80,9 +101,9 @@ export function CashPage() {
     return {
       income,
       expense,
-      balance: income - expense,
+      balance: (cashSession?.opening_amount ?? 0) + income - expense,
     }
-  }, [movements])
+  }, [movements, cashSession?.opening_amount])
 
   async function handleSaved() {
     setActiveModal(null)
@@ -91,6 +112,36 @@ export function CashPage() {
 
   return (
     <div className="space-y-6">
+      {showPreviousAlert && previousOpenSession ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+            <div className="flex gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="font-semibold">Caixa anterior ainda está aberto</p>
+                <p className="mt-1">
+                  Existe um caixa aberto de {formatDateBR(previousOpenSession.session_date)} que ainda não foi fechado.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setCashSession(previousOpenSession)
+                  setActiveModal('close-session')
+                }}
+              >
+                Fechar caixa anterior
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setShowPreviousAlert(false)}>
+                Lembrar depois
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-col justify-between gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm lg:flex-row lg:items-center">
         <div>
           <h1 className="text-xl font-semibold text-gray-950">Caixa</h1>
@@ -111,6 +162,49 @@ export function CashPage() {
           </Button>
         </div>
       </div>
+
+      <Card
+        title={cashSession?.status === 'open' ? 'Caixa aberto' : cashSession?.status === 'closed' ? 'Caixa fechado' : 'Caixa do dia ainda não foi aberto'}
+        description={
+          cashSession
+            ? `Data ${formatDateBR(cashSession.session_date)} · Valor inicial ${formatCurrencyBRL(cashSession.opening_amount)}`
+            : 'Abra o caixa para registrar o valor inicial do dia.'
+        }
+        action={
+          <div className="flex gap-2">
+            {!cashSession ? (
+              <Button onClick={() => setActiveModal('open-session')}>Abrir caixa</Button>
+            ) : cashSession.status === 'open' ? (
+              <Button variant="secondary" onClick={() => setActiveModal('close-session')}>Fechar caixa</Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                // TODO: remover botão de teste antes da entrega final.
+                setPreviousOpenSession({
+                  id: 'test',
+                  session_date: '2026-05-18',
+                  opening_amount: 0,
+                  status: 'open',
+                  opened_at: '2026-05-18',
+                  created_at: '2026-05-18',
+                  updated_at: '2026-05-18',
+                })
+                setShowPreviousAlert(true)
+              }}
+            >
+              Testar lembrete de caixa aberto
+            </Button>
+          </div>
+        }
+      >
+        {cashSession?.status === 'closed' ? (
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+            Caixa fechado. Novos lançamentos ainda podem ser registrados, mas ficarão sem vínculo com caixa aberto.
+          </div>
+        ) : null}
+      </Card>
 
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
@@ -177,11 +271,47 @@ export function CashPage() {
       </Card>
 
       <Modal open={activeModal === 'sale'} title="Nova venda" onClose={() => setActiveModal(null)} size="6xl">
-        <CashSaleForm onCancel={() => setActiveModal(null)} onSaved={() => void handleSaved()} />
+        <CashSaleForm
+          onCancel={() => setActiveModal(null)}
+          onSaved={() => void handleSaved()}
+          cashSessionId={cashSession?.status === 'open' ? cashSession.id : null}
+          sessionClosed={cashSession?.status === 'closed'}
+        />
       </Modal>
 
       <Modal open={activeModal === 'expense'} title="Novo gasto" onClose={() => setActiveModal(null)} size="lg">
-        <CashExpenseForm onCancel={() => setActiveModal(null)} onSaved={() => void handleSaved()} />
+        <CashExpenseForm
+          onCancel={() => setActiveModal(null)}
+          onSaved={() => void handleSaved()}
+          cashSessionId={cashSession?.status === 'open' ? cashSession.id : null}
+          sessionClosed={cashSession?.status === 'closed'}
+        />
+      </Modal>
+
+      <Modal open={activeModal === 'open-session'} title="Abrir caixa" onClose={() => setActiveModal(null)} size="lg">
+        <OpenCashSessionForm
+          onCancel={() => setActiveModal(null)}
+          onSaved={(session) => {
+            setCashSession(session)
+            setActiveModal(null)
+          }}
+        />
+      </Modal>
+
+      <Modal open={activeModal === 'close-session' && cashSession !== null} title="Fechar caixa" onClose={() => setActiveModal(null)} size="2xl">
+        {cashSession ? (
+          <CloseCashSessionForm
+            session={cashSession}
+            income={totals.income}
+            expense={totals.expense}
+            onCancel={() => setActiveModal(null)}
+            onSaved={(session) => {
+              setCashSession(session)
+              setActiveModal(null)
+              setShowPreviousAlert(false)
+            }}
+          />
+        ) : null}
       </Modal>
 
       <CashHistorySearchModal

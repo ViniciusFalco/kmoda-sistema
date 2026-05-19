@@ -1,5 +1,4 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { LockKeyhole } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -52,14 +51,8 @@ export function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
       <Card className="w-full max-w-md">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-md bg-gray-900 text-white">
-            <LockKeyhole className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-gray-950">KModa Admin</h1>
-            <p className="text-sm text-gray-500">Acesse o painel administrativo</p>
-          </div>
+        <div className="mb-6 flex items-center justify-center">
+          <img src="/logo-4k.png" alt="KModa" className="h-36 w-auto object-contain sm:h-44" />
         </div>
 
         {!isSupabaseConfigured ? (

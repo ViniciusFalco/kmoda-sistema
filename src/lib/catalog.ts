@@ -3,9 +3,11 @@ import { supabase } from './supabase'
 import type {
   Brand,
   CashMovement,
+  CashSession,
   CashMovementType,
   ClothingType,
   Color,
+  Customer,
   PaymentMethod,
   Product,
   RegistryItem,
@@ -15,7 +17,7 @@ import type {
   StockMovementReason,
   StockMovementType,
 } from '../types/database'
-import { todayISODate } from './utils'
+import { getNowLocalTimestamp, todayISODate } from './utils'
 
 type RegistryTableMap = {
   brands: Brand
@@ -422,6 +424,7 @@ export interface CashExpenseInput {
   paymentMethod: PaymentMethod
   notes?: string | null
   user?: User | null
+  cashSessionId?: string | null
 }
 
 export interface CashIncomeInput {
@@ -431,12 +434,38 @@ export interface CashIncomeInput {
   paymentMethod: PaymentMethod
   notes?: string | null
   user?: User | null
+  cashSessionId?: string | null
 }
 
 export interface SaleRegistrationInput {
   items: SaleLineInput[]
   paymentMethod: PaymentMethod
   movementDate: string
+  notes?: string | null
+  user?: User | null
+  cashSessionId?: string | null
+}
+
+export interface CustomerInput {
+  name: string
+  phone?: string | null
+  email?: string | null
+  cpf?: string | null
+  notes?: string | null
+  user?: User | null
+}
+
+export interface OpenCashSessionInput {
+  openingAmount: number
+  notes?: string | null
+  user?: User | null
+}
+
+export interface CloseCashSessionInput {
+  sessionId: string
+  closingAmount: number
+  expectedAmount: number
+  differenceAmount: number
   notes?: string | null
   user?: User | null
 }
@@ -476,6 +505,163 @@ const cashMovementSelect = `
     )
   )
 `
+
+function normalizeCashSession(session: CashSession): CashSession {
+  return {
+    ...session,
+    opening_amount: normalizeNumber(session.opening_amount),
+    closing_amount: session.closing_amount === null || session.closing_amount === undefined ? null : Number(session.closing_amount),
+    expected_amount: session.expected_amount === null || session.expected_amount === undefined ? null : Number(session.expected_amount),
+    difference_amount: session.difference_amount === null || session.difference_amount === undefined ? null : Number(session.difference_amount),
+  }
+}
+
+export async function listCustomers() {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('customers')
+    .select('*')
+    .order('name', { ascending: true })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return (data ?? []) as Customer[]
+}
+
+export async function createCustomer(input: CustomerInput) {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('customers')
+    .insert({
+      user_id: input.user?.id ?? null,
+      name: input.name.trim(),
+      phone: normalizeNullable(input.phone),
+      email: normalizeNullable(input.email),
+      cpf: normalizeNullable(input.cpf),
+      notes: normalizeNullable(input.notes),
+    })
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data as Customer
+}
+
+export async function updateCustomer(id: string, input: CustomerInput) {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('customers')
+    .update({
+      name: input.name.trim(),
+      phone: normalizeNullable(input.phone),
+      email: normalizeNullable(input.email),
+      cpf: normalizeNullable(input.cpf),
+      notes: normalizeNullable(input.notes),
+    })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data as Customer
+}
+
+export async function deleteCustomer(id: string) {
+  const client = getSupabase()
+  const { error } = await client.from('customers').delete().eq('id', id)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+export async function getTodayCashSession(date = todayISODate()) {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('cash_sessions')
+    .select('*')
+    .eq('session_date', date)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data ? normalizeCashSession(data as CashSession) : null
+}
+
+export async function getPreviousOpenCashSession(date = todayISODate()) {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('cash_sessions')
+    .select('*')
+    .eq('status', 'open')
+    .lt('session_date', date)
+    .order('session_date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data ? normalizeCashSession(data as CashSession) : null
+}
+
+export async function openCashSession(input: OpenCashSessionInput) {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('cash_sessions')
+    .insert({
+      session_date: todayISODate(),
+      opening_amount: input.openingAmount,
+      status: 'open',
+      opened_by: input.user?.id ?? null,
+      notes: normalizeNullable(input.notes),
+    })
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return normalizeCashSession(data as CashSession)
+}
+
+export async function closeCashSession(input: CloseCashSessionInput) {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('cash_sessions')
+    .update({
+      closing_amount: input.closingAmount,
+      expected_amount: input.expectedAmount,
+      difference_amount: input.differenceAmount,
+      status: 'closed',
+      closed_at: getNowLocalTimestamp(),
+      closed_by: input.user?.id ?? null,
+      notes: normalizeNullable(input.notes),
+    })
+    .eq('id', input.sessionId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return normalizeCashSession(data as CashSession)
+}
 
 export async function listTodayCashMovements(date = todayISODate()) {
   const client = getSupabase()
@@ -555,6 +741,7 @@ export async function createCashExpense(input: CashExpenseInput) {
     .insert({
       user_id: input.user?.id ?? null,
       created_by: input.user?.id ?? null,
+      cash_session_id: input.cashSessionId ?? null,
       type: 'expense',
       origin: 'manual_expense',
       description: input.description.trim(),
@@ -580,6 +767,7 @@ export async function createCashIncome(input: CashIncomeInput) {
     .insert({
       user_id: input.user?.id ?? null,
       created_by: input.user?.id ?? null,
+      cash_session_id: input.cashSessionId ?? null,
       type: 'income',
       origin: 'manual_income',
       description: input.description.trim(),
@@ -616,6 +804,7 @@ export async function registerSaleWithCashAndStock(input: SaleRegistrationInput)
     p_movement_date: input.movementDate,
     p_notes: normalizeNullable(input.notes),
     p_user_id: input.user?.id ?? null,
+    p_cash_session_id: input.cashSessionId ?? null,
   } as never)
 
   if (error) {

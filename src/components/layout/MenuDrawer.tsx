@@ -1,6 +1,8 @@
 import {
   Boxes,
   CreditCard,
+  ChevronDown,
+  LogOut,
   Home,
   Package,
   Palette,
@@ -11,7 +13,11 @@ import {
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import { useAuth } from '../../hooks/useAuth'
+import { useDisplayName } from '../../hooks/useAppSettings'
+import { getGreeting } from '../../lib/appSettings'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/Button'
 
@@ -21,13 +27,11 @@ const mainItems = [
   { label: 'Estoque', path: '/estoque', icon: Boxes },
 ]
 
-const registryItems = [
-  { label: 'Produtos', path: '/produtos', icon: Package },
+const categoryItems = [
   { label: 'Marcas', path: '/categorias', icon: Tags },
   { label: 'Tipos de roupa', path: '/categorias', icon: Tags },
   { label: 'Tamanhos', path: '/categorias', icon: Ruler },
   { label: 'Cores', path: '/categorias', icon: Palette },
-  { label: 'Clientes', path: '/clientes', icon: Users },
 ]
 
 interface MenuDrawerProps {
@@ -36,6 +40,12 @@ interface MenuDrawerProps {
 }
 
 export function MenuDrawer({ open, onClose }: MenuDrawerProps) {
+  const location = useLocation()
+  const { user, signOut } = useAuth()
+  const displayName = useDisplayName()
+  const greeting = getGreeting()
+  const [categoriesOpen, setCategoriesOpen] = useState(location.pathname === '/categorias')
+
   return (
     <>
       <div
@@ -48,26 +58,96 @@ export function MenuDrawer({ open, onClose }: MenuDrawerProps) {
           open && 'translate-x-0',
         )}
       >
-        <div className="flex h-16 items-center justify-between border-b border-gray-100 px-5">
-          <div>
-            <p className="text-base font-semibold text-gray-950">KModa</p>
-            <p className="text-xs text-gray-500">Menu da loja</p>
-          </div>
-          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Fechar menu">
+        <div className="relative flex h-40 items-center justify-center border-b border-gray-100 px-5">
+          <img src="/logo.png" alt="KModa" className="h-32 w-auto max-w-[320px] object-contain" />
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Fechar menu" className="absolute right-5 top-1/2 -translate-y-1/2">
             <X className="h-5 w-5" />
           </Button>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-4 py-5">
           <MenuGroup title="Operação" items={mainItems} onClose={onClose} />
-          <MenuGroup title="Cadastros" items={registryItems} onClose={onClose} />
+          <div className="mb-6">
+            <p className="mb-2 px-2 text-xs font-semibold uppercase text-gray-400">Cadastros</p>
+            <div className="space-y-1">
+              <DrawerLink label="Produtos" path="/produtos" icon={Package} onClose={onClose} />
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition',
+                  location.pathname === '/categorias' ? 'bg-gray-100 text-gray-950' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-950',
+                )}
+                onClick={() => setCategoriesOpen((current) => !current)}
+              >
+                <Tags className="h-4 w-4" />
+                <span className="flex-1 text-left">Categorização de produtos</span>
+                <ChevronDown className={cn('h-4 w-4 transition', categoriesOpen && 'rotate-180')} />
+              </button>
+              {categoriesOpen ? (
+                <div className="ml-6 border-l border-gray-100 pl-2">
+                  {categoryItems.map((item) => (
+                    <SubDrawerLink key={item.label} {...item} active={location.pathname === item.path} onClose={onClose} />
+                  ))}
+                </div>
+              ) : null}
+              <DrawerLink label="Clientes" path="/clientes" icon={Users} onClose={onClose} />
+            </div>
+          </div>
           <div className="mt-6 border-t border-gray-100 pt-4">
             <p className="mb-2 px-2 text-xs font-semibold uppercase text-gray-400">Outros</p>
             <DrawerLink label="Configurações" path="/configuracoes" icon={Settings} onClose={onClose} />
           </div>
         </nav>
+
+        <div className="border-t border-gray-100 p-4">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-sm font-medium text-gray-900">
+              {greeting}, {displayName}
+            </p>
+            <p className="mt-1 truncate text-xs text-gray-500">{user?.email ?? 'Sessão ativa'}</p>
+            <Button
+              variant="secondary"
+              className="mt-4 w-full justify-center"
+              onClick={async () => {
+                await signOut()
+                onClose()
+              }}
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </Button>
+          </div>
+        </div>
       </aside>
     </>
+  )
+}
+
+function SubDrawerLink({
+  label,
+  path,
+  icon: Icon,
+  active,
+  onClose,
+}: {
+  label: string
+  path: string
+  icon: LucideIcon
+  active: boolean
+  onClose: () => void
+}) {
+  return (
+    <NavLink
+      to={path}
+      onClick={onClose}
+      className={cn(
+        'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition',
+        active ? 'font-medium text-gray-950' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </NavLink>
   )
 }
 

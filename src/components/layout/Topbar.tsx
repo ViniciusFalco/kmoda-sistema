@@ -1,27 +1,16 @@
-import { LogOut, Menu } from 'lucide-react'
-import { useLocation } from 'react-router-dom'
-import { useAuth } from '../../hooks/useAuth'
+import { Menu } from 'lucide-react'
+import { useDisplayName } from '../../hooks/useAppSettings'
+import { getGreeting } from '../../lib/appSettings'
 import { Button } from '../ui/Button'
 import { QuickSearch } from '../ui/QuickSearch'
-
-const pageTitles: Record<string, string> = {
-  '/dashboard': 'Central da loja',
-  '/produtos': 'Produtos',
-  '/categorias': 'Cadastros',
-  '/clientes': 'Clientes',
-  '/estoque': 'Estoque',
-  '/caixa': 'Caixa',
-  '/configuracoes': 'Configurações',
-}
 
 interface TopbarProps {
   onMenuClick: () => void
 }
 
 export function Topbar({ onMenuClick }: TopbarProps) {
-  const location = useLocation()
-  const { user, signOut } = useAuth()
-  const title = pageTitles[location.pathname] ?? 'KModa'
+  const displayName = useDisplayName()
+  const greeting = getGreeting()
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-gray-200 bg-white/95 px-4 backdrop-blur lg:px-8">
@@ -35,9 +24,12 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           <Menu className="h-5 w-5" />
           Menu
         </Button>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">KModa</p>
-          <h1 className="truncate text-lg font-semibold text-gray-950">{title}</h1>
+        <div className="flex min-w-0 items-center">
+          <img
+            src="/logo.png"
+            alt="KModa"
+            className="h-9 w-auto max-w-[140px] object-contain"
+          />
         </div>
       </div>
 
@@ -45,15 +37,10 @@ export function Topbar({ onMenuClick }: TopbarProps) {
         <QuickSearch placeholder="Buscar produto, cliente ou código" />
       </div>
 
-      <div className="flex shrink-0 items-center gap-3">
-        <div className="hidden text-right sm:block">
-          <p className="text-sm font-medium text-gray-800">Administrador</p>
-          <p className="max-w-48 truncate text-xs text-gray-500">{user?.email ?? 'Sessão ativa'}</p>
-        </div>
-        <Button variant="secondary" size="sm" onClick={signOut}>
-          <LogOut className="h-4 w-4" />
-          <span className="hidden sm:inline">Sair</span>
-        </Button>
+      <div className="hidden shrink-0 text-right sm:block">
+        <p className="text-sm font-medium text-gray-800">
+          {greeting}, {displayName}
+        </p>
       </div>
     </header>
   )

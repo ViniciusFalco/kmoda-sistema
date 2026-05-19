@@ -9,9 +9,11 @@ import { useAuth } from '../../hooks/useAuth'
 interface CashExpenseFormProps {
   onCancel: () => void
   onSaved: () => void
+  cashSessionId?: string | null
+  sessionClosed?: boolean
 }
 
-export function CashExpenseForm({ onCancel, onSaved }: CashExpenseFormProps) {
+export function CashExpenseForm({ onCancel, onSaved, cashSessionId, sessionClosed }: CashExpenseFormProps) {
   const { user } = useAuth()
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
@@ -46,6 +48,7 @@ export function CashExpenseForm({ onCancel, onSaved }: CashExpenseFormProps) {
         paymentMethod,
         notes,
         user,
+        cashSessionId,
       })
       onSaved()
     } catch (err) {
@@ -58,6 +61,11 @@ export function CashExpenseForm({ onCancel, onSaved }: CashExpenseFormProps) {
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {sessionClosed ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          O caixa do dia está fechado. O gasto será registrado sem vínculo com caixa aberto.
+        </div>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Input label="Descrição" value={description} onChange={(event) => setDescription(event.target.value)} required />
