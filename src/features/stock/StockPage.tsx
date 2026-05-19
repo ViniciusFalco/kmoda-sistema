@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { ClipboardList, PackageMinus, PackagePlus, Search, SlidersHorizontal } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
+import { Input } from '../../components/ui/Input'
+import { Modal } from '../../components/ui/Modal'
 import { Table } from '../../components/ui/Table'
 import {
   createStockMovement,
@@ -7,9 +11,15 @@ import {
   listProducts,
   listStockMovements,
 } from '../../lib/catalog'
-import type { Product, StockMovement } from '../../types/database'
+import type { Product, StockMovement, StockMovementReason, StockMovementType } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import { StockMovementForm, type StockMovementFormValues } from './StockMovementForm'
+
+interface MovementPreset {
+  title: string
+  type: StockMovementType
+  reason: StockMovementReason
+}
 
 export function StockPage() {
   const { user } = useAuth()
@@ -18,6 +28,31 @@ export function StockPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [productQuery, setProductQuery] = useState('')
+  const [movementPreset, setMovementPreset] = useState<MovementPreset | null>(null)
+
+  const filteredProducts = useMemo(() => {
+    const term = productQuery.trim().toLowerCase()
+
+    if (!term) {
+      return products.slice(0, 6)
+    }
+
+    return products
+      .filter((product) =>
+        [
+          product.name,
+          product.barcode,
+          product.brand?.name,
+          product.clothing_type?.name,
+          product.size?.name,
+          product.color?.name,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(term)),
+      )
+      .slice(0, 8)
+  }, [productQuery, products])
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -87,6 +122,7 @@ export function StockPage() {
         user,
       })
       await loadData()
+      setMovementPreset(null)
     } catch (err) {
       setError(friendlyCatalogError(err))
     } finally {
@@ -96,14 +132,92 @@ export function StockPage() {
 
   return (
     <div className="space-y-6">
-      <Card title="Registrar movimentação" description="Entradas, saídas e ajustes manuais de estoque.">
-        {error ? (
-          <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {error}
+      <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-950">Estoque</h1>
+            <p className="mt-1 text-sm text-gray-500">Consulte peças e registre entradas, saídas ou ajustes.</p>
           </div>
-        ) : null}
-        <StockMovementForm products={products} submitting={submitting} onSubmit={handleSubmit} />
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <Button onClick={() => setMovementPreset({ title: 'Entrada de produto', type: 'entrada', reason: 'compra' })}>
+              <PackagePlus className="h-4 w-4" />
+              Entrada
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setMovementPreset({ title: 'Saída de produto', type: 'saida', reason: 'venda' })}
+            >
+              <PackageMinus className="h-4 w-4" />
+              Saída
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setMovementPreset({ title: 'Ajuste manual', type: 'entrada', reason: 'ajuste_manual' })}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Ajuste
+            </Button>
+            <Button variant="secondary" onClick={() => document.getElementById('stock-search')?.focus()}>
+              <Search className="h-4 w-4" />
+              Consultar
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <Card
+        title="Consultar produto"
+        description="Busque por nome, código de barras, marca, tipo, cor ou tamanho."
+      >
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+          <Input
+            id="stock-search"
+            className="h-12 pl-10 text-base"
+            placeholder="Digite nome, código de barras, marca, tipo, cor ou tamanho"
+            value={productQuery}
+            onChange={(event) => setProductQuery(event.target.value)}
+          />
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <Table
+            data={filteredProducts}
+            emptyMessage={loading ? 'Carregando produtos...' : 'Nenhum produto encontrado.'}
+            columns={[
+              {
+                key: 'product',
+                header: 'Produto',
+                render: (product) => (
+                  <div>
+                    <p className="font-medium text-gray-950">{product.name}</p>
+                    <p className="text-xs text-gray-500">{product.barcode ?? 'Sem código de barras'}</p>
+                  </div>
+                ),
+              },
+              { key: 'brand', header: 'Marca', render: (product) => product.brand?.name ?? '-' },
+              { key: 'type', header: 'Tipo', render: (product) => product.clothing_type?.name ?? '-' },
+              { key: 'size', header: 'Tamanho', render: (product) => product.size?.name ?? '-' },
+              { key: 'color', header: 'Cor', render: (product) => product.color?.name ?? '-' },
+              {
+                key: 'stock',
+                header: 'Estoque',
+                render: (product) => (
+                  <span className={product.stock_quantity <= product.min_stock ? 'font-semibold text-red-700' : 'text-gray-700'}>
+                    {product.stock_quantity}
+                  </span>
+                ),
+              },
+            ]}
+          />
+        </div>
       </Card>
+
+      {error ? (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
 
       <Card title="Histórico de movimentações">
         {loading ? (
@@ -141,6 +255,25 @@ export function StockPage() {
           />
         )}
       </Card>
+
+      <Modal
+        open={movementPreset !== null}
+        title={movementPreset?.title ?? 'Movimentação de estoque'}
+        onClose={() => setMovementPreset(null)}
+        size="5xl"
+      >
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+          <ClipboardList className="h-4 w-4 text-gray-500" />
+          Selecione o produto, confirme a quantidade e registre a movimentação.
+        </div>
+        <StockMovementForm
+          products={products}
+          submitting={submitting}
+          defaultType={movementPreset?.type}
+          defaultReason={movementPreset?.reason}
+          onSubmit={handleSubmit}
+        />
+      </Modal>
     </div>
   )
 }

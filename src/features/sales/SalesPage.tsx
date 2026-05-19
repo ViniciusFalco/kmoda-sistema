@@ -3,7 +3,7 @@ import { SaleForm } from './SaleForm'
 
 export function SalesPage() {
   return (
-    <Card title="Registrar venda" description="Busque produtos por nome ou código de barras e finalize a venda.">
+    <Card title="Venda rápida" description="Busque produtos, monte a venda e finalize com baixa automática no estoque.">
       <SaleForm />
     </Card>
   )

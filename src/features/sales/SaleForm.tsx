@@ -98,12 +98,13 @@ export function SaleForm() {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
+          <Search className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
           <Input
-            className="pl-9"
-            placeholder="Buscar por nome ou código de barras"
+            className="h-12 pl-10 text-base"
+            placeholder="Buscar produto ou escanear código de barras"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
@@ -114,59 +115,62 @@ export function SaleForm() {
             }}
           />
         </div>
-        <Button onClick={() => void addProduct()} disabled={loading}>
+        <Button onClick={() => void addProduct()} disabled={loading} className="h-12 px-6">
           {loading ? 'Buscando...' : 'Adicionar item'}
         </Button>
+        </div>
       </div>
 
       {error ? (
         <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
       ) : null}
 
-      <Table
-        data={items}
-        emptyMessage="Nenhum item adicionado."
-        columns={[
-          {
-            key: 'name',
-            header: 'Produto',
-            render: (item) => (
-              <div>
-                <p className="font-medium text-gray-950">{item.product.name}</p>
-                <p className="text-xs text-gray-500">
-                  {[
-                    item.product.brand?.name,
-                    item.product.clothing_type?.name,
-                    item.product.size?.name,
-                    item.product.color?.name,
-                  ]
-                    .filter(Boolean)
-                    .join(' • ') || '-'}
-                </p>
-              </div>
-            ),
-          },
-          { key: 'barcode', header: 'Código', render: (item) => item.product.barcode ?? '-' },
-          { key: 'quantity', header: 'Qtd.', render: (item) => item.quantity },
-          { key: 'unit', header: 'Unitário', render: (item) => formatCurrency(item.unitPrice) },
-          { key: 'total', header: 'Total', render: (item) => formatCurrency(item.quantity * item.unitPrice) },
-          {
-            key: 'remove',
-            header: '',
-            render: (item) => (
-              <Button variant="ghost" size="sm" onClick={() => removeProduct(item.id)} aria-label="Remover item">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            ),
-          },
-        ]}
-      />
+      <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <Table
+          data={items}
+          emptyMessage="Nenhum item adicionado."
+          columns={[
+            {
+              key: 'name',
+              header: 'Produto',
+              render: (item) => (
+                <div>
+                  <p className="font-medium text-gray-950">{item.product.name}</p>
+                  <p className="text-xs text-gray-500">
+                    {[
+                      item.product.brand?.name,
+                      item.product.clothing_type?.name,
+                      item.product.size?.name,
+                      item.product.color?.name,
+                    ]
+                      .filter(Boolean)
+                      .join(' • ') || '-'}
+                  </p>
+                </div>
+              ),
+            },
+            { key: 'barcode', header: 'Código', render: (item) => item.product.barcode ?? '-' },
+            { key: 'quantity', header: 'Qtd.', render: (item) => item.quantity },
+            { key: 'unit', header: 'Unitário', render: (item) => formatCurrency(item.unitPrice) },
+            { key: 'total', header: 'Total', render: (item) => formatCurrency(item.quantity * item.unitPrice) },
+            {
+              key: 'remove',
+              header: '',
+              render: (item) => (
+                <Button variant="ghost" size="sm" onClick={() => removeProduct(item.id)} aria-label="Remover item">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              ),
+            },
+          ]}
+        />
+      </div>
 
-      <div className="grid gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 md:grid-cols-[1fr_220px_180px] md:items-end">
+      <div className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-[1fr_260px_220px] md:items-end">
         <label className="block space-y-1.5">
           <span className="text-sm font-medium text-gray-700">Forma de pagamento</span>
           <select
-            className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm"
+            className="h-12 w-full rounded-md border border-gray-200 bg-white px-3 text-sm"
             value={paymentMethod}
             onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
           >
@@ -178,9 +182,13 @@ export function SaleForm() {
         </label>
         <div>
           <p className="text-sm text-gray-500">Total da venda</p>
-          <p className="text-2xl font-semibold text-gray-950">{formatCurrency(total)}</p>
+          <p className="text-3xl font-semibold text-gray-950">{formatCurrency(total)}</p>
         </div>
-        <Button onClick={() => void finishSale()} disabled={items.length === 0 || finishing}>
+        <Button
+          onClick={() => void finishSale()}
+          disabled={items.length === 0 || finishing}
+          className="h-12 text-base"
+        >
           {finishing ? 'Finalizando...' : 'Finalizar venda'}
         </Button>
       </div>

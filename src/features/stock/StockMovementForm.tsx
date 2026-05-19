@@ -15,10 +15,18 @@ export interface StockMovementFormValues {
 interface StockMovementFormProps {
   products: Product[]
   submitting?: boolean
+  defaultType?: StockMovementType
+  defaultReason?: StockMovementReason
   onSubmit: (values: StockMovementFormValues) => Promise<void> | void
 }
 
-export function StockMovementForm({ products, submitting = false, onSubmit }: StockMovementFormProps) {
+export function StockMovementForm({
+  products,
+  submitting = false,
+  defaultType = 'entrada',
+  defaultReason = 'compra',
+  onSubmit,
+}: StockMovementFormProps) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
@@ -37,14 +45,22 @@ export function StockMovementForm({ products, submitting = false, onSubmit }: St
       <ProductField products={products} />
       <label className="block space-y-1.5">
         <span className="text-sm font-medium text-gray-700">Tipo</span>
-        <select name="type" className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm">
+        <select
+          name="type"
+          defaultValue={defaultType}
+          className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm"
+        >
           <option value="entrada">Entrada</option>
           <option value="saida">Saída</option>
         </select>
       </label>
       <label className="block space-y-1.5">
         <span className="text-sm font-medium text-gray-700">Motivo</span>
-        <select name="reason" className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm">
+        <select
+          name="reason"
+          defaultValue={defaultReason}
+          className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm"
+        >
           <option value="cadastro_inicial">Cadastro inicial</option>
           <option value="compra">Compra</option>
           <option value="venda">Venda</option>

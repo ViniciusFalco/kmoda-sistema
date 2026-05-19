@@ -5,6 +5,7 @@ import { CashPage } from '../features/cash/CashPage'
 import { CategoriesPage } from '../features/categories/CategoriesPage'
 import { CustomersPage } from '../features/customers/CustomersPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
+import { OrdersPage } from '../features/orders/OrdersPage'
 import { ProductsPage } from '../features/products/ProductsPage'
 import { SalesPage } from '../features/sales/SalesPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
@@ -22,6 +23,7 @@ export function AppRoutes() {
             <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/encomendas" element={<OrdersPage />} />
               <Route path="/produtos" element={<ProductsPage />} />
               <Route path="/categorias" element={<CategoriesPage />} />
               <Route path="/clientes" element={<CustomersPage />} />

@@ -1,7 +1,12 @@
+import { ArrowDownCircle, ArrowUpCircle, Plus, Wallet } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
+import { Modal } from '../../components/ui/Modal'
+import { SummaryCard } from '../../components/ui/SummaryCard'
 import { Table } from '../../components/ui/Table'
 import { formatCurrency } from '../../lib/utils'
-import type { CashMovement } from '../../types/database'
+import type { CashMovement, CashMovementType } from '../../types/database'
 import { CashMovementForm } from './CashMovementForm'
 
 const movements: CashMovement[] = [
@@ -28,20 +33,51 @@ const movements: CashMovement[] = [
 ]
 
 export function CashPage() {
-  const balance = movements.reduce(
-    (sum, movement) => sum + (movement.type === 'entrada' ? movement.amount : -movement.amount),
-    0,
-  )
+  const [movementType, setMovementType] = useState<CashMovementType | null>(null)
+  const totals = useMemo(() => {
+    const entries = movements
+      .filter((movement) => movement.type === 'entrada')
+      .reduce((sum, movement) => sum + movement.amount, 0)
+    const exits = movements
+      .filter((movement) => movement.type === 'saida')
+      .reduce((sum, movement) => sum + movement.amount, 0)
+
+    return {
+      entries,
+      exits,
+      balance: entries - exits,
+    }
+  }, [])
 
   return (
     <div className="space-y-6">
-      <Card title="Fluxo de caixa" description="Registre entradas, saídas e formas de pagamento.">
-        <CashMovementForm onSubmit={() => undefined} />
-      </Card>
+      <div className="flex flex-col justify-between gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm lg:flex-row lg:items-center">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-950">Caixa</h1>
+          <p className="mt-1 text-sm text-gray-500">Registre entradas, saídas e acompanhe o movimento do dia.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setMovementType('entrada')} className="h-11 px-5">
+            <Plus className="h-4 w-4" />
+            Nova entrada
+          </Button>
+          <Button variant="secondary" onClick={() => setMovementType('saida')} className="h-11 px-5">
+            <ArrowDownCircle className="h-4 w-4" />
+            Nova saída
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <SummaryCard label="Saldo do dia" value={formatCurrency(totals.balance)} icon={<Wallet className="h-5 w-5" />} />
+        <SummaryCard label="Entradas" value={formatCurrency(totals.entries)} icon={<ArrowUpCircle className="h-5 w-5" />} />
+        <SummaryCard label="Saídas" value={formatCurrency(totals.exits)} icon={<ArrowDownCircle className="h-5 w-5" />} />
+      </div>
 
       <Card
-        title="Movimentações financeiras"
-        action={<p className="text-sm font-semibold text-gray-950">Saldo: {formatCurrency(balance)}</p>}
+        title="Histórico do dia"
+        description="Movimentações registradas no caixa."
+        action={<p className="text-sm font-semibold text-gray-950">Saldo: {formatCurrency(totals.balance)}</p>}
       >
         <Table
           data={movements}
@@ -54,6 +90,19 @@ export function CashPage() {
           ]}
         />
       </Card>
+
+      <Modal
+        open={movementType !== null}
+        title={movementType === 'saida' ? 'Nova saída' : 'Nova entrada'}
+        onClose={() => setMovementType(null)}
+        size="lg"
+      >
+        <CashMovementForm
+          defaultType={movementType ?? 'entrada'}
+          onCancel={() => setMovementType(null)}
+          onSubmit={() => setMovementType(null)}
+        />
+      </Modal>
     </div>
   )
 }
