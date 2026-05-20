@@ -17,6 +17,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useDisplayName } from '../../hooks/useAppSettings'
+import { usePwaInstall } from '../../hooks/usePwaInstall'
 import { getGreeting } from '../../lib/appSettings'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/Button'
@@ -44,6 +45,7 @@ export function MenuDrawer({ open, onClose }: MenuDrawerProps) {
   const { user, signOut } = useAuth()
   const displayName = useDisplayName()
   const greeting = getGreeting()
+  const { installed, supportsPrompt, canPromptInstall, message, promptInstall, clearMessage } = usePwaInstall()
   const [categoriesOpen, setCategoriesOpen] = useState(location.pathname === '/categorias')
 
   return (
@@ -105,6 +107,34 @@ export function MenuDrawer({ open, onClose }: MenuDrawerProps) {
               {greeting}, {displayName}
             </p>
             <p className="mt-1 truncate text-xs text-gray-500">{user?.email ?? 'Sessão ativa'}</p>
+            {!installed && supportsPrompt ? (
+              <Button
+                variant="secondary"
+                className="mt-4 w-full justify-center"
+                disabled={!canPromptInstall}
+                onClick={async () => {
+                  await promptInstall()
+                }}
+              >
+                {canPromptInstall ? 'Instalar aplicativo' : 'Aguardando instalação'}
+              </Button>
+            ) : (
+              <p className="mt-4 text-center text-xs font-medium text-emerald-700">Aplicativo instalado</p>
+            )}
+            {!supportsPrompt ? (
+              <p className="mt-3 text-left text-xs leading-5 text-gray-500">
+                Instalação indisponível neste navegador.
+              </p>
+            ) : null}
+            {!supportsPrompt && message ? (
+              <button
+                type="button"
+                className="mt-3 text-left text-xs leading-5 text-gray-500"
+                onClick={clearMessage}
+              >
+                {message}
+              </button>
+            ) : null}
             <Button
               variant="secondary"
               className="mt-4 w-full justify-center"

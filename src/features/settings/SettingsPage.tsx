@@ -1,34 +1,96 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
-import { getDisplayName, setDisplayName } from '../../lib/appSettings'
+import { useAuth } from '../../hooks/useAuth'
+import { loadDisplayName, saveDisplayName } from '../../lib/profileSettings'
 import { isSupabaseConfigured } from '../../lib/supabase'
 
 export function SettingsPage() {
-  const [displayName, setDisplayNameState] = useState(getDisplayName())
+  const { user } = useAuth()
+  const [displayName, setDisplayNameState] = useState('Administrador')
+  const [loadingName, setLoadingName] = useState(true)
+  const [savingName, setSavingName] = useState(false)
   const [savedMessage, setSavedMessage] = useState('')
+  const [error, setError] = useState('')
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    let active = true
+
+    async function load() {
+      setLoadingName(true)
+      setError('')
+
+      if (!user) {
+        if (active) {
+          setDisplayNameState('Administrador')
+          setLoadingName(false)
+        }
+        return
+      }
+
+      try {
+        const name = await loadDisplayName(user.id)
+        if (active) {
+          setDisplayNameState(name || 'Administrador')
+        }
+      } catch (loadError) {
+        if (active) {
+          setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar o nome.')
+        }
+      } finally {
+        if (active) {
+          setLoadingName(false)
+        }
+      }
+    }
+
+    void load()
+
+    return () => {
+      active = false
+    }
+  }, [user])
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setDisplayName(displayName)
-    setSavedMessage('Nome salvo com sucesso.')
-    window.setTimeout(() => setSavedMessage(''), 2000)
+    if (!user) {
+      setError('Usuário não autenticado.')
+      return
+    }
+
+    setSavingName(true)
+    setError('')
+
+    try {
+      const saved = await saveDisplayName(user.id, displayName)
+      setDisplayNameState(saved)
+      setSavedMessage('Nome salvo com sucesso.')
+      window.setTimeout(() => setSavedMessage(''), 2000)
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar o nome.')
+    } finally {
+      setSavingName(false)
+    }
   }
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <Card title="Perfil rápido" description="Nome exibido no topo e no menu, salvo neste navegador.">
+      <Card title="Perfil rápido" description="Nome exibido no topo e no menu, salvo no seu usuário do Supabase.">
         <form className="space-y-4" onSubmit={handleSubmit}>
           <Input
             label="Nome personalizado"
             value={displayName}
             onChange={(event) => setDisplayNameState(event.target.value)}
             placeholder="Ex.: Vinicius, Atendimento, Gerência"
+            disabled={loadingName || savingName}
           />
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
           {savedMessage ? <p className="text-sm text-emerald-700">{savedMessage}</p> : null}
           <div className="flex justify-end">
-            <Button type="submit">Salvar nome</Button>
+            <Button type="submit" disabled={loadingName || savingName || !user}>
+              {savingName ? 'Salvando...' : 'Salvar nome'}
+            </Button>
           </div>
         </form>
       </Card>

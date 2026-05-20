@@ -53,6 +53,17 @@ create table if not exists public.cash_sessions (
 
 alter table public.cash_sessions enable row level security;
 alter table public.customers enable row level security;
+alter table public.profiles enable row level security;
+
+drop policy if exists "Authenticated users can view profiles." on public.profiles;
+drop policy if exists "Authenticated users can create profiles." on public.profiles;
+drop policy if exists "Authenticated users can update profiles." on public.profiles;
+create policy "Authenticated users can view profiles." on public.profiles
+for select to authenticated using (auth.uid() = user_id);
+create policy "Authenticated users can create profiles." on public.profiles
+for insert to authenticated with check (auth.uid() = user_id);
+create policy "Authenticated users can update profiles." on public.profiles
+for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 drop policy if exists "Authenticated users can view customers." on public.customers;
 drop policy if exists "Authenticated users can create customers." on public.customers;

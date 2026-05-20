@@ -12,13 +12,16 @@ import {
   createProduct,
   createRegistryItem,
   friendlyCatalogError,
+  getTodayCashSession,
   listProducts,
+  listStockMovements,
+  listTodayCashMovements,
   loadProductRegistries,
   type ProductInput,
   type RegistryInput,
 } from '../../lib/catalog'
 import { formatCurrency } from '../../lib/utils'
-import type { Brand, ClothingType, Color, Product, RegistryKind, Size } from '../../types/database'
+import type { Brand, CashMovement, CashSession, ClothingType, Color, Product, RegistryKind, Size, StockMovement } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import { ProductForm, type ProductFormValues, type ProductSubmitMode } from '../products/ProductForm'
 
@@ -36,11 +39,14 @@ const emptyRegistries: ProductRegistries = {
   colors: [],
 }
 
-const latestMovements = [
-  { id: '1', time: '09:30', type: 'Venda', description: 'Venda balcão', value: 238.9 },
-  { id: '2', time: '10:10', type: 'Estoque', description: 'Entrada de produto', value: 0 },
-  { id: '3', time: '11:05', type: 'Caixa', description: 'Saída operacional', value: -80 },
-]
+interface DashboardMovementRow {
+  id: string
+  createdAt: string
+  time: string
+  type: string
+  description: string
+  value: number | null
+}
 
 export function DashboardPage() {
   const { user } = useAuth()
@@ -49,14 +55,70 @@ export function DashboardPage() {
   const [barcodeModalOpen, setBarcodeModalOpen] = useState(false)
   const [registries, setRegistries] = useState<ProductRegistries>(emptyRegistries)
   const [products, setProducts] = useState<Product[]>([])
+  const [cashSession, setCashSession] = useState<CashSession | null>(null)
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>([])
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([])
   const [barcodeQuery, setBarcodeQuery] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const lowStockCount = useMemo(
-    () => products.filter((product) => product.stock_quantity <= product.min_stock).length,
+  const totalStockQuantity = useMemo(
+    () => products.reduce((sum, product) => sum + product.stock_quantity, 0),
     [products],
   )
+
+  const salesToday = useMemo(
+    () =>
+      cashMovements
+        .filter((movement) => movement.type === 'income' && movement.origin === 'sale')
+        .reduce((sum, movement) => sum + movement.amount, 0),
+    [cashMovements],
+  )
+
+  const incomeToday = useMemo(
+    () =>
+      cashMovements
+        .filter((movement) => movement.type === 'income')
+        .reduce((sum, movement) => sum + movement.amount, 0),
+    [cashMovements],
+  )
+
+  const expenseToday = useMemo(
+    () =>
+      cashMovements
+        .filter((movement) => movement.type === 'expense')
+        .reduce((sum, movement) => sum + movement.amount, 0),
+    [cashMovements],
+  )
+
+  const balanceToday = useMemo(
+    () => (cashSession?.opening_amount ?? 0) + incomeToday - expenseToday,
+    [cashSession?.opening_amount, expenseToday, incomeToday],
+  )
+
+  const latestMovements = useMemo<DashboardMovementRow[]>(() => {
+    const cashRows = cashMovements.map((movement) => ({
+      id: `cash-${movement.id}`,
+      createdAt: movement.created_at,
+      time: formatTime(movement.created_at),
+      type: movement.type === 'income' ? (movement.origin === 'sale' ? 'Venda' : 'Entrada avulsa') : 'Gasto',
+      description: movementDescription(movement),
+      value: movement.type === 'expense' ? -movement.amount : movement.amount,
+    }))
+
+    const stockRows = stockMovements.map((movement) => ({
+      id: `stock-${movement.id}`,
+      createdAt: movement.created_at,
+      time: formatTime(movement.created_at),
+      type: movement.type === 'entrada' ? 'Entrada de estoque' : 'Saída de estoque',
+      description: stockMovementDescription(movement),
+      value: null,
+    }))
+
+    return [...cashRows, ...stockRows]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 5)
+  }, [cashMovements, stockMovements])
 
   const barcodeResult = useMemo(() => {
     const normalized = barcodeQuery.trim().toLowerCase()
@@ -72,13 +134,20 @@ export function DashboardPage() {
   }, [barcodeQuery, products])
 
   const loadData = useCallback(async () => {
+    setError('')
     try {
-      const [registryRows, productRows] = await Promise.all([
+      const [registryRows, productRows, sessionRows, cashRows, stockRows] = await Promise.all([
         loadProductRegistries(),
         listProducts({ active: true }),
+        getTodayCashSession(),
+        listTodayCashMovements(),
+        listStockMovements(),
       ])
       setRegistries(registryRows)
       setProducts(productRows)
+      setCashSession(sessionRows)
+      setCashMovements(cashRows)
+      setStockMovements(stockRows)
     } catch (err) {
       setError(friendlyCatalogError(err))
     }
@@ -89,13 +158,19 @@ export function DashboardPage() {
 
     async function loadInitial() {
       try {
-        const [registryRows, productRows] = await Promise.all([
+        const [registryRows, productRows, sessionRows, cashRows, stockRows] = await Promise.all([
           loadProductRegistries(),
           listProducts({ active: true }),
+          getTodayCashSession(),
+          listTodayCashMovements(),
+          listStockMovements(),
         ])
         if (active) {
           setRegistries(registryRows)
           setProducts(productRows)
+          setCashSession(sessionRows)
+          setCashMovements(cashRows)
+          setStockMovements(stockRows)
         }
       } catch (err) {
         if (active) {
@@ -106,10 +181,19 @@ export function DashboardPage() {
 
     void loadInitial()
 
+    function handleRefresh() {
+      void loadData()
+    }
+
+    window.addEventListener('focus', handleRefresh)
+    document.addEventListener('visibilitychange', handleRefresh)
+
     return () => {
       active = false
+      window.removeEventListener('focus', handleRefresh)
+      document.removeEventListener('visibilitychange', handleRefresh)
     }
-  }, [])
+  }, [loadData])
 
   async function handleProductSubmit(values: ProductFormValues, mode: ProductSubmitMode) {
     const payload: ProductInput = {
@@ -194,9 +278,9 @@ export function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <SummaryCard label="Vendas de hoje" value={formatCurrency(0)} icon={<Receipt className="h-5 w-5" />} />
-        <SummaryCard label="Saldo do caixa" value={formatCurrency(0)} icon={<Wallet className="h-5 w-5" />} />
-        <SummaryCard label="Estoque baixo" value={String(lowStockCount)} icon={<Boxes className="h-5 w-5" />} />
+        <SummaryCard label="Vendas de hoje" value={formatCurrency(salesToday)} icon={<Receipt className="h-5 w-5" />} />
+        <SummaryCard label="Saldo do caixa" value={formatCurrency(balanceToday)} icon={<Wallet className="h-5 w-5" />} />
+        <SummaryCard label="Estoque total" value={String(totalStockQuantity)} icon={<Boxes className="h-5 w-5" />} />
       </div>
 
       <Card title="Últimas movimentações" description="Resumo operacional do dia.">
@@ -209,7 +293,11 @@ export function DashboardPage() {
               { key: 'time', header: 'Hora', render: (row) => row.time },
               { key: 'type', header: 'Tipo', render: (row) => row.type },
               { key: 'description', header: 'Descrição', render: (row) => row.description },
-              { key: 'value', header: 'Valor', render: (row) => (row.value ? formatCurrency(row.value) : '-') },
+              {
+                key: 'value',
+                header: 'Valor',
+                render: (row) => (typeof row.value === 'number' ? formatCurrency(row.value) : '-'),
+              },
             ]}
           />
         )}
@@ -263,4 +351,41 @@ export function DashboardPage() {
       </Modal>
     </div>
   )
+}
+
+function formatTime(timestamp: string) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(timestamp))
+}
+
+function movementDescription(movement: CashMovement) {
+  if (movement.origin === 'sale') {
+    const items = movement.sale?.sale_items?.map((item) => item.product?.name).filter(Boolean) ?? []
+    return items.length > 0 ? items.join(', ') : movement.description
+  }
+
+  return movement.description
+}
+
+function stockMovementDescription(movement: StockMovement) {
+  const productName = movement.product?.name ?? 'Produto'
+  const detail = movement.reason === 'venda' ? 'Baixa por venda' : stockReasonLabel(movement.reason)
+  const reference = movement.cash_movement?.movement_code ? ` · ${movement.cash_movement.movement_code}` : ''
+
+  return `${detail} · ${productName}${reference}`
+}
+
+function stockReasonLabel(reason: StockMovement['reason']) {
+  const labels: Record<StockMovement['reason'], string> = {
+    cadastro_inicial: 'Cadastro inicial',
+    compra: 'Compra',
+    venda: 'Venda',
+    ajuste_manual: 'Ajuste manual',
+    troca: 'Troca',
+    perda: 'Perda',
+  }
+
+  return labels[reason]
 }

@@ -35,6 +35,22 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+alter table public.profiles enable row level security;
+
+drop policy if exists "Authenticated users can view profiles." on public.profiles;
+drop policy if exists "Authenticated users can create profiles." on public.profiles;
+drop policy if exists "Authenticated users can update profiles." on public.profiles;
+create policy "Authenticated users can view profiles." on public.profiles
+for select to authenticated
+using (auth.uid() = user_id);
+create policy "Authenticated users can create profiles." on public.profiles
+for insert to authenticated
+with check (auth.uid() = user_id);
+create policy "Authenticated users can update profiles." on public.profiles
+for update to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
 -- Categorias usadas para organizar produtos.
 create table if not exists public.categories (
   id uuid primary key default gen_random_uuid(),
