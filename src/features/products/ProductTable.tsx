@@ -19,11 +19,25 @@ export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) 
         {
           key: 'name',
           header: 'Nome',
-          render: (product) => <p className="font-medium text-gray-950">{product.name}</p>,
+          render: (product) => (
+            <div>
+              <p className="font-medium text-gray-950">{product.product_model?.name ?? product.name}</p>
+              <p className="text-xs text-gray-500">Família: {product.product_model?.family ?? '-'}</p>
+            </div>
+          ),
+        },
+        {
+          key: 'reference',
+          header: 'Ref.',
+          render: (product) => product.product_model?.reference ?? product.reference ?? '-',
         },
         { key: 'barcode', header: 'Código de barras', render: (product) => product.barcode ?? '-' },
-        { key: 'brand', header: 'Marca', render: (product) => product.brand?.name ?? '-' },
-        { key: 'type', header: 'Tipo', render: (product) => product.clothing_type?.name ?? '-' },
+        { key: 'brand', header: 'Marca', render: (product) => product.product_model?.brand?.name ?? product.brand?.name ?? '-' },
+        {
+          key: 'type',
+          header: 'Tipo',
+          render: (product) => product.product_model?.category?.name ?? product.clothing_type?.name ?? '-',
+        },
         { key: 'size', header: 'Tamanho', render: (product) => product.size?.name ?? '-' },
         {
           key: 'color',

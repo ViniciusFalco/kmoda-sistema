@@ -7,16 +7,20 @@ interface QuickCreateModalProps {
   open: boolean
   title: string
   descriptionLabel?: string
+  extraLabel?: string
+  extraPlaceholder?: string
   submitting?: boolean
   error?: string
   onClose: () => void
-  onSubmit: (values: { name: string; description: string }) => Promise<void> | void
+  onSubmit: (values: { name: string; description: string; extra?: string }) => Promise<void> | void
 }
 
 export function QuickCreateModal({
   open,
   title,
   descriptionLabel = 'Descrição',
+  extraLabel,
+  extraPlaceholder,
   submitting = false,
   error,
   onClose,
@@ -24,6 +28,7 @@ export function QuickCreateModal({
 }: QuickCreateModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [extra, setExtra] = useState('')
   const [nameError, setNameError] = useState('')
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -33,9 +38,10 @@ export function QuickCreateModal({
       return
     }
 
-    await onSubmit({ name, description })
+    await onSubmit({ name, description, extra })
     setName('')
     setDescription('')
+    setExtra('')
     setNameError('')
   }
 
@@ -62,6 +68,14 @@ export function QuickCreateModal({
           value={description}
           onChange={(event) => setDescription(event.target.value)}
         />
+        {extraLabel ? (
+          <Input
+            label={extraLabel}
+            placeholder={extraPlaceholder}
+            value={extra}
+            onChange={(event) => setExtra(event.target.value)}
+          />
+        ) : null}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={submitting}>
             Cancelar

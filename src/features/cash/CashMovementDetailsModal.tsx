@@ -57,9 +57,17 @@ export function CashMovementDetailsModal({ movement, onClose }: CashMovementDeta
                   header: 'Produto',
                   render: (item) => (
                     <div>
-                      <p className="font-medium text-gray-950">{item.product?.name ?? '-'}</p>
+                      <p className="font-medium text-gray-950">{item.product?.product_model?.name ?? item.product?.name ?? '-'}</p>
                       <p className="text-xs text-gray-500">
-                        {[item.product?.barcode, item.product?.brand?.name, item.product?.clothing_type?.name, item.product?.size?.name, item.product?.color?.name]
+                        {[
+                          item.product?.product_model?.reference,
+                          item.product?.barcode,
+                          item.product?.product_model?.family,
+                          item.product?.product_model?.brand?.name ?? item.product?.brand?.name,
+                          item.product?.product_model?.category?.name ?? item.product?.clothing_type?.name,
+                          item.product?.size?.name,
+                          item.product?.color?.name,
+                        ]
                           .filter(Boolean)
                           .join(' • ') || '-'}
                       </p>
@@ -116,7 +124,7 @@ function movementDescription(movement: CashMovement) {
   }
 
   const productNames = movement.sale?.sale_items
-    ?.map((item) => item.product?.name)
+    ?.map((item) => item.product?.product_model?.name ?? item.product?.name)
     .filter(Boolean)
 
   return productNames?.length ? productNames.join(', ') : movement.description

@@ -70,11 +70,26 @@ export interface Color {
 export type RegistryKind = 'brands' | 'clothing_types' | 'sizes' | 'colors'
 export type RegistryItem = Brand | ClothingType | Size | Color
 
+export interface ProductModel {
+  id: string
+  user_id?: string | null
+  reference: string
+  name: string
+  family?: string | null
+  brand_id?: string | null
+  category_id?: string | null
+  created_at: string
+  updated_at: string
+  brand?: Brand | null
+  category?: ClothingType | null
+}
+
 export interface Product {
   id: string
   user_id?: string | null
   name: string
   barcode?: string | null
+  product_model_id?: string | null
   brand_id?: string | null
   clothing_type_id?: string | null
   size_id?: string | null
@@ -89,6 +104,7 @@ export interface Product {
   active: boolean
   created_at: string
   updated_at: string
+  product_model?: ProductModel | null
   brand?: Brand | null
   clothing_type?: ClothingType | null
   size?: Size | null

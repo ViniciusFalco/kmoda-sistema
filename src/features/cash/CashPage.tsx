@@ -25,8 +25,11 @@ type CashModal = 'sale' | 'expense' | 'history' | 'open-session' | 'close-sessio
 
 export function CashPage() {
   const location = useLocation()
-  const initialModal = new URLSearchParams(location.search).get('acao') === 'nova-venda' ? 'sale' : null
+  const searchParams = new URLSearchParams(location.search)
+  const initialModal = searchParams.get('acao') === 'nova-venda' ? 'sale' : null
+  const initialSaleBarcode = searchParams.get('barcode') ?? ''
   const [activeModal, setActiveModal] = useState<CashModal>(initialModal)
+  const [saleBarcodePrefill, setSaleBarcodePrefill] = useState(initialSaleBarcode)
   const [selectedMovement, setSelectedMovement] = useState<CashMovement | null>(null)
   const [movements, setMovements] = useState<CashMovement[]>([])
   const [cashSession, setCashSession] = useState<CashSession | null>(null)
@@ -106,8 +109,14 @@ export function CashPage() {
   }, [movements, cashSession?.opening_amount])
 
   async function handleSaved() {
+    setSaleBarcodePrefill('')
     setActiveModal(null)
     await loadData()
+  }
+
+  function closeSaleModal() {
+    setSaleBarcodePrefill('')
+    setActiveModal(null)
   }
 
   return (
@@ -270,12 +279,13 @@ export function CashPage() {
         )}
       </Card>
 
-      <Modal open={activeModal === 'sale'} title="Nova venda" onClose={() => setActiveModal(null)} size="6xl">
+      <Modal open={activeModal === 'sale'} title="Nova venda" onClose={closeSaleModal} size="6xl">
         <CashSaleForm
-          onCancel={() => setActiveModal(null)}
+          onCancel={closeSaleModal}
           onSaved={() => void handleSaved()}
           cashSessionId={cashSession?.status === 'open' ? cashSession.id : null}
           sessionClosed={cashSession?.status === 'closed'}
+          initialBarcode={saleBarcodePrefill}
         />
       </Modal>
 
@@ -339,7 +349,7 @@ function movementDescription(movement: CashMovement) {
   }
 
   const productNames = movement.sale?.sale_items
-    ?.map((item) => item.product?.name)
+    ?.map((item) => item.product?.product_model?.name ?? item.product?.name)
     .filter(Boolean)
 
   return productNames?.length ? productNames.join(', ') : movement.description

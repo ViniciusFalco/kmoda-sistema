@@ -74,8 +74,15 @@ export function QuickSearch({
           ...products.slice(0, 6).map((product) => ({
             type: 'product' as const,
             id: product.id,
-            title: product.name,
-            subtitle: [product.brand?.name, product.clothing_type?.name, product.size?.name, product.color?.name]
+            title: product.product_model?.name ?? product.name,
+            subtitle: [
+              product.product_model?.reference,
+              product.product_model?.family,
+              product.product_model?.brand?.name ?? product.brand?.name,
+              product.product_model?.category?.name ?? product.clothing_type?.name,
+              product.size?.name,
+              product.color?.name,
+            ]
               .filter(Boolean)
               .join(' • '),
             detail: product.barcode ? `Código: ${product.barcode}` : `Estoque: ${product.stock_quantity}`,

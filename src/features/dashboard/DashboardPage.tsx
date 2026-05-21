@@ -1,16 +1,18 @@
 import { Barcode, Boxes, PackagePlus, Receipt, ShoppingCart, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { BarcodeResultModal, type BarcodeLookupResult } from '../../components/barcode/BarcodeResultModal'
+import { BarcodeScanModal } from '../../components/barcode/BarcodeScanModal'
 import { ActionCard } from '../../components/ui/ActionCard'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
 import { SummaryCard } from '../../components/ui/SummaryCard'
 import { Table } from '../../components/ui/Table'
 import {
   createProduct,
   createRegistryItem,
+  findBarcodeLookup,
   friendlyCatalogError,
   getTodayCashSession,
   listProducts,
@@ -23,6 +25,7 @@ import {
 import { formatCurrency } from '../../lib/utils'
 import type { Brand, CashMovement, CashSession, ClothingType, Color, Product, RegistryKind, Size, StockMovement } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
+import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import { ProductForm, type ProductFormValues, type ProductSubmitMode } from '../products/ProductForm'
 
 interface ProductRegistries {
@@ -51,14 +54,16 @@ interface DashboardMovementRow {
 export function DashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { open: barcodeScannerOpen, barcode: barcodeValue, setBarcode: setBarcodeValue, openScanner, closeScanner } =
+    useBarcodeScanner()
   const [productModalOpen, setProductModalOpen] = useState(false)
-  const [barcodeModalOpen, setBarcodeModalOpen] = useState(false)
   const [registries, setRegistries] = useState<ProductRegistries>(emptyRegistries)
   const [products, setProducts] = useState<Product[]>([])
   const [cashSession, setCashSession] = useState<CashSession | null>(null)
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([])
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([])
-  const [barcodeQuery, setBarcodeQuery] = useState('')
+  const [barcodeResult, setBarcodeResult] = useState<BarcodeLookupResult | null>(null)
+  const [productBarcodePrefill, setProductBarcodePrefill] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -120,18 +125,15 @@ export function DashboardPage() {
       .slice(0, 5)
   }, [cashMovements, stockMovements])
 
-  const barcodeResult = useMemo(() => {
-    const normalized = barcodeQuery.trim().toLowerCase()
-    if (!normalized) {
-      return null
-    }
+  const handleBarcodeScan = useCallback(async (code: string) => {
+    setError('')
 
-    return (
-      products.find((product) => product.barcode?.toLowerCase() === normalized) ??
-      products.find((product) => product.name.toLowerCase().includes(normalized)) ??
-      null
-    )
-  }, [barcodeQuery, products])
+    try {
+      setBarcodeResult(await findBarcodeLookup(code))
+    } catch (err) {
+      setError(friendlyCatalogError(err))
+    }
+  }, [])
 
   const loadData = useCallback(async () => {
     setError('')
@@ -201,6 +203,7 @@ export function DashboardPage() {
       barcode: values.barcode,
       brand_id: values.brand_id,
       clothing_type_id: values.clothing_type_id,
+      family: values.family,
       size_id: values.size_id,
       color_id: values.color_id,
       reference: values.reference,
@@ -222,6 +225,7 @@ export function DashboardPage() {
 
       if (mode === 'close') {
         setProductModalOpen(false)
+        setProductBarcodePrefill('')
       }
 
       return true
@@ -255,7 +259,10 @@ export function DashboardPage() {
           title="Adicionar produto"
           description="Cadastre uma nova peça no estoque"
           icon={<PackagePlus className="h-6 w-6" />}
-          onClick={() => setProductModalOpen(true)}
+          onClick={() => {
+            setProductBarcodePrefill('')
+            setProductModalOpen(true)
+          }}
         />
         <ActionCard
           title="Atualizar estoque"
@@ -267,7 +274,7 @@ export function DashboardPage() {
           title="Ler código de barras"
           description="Consultar produto pelo código"
           icon={<Barcode className="h-6 w-6" />}
-          onClick={() => setBarcodeModalOpen(true)}
+          onClick={() => openScanner()}
         />
         <ActionCard
           title="Realizar venda"
@@ -303,52 +310,104 @@ export function DashboardPage() {
         )}
       </Card>
 
-      <Modal open={productModalOpen} title="Adicionar produto" onClose={() => setProductModalOpen(false)} size="6xl">
+      <Modal
+        open={productModalOpen}
+        title="Adicionar produto"
+        onClose={() => {
+          setProductBarcodePrefill('')
+          setProductModalOpen(false)
+        }}
+        size="6xl"
+      >
         <ProductForm
+          key={productBarcodePrefill || 'new-product'}
           registries={registries}
           submitting={submitting}
-          onCancel={() => setProductModalOpen(false)}
+          initialBarcode={productBarcodePrefill}
+          onCancel={() => {
+            setProductBarcodePrefill('')
+            setProductModalOpen(false)
+          }}
           onSubmit={handleProductSubmit}
           onQuickCreate={handleQuickCreate}
         />
       </Modal>
 
-      <Modal
-        open={barcodeModalOpen}
-        title="Ler código de barras"
-        onClose={() => setBarcodeModalOpen(false)}
-        size="lg"
-      >
-        <div className="space-y-4">
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            Leitor ainda será configurado. Por enquanto, digite o código manualmente para consultar.
-          </div>
-          <Input
-            label="Código de barras"
-            inputMode="text"
-            value={barcodeQuery}
-            autoFocus
-            onChange={(event) => setBarcodeQuery(event.target.value)}
-          />
-          {barcodeQuery.trim() ? (
-            barcodeResult ? (
-              <div className="rounded-lg border border-gray-200 bg-white p-4">
-                <p className="font-semibold text-gray-950">{barcodeResult.name}</p>
-                <p className="mt-1 text-sm text-gray-500">
-                  {[barcodeResult.brand?.name, barcodeResult.clothing_type?.name, barcodeResult.size?.name, barcodeResult.color?.name]
-                    .filter(Boolean)
-                    .join(' • ') || 'Produto cadastrado'}
-                </p>
-                <p className="mt-3 text-sm font-medium text-gray-900">
-                  Estoque: {barcodeResult.stock_quantity} · Venda: {formatCurrency(barcodeResult.sale_price)}
-                </p>
-              </div>
-            ) : (
-              <EmptyState title="Produto não encontrado." description="Confira o código digitado ou cadastre o produto." />
-            )
-          ) : null}
-        </div>
-      </Modal>
+      <BarcodeScanModal
+        open={barcodeScannerOpen}
+        value={barcodeValue}
+        onValueChange={setBarcodeValue}
+        onConfirm={handleBarcodeScan}
+        onClose={closeScanner}
+      />
+
+      <BarcodeResultModal
+        open={barcodeResult !== null}
+        result={barcodeResult}
+        onClose={() => setBarcodeResult(null)}
+        actions={
+          barcodeResult?.kind === 'found'
+            ? [
+                {
+                  label: 'Ver produto',
+                  onClick: () => {
+                    if (!barcodeResult) {
+                      return
+                    }
+
+                    setBarcodeResult(null)
+                    navigate(`/produtos?q=${encodeURIComponent(barcodeResult.code)}`)
+                  },
+                },
+                {
+                  label: 'Atualizar estoque',
+                  onClick: () => {
+                    if (!barcodeResult) {
+                      return
+                    }
+
+                    setBarcodeResult(null)
+                    navigate(`/estoque?barcode=${encodeURIComponent(barcodeResult.code)}&auto=1`)
+                  },
+                },
+                {
+                  label: 'Nova venda com este produto',
+                  onClick: () => {
+                    if (!barcodeResult) {
+                      return
+                    }
+
+                    setBarcodeResult(null)
+                    navigate(`/caixa?acao=nova-venda&barcode=${encodeURIComponent(barcodeResult.code)}`)
+                  },
+                },
+                {
+                  label: 'Fechar',
+                  variant: 'secondary',
+                  onClick: () => setBarcodeResult(null),
+                },
+              ]
+            : [
+                {
+                  label: 'Cadastrar produto com este código',
+                  onClick: () => {
+                    if (!barcodeResult) {
+                      return
+                    }
+
+                    setBarcodeResult(null)
+                    setProductBarcodePrefill(barcodeResult.code)
+                    setProductModalOpen(true)
+                  },
+                },
+                {
+                  label: 'Fechar',
+                  variant: 'secondary',
+                  onClick: () => setBarcodeResult(null),
+                },
+              ]
+        }
+      />
     </div>
   )
 }
@@ -362,7 +421,8 @@ function formatTime(timestamp: string) {
 
 function movementDescription(movement: CashMovement) {
   if (movement.origin === 'sale') {
-    const items = movement.sale?.sale_items?.map((item) => item.product?.name).filter(Boolean) ?? []
+    const items =
+      movement.sale?.sale_items?.map((item) => item.product?.product_model?.name ?? item.product?.name).filter(Boolean) ?? []
     return items.length > 0 ? items.join(', ') : movement.description
   }
 
@@ -370,11 +430,14 @@ function movementDescription(movement: CashMovement) {
 }
 
 function stockMovementDescription(movement: StockMovement) {
-  const productName = movement.product?.name ?? 'Produto'
+  const productName = movement.product?.product_model?.name ?? movement.product?.name ?? 'Produto'
   const detail = movement.reason === 'venda' ? 'Baixa por venda' : stockReasonLabel(movement.reason)
   const reference = movement.cash_movement?.movement_code ? ` · ${movement.cash_movement.movement_code}` : ''
+  const modelReference = movement.product?.product_model?.reference
+    ? ` · Ref. ${movement.product.product_model.reference}`
+    : ''
 
-  return `${detail} · ${productName}${reference}`
+  return `${detail} · ${productName}${modelReference}${reference}`
 }
 
 function stockReasonLabel(reason: StockMovement['reason']) {

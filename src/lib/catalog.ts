@@ -1,4 +1,5 @@
 import type { User } from '@supabase/supabase-js'
+import { normalizeBarcode } from './barcode'
 import { supabase } from './supabase'
 import type {
   Brand,
@@ -10,6 +11,7 @@ import type {
   Customer,
   PaymentMethod,
   Product,
+  ProductModel,
   RegistryItem,
   RegistryKind,
   Size,
@@ -47,9 +49,24 @@ function normalizeNumber(value: number | null | undefined, fallback = 0) {
   return value === null || value === undefined ? fallback : Number(value)
 }
 
+function normalizeProductModel(model: ProductModel): ProductModel {
+  return {
+    ...model,
+    reference: normalizeNullable(model.reference) ?? '',
+    name: model.name.trim(),
+    family: normalizeNullable(model.family),
+  }
+}
+
 function normalizeProduct(product: Product): Product {
+  const productModel = product.product_model ? normalizeProductModel(product.product_model) : null
+
   return {
     ...product,
+    name: productModel?.name ?? product.name,
+    reference: productModel?.reference ?? normalizeNullable(product.reference),
+    brand_id: product.brand_id ?? productModel?.brand_id ?? null,
+    clothing_type_id: product.clothing_type_id ?? productModel?.category_id ?? null,
     cost_price: normalizeNumber(product.cost_price),
     sale_price: normalizeNumber(product.sale_price),
     suggested_price:
@@ -59,6 +76,7 @@ function normalizeProduct(product: Product): Product {
     stock_quantity: normalizeNumber(product.stock_quantity),
     min_stock: normalizeNumber(product.min_stock),
     active: Boolean(product.active),
+    product_model: productModel,
   }
 }
 
@@ -85,6 +103,119 @@ function normalizeCashMovement(movement: CashMovement): CashMovement {
         }
       : null,
   }
+}
+
+function normalizeText(value: string) {
+  return value.trim().toLowerCase()
+}
+
+function sameProductModel(product: Product, model: ProductModel) {
+  const productReference = normalizeNullable(product.reference)
+  const modelReference = normalizeNullable(model.reference)
+
+  if (product.product_model_id && product.product_model_id === model.id) {
+    return true
+  }
+
+  if (productReference && modelReference) {
+    return normalizeText(productReference) === normalizeText(modelReference)
+  }
+
+  return false
+}
+
+function compareSuggestedProducts(a: Product, b: Product, currentName: string) {
+  const aScore = scoreSuggestedProduct(a, currentName)
+  const bScore = scoreSuggestedProduct(b, currentName)
+
+  if (aScore !== bScore) {
+    return bScore - aScore
+  }
+
+  if (a.stock_quantity !== b.stock_quantity) {
+    return b.stock_quantity - a.stock_quantity
+  }
+
+  return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
+}
+
+function scoreSuggestedProduct(product: Product, currentName: string) {
+  const candidateName = normalizeText(product.product_model?.name ?? product.name)
+  const current = normalizeText(currentName)
+  let score = 0
+
+  if (!current) {
+    return product.stock_quantity
+  }
+
+  if (candidateName === current) {
+    score += 40
+  }
+
+  if (candidateName.includes(current) || current.includes(candidateName)) {
+    score += 25
+  }
+
+  const currentWords = current.split(/\s+/).filter((word) => word.length > 2)
+  const candidateWords = new Set(candidateName.split(/\s+/).filter((word) => word.length > 2))
+
+  score += currentWords.reduce((total, word) => total + (candidateWords.has(word) ? 4 : 0), 0)
+  score += Math.min(product.stock_quantity, 20)
+
+  return score
+}
+
+async function syncProductsForModel(model: ProductModel) {
+  const client = getSupabase()
+  const { error } = await client
+    .from('products')
+    .update({
+      name: model.name,
+      reference: normalizeNullable(model.reference),
+      brand_id: model.brand_id ?? null,
+      clothing_type_id: model.category_id ?? null,
+    })
+    .eq('product_model_id', model.id)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+async function updateProductModelById(modelId: string, input: ProductInput, user: User | null) {
+  const client = getSupabase()
+  const existingModel = await loadProductModelById(modelId)
+
+  if (!existingModel) {
+    throw new Error('Modelo do produto não encontrado.')
+  }
+
+  const payload = buildProductModelPayload(input, user, existingModel)
+  const { data, error } = await client
+    .from('product_models')
+    .update(payload as never)
+    .eq('id', modelId)
+    .select(productModelSelect)
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const model = normalizeProductModel(data as unknown as ProductModel)
+  await syncProductsForModel(model)
+  return model
+}
+
+async function loadProductModelById(modelId: string) {
+  const client = getSupabase()
+  const { data, error } = await client.from('product_models').select(productModelSelect).eq('id', modelId).maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data ? normalizeProductModel(data as unknown as ProductModel) : null
 }
 
 export interface RegistryInput {
@@ -164,6 +295,7 @@ export interface ProductInput {
   barcode?: string | null
   brand_id?: string | null
   clothing_type_id?: string | null
+  family?: string | null
   size_id?: string | null
   color_id?: string | null
   reference?: string | null
@@ -176,6 +308,30 @@ export interface ProductInput {
   active: boolean
 }
 
+export interface ProductModelInput {
+  reference: string
+  name: string
+  family?: string | null
+  brand_id?: string | null
+  category_id?: string | null
+}
+
+export interface BarcodeLookupFound {
+  kind: 'found'
+  code: string
+  product: Product
+  productModel: ProductModel | null
+  sameModelVariants: Product[]
+  suggestions: Product[]
+}
+
+export interface BarcodeLookupNotFound {
+  kind: 'not_found'
+  code: string
+}
+
+export type BarcodeLookupResult = BarcodeLookupFound | BarcodeLookupNotFound
+
 export interface ProductFilters {
   query?: string
   brandId?: string
@@ -186,8 +342,23 @@ export interface ProductFilters {
   lowStock?: boolean
 }
 
+const productModelSelect = `
+  id,
+  user_id,
+  reference,
+  name,
+  family,
+  brand_id,
+  category_id,
+  created_at,
+  updated_at,
+  brand:brands(id, name, description, active, created_at, updated_at),
+  category:clothing_types(id, name, description, active, created_at, updated_at)
+`
+
 const productSelect = `
   *,
+  product_model:product_models(${productModelSelect}),
   brand:brands(id, name, description, active, created_at, updated_at),
   clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
   size:sizes(id, name, sort_order, active, created_at, updated_at),
@@ -232,14 +403,37 @@ export async function listProducts(filters: ProductFilters = {}) {
       [
         product.name,
         product.barcode,
+        product.reference,
         product.brand?.name,
         product.clothing_type?.name,
         product.color?.name,
         product.size?.name,
+        product.product_model?.name,
+        product.product_model?.reference,
+        product.product_model?.family,
+        product.product_model?.brand?.name,
+        product.product_model?.category?.name,
       ]
         .filter(Boolean)
         .some((value) => value?.toLowerCase().includes(query)),
     )
+    products = products.sort((a, b) => {
+      const aExactBarcode = a.barcode?.toLowerCase() === query
+      const bExactBarcode = b.barcode?.toLowerCase() === query
+
+      if (aExactBarcode !== bExactBarcode) {
+        return aExactBarcode ? -1 : 1
+      }
+
+      const aBarcodeMatch = a.barcode?.toLowerCase().includes(query) ?? false
+      const bBarcodeMatch = b.barcode?.toLowerCase().includes(query) ?? false
+
+      if (aBarcodeMatch !== bBarcodeMatch) {
+        return aBarcodeMatch ? -1 : 1
+      }
+
+      return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
+    })
   }
 
   if (filters.lowStock) {
@@ -249,16 +443,247 @@ export async function listProducts(filters: ProductFilters = {}) {
   return products
 }
 
-export async function createProduct(input: ProductInput, user: User | null) {
+function buildProductModelPayload(input: ProductInput, user: User | null, existingModel?: ProductModel | null) {
+  return {
+    user_id: user?.id ?? existingModel?.user_id ?? null,
+    reference: normalizeNullable(input.reference) ?? existingModel?.reference ?? null,
+    name: input.name.trim(),
+    family: normalizeNullable(input.family) ?? existingModel?.family ?? null,
+    brand_id: input.brand_id || existingModel?.brand_id || null,
+    category_id: input.clothing_type_id || existingModel?.category_id || null,
+  }
+}
+
+function buildProductVariantPayload(input: ProductInput, model: ProductModel, userId?: string | null) {
+  return {
+    ...toProductPayload({
+      ...input,
+      name: model.name,
+      barcode: input.barcode,
+      brand_id: model.brand_id ?? input.brand_id ?? null,
+      clothing_type_id: model.category_id ?? input.clothing_type_id ?? null,
+      reference: model.reference || input.reference || null,
+      family: input.family ?? model.family ?? null,
+    }),
+    product_model_id: model.id,
+    user_id: userId ?? null,
+  }
+}
+
+async function loadProductById(id: string, active?: boolean | null) {
   const client = getSupabase()
-  const { data, error } = await client
-    .from('products')
-    .insert({
-      ...toProductPayload(input),
-      user_id: user?.id ?? null,
+  let request = client.from('products').select(productSelect).eq('id', id)
+
+  if (active !== null && active !== undefined) {
+    request = request.eq('active', active)
+  }
+
+  const { data, error } = await request.limit(1).maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data ? normalizeProduct(data as Product) : null
+}
+
+export async function findProductModelByReference(reference: string) {
+  const client = getSupabase()
+  const normalized = normalizeNullable(reference)
+
+  if (!normalized) {
+    return null
+  }
+
+  let request = client.from('product_models').select(productModelSelect).eq('reference', normalized)
+  let { data, error } = await request.limit(1).maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  if (!data) {
+    request = client.from('product_models').select(productModelSelect).ilike('reference', normalized)
+    const response = await request.limit(1).maybeSingle()
+    data = response.data
+    error = response.error
+  }
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data ? normalizeProductModel(data as unknown as ProductModel) : null
+}
+
+export async function findVariantByBarcode(code: string, active = false) {
+  const client = getSupabase()
+  const normalized = normalizeBarcode(code)
+
+  if (!normalized) {
+    return null
+  }
+
+  let request = client.from('products').select(productSelect).eq('barcode', normalized)
+
+  if (active) {
+    request = request.eq('active', true)
+  }
+
+  const { data, error } = await request.limit(1).maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data ? normalizeProduct(data as Product) : null
+}
+
+export async function findProductByBarcode(code: string, active = true) {
+  return findVariantByBarcode(code, active)
+}
+
+export async function findVariantsByReference(reference: string, active?: boolean | null) {
+  const model = await findProductModelByReference(reference)
+
+  if (!model) {
+    return []
+  }
+
+  const products = await listProducts({ active: active ?? null })
+  return products.filter((product) => sameProductModel(product, model))
+}
+
+export async function findVariantsByProductId(productId: string, active?: boolean | null) {
+  const product = await loadProductById(productId, active)
+
+  if (!product) {
+    return []
+  }
+
+  if (!product.product_model_id && !product.reference) {
+    return [product]
+  }
+
+  if (product.product_model_id) {
+    const products = await listProducts({ active: active ?? null })
+    return products.filter((candidate) => candidate.product_model_id === product.product_model_id)
+  }
+
+  return findVariantsByReference(product.reference ?? '', active)
+}
+
+export async function findSuggestionsByFamily(family: string, currentProductId?: string) {
+  const normalizedFamily = normalizeNullable(family)
+
+  if (!normalizedFamily) {
+    return []
+  }
+
+  const products = await listProducts({ active: true })
+  const currentProduct = currentProductId ? await loadProductById(currentProductId, false) : null
+  const currentModelId = currentProduct?.product_model_id ?? null
+  const normalizedCurrentName = normalizeText(currentProduct?.product_model?.name ?? currentProduct?.name ?? '')
+
+  return products
+    .filter((product) => product.stock_quantity > 0)
+    .filter((product) => product.id !== currentProductId)
+    .filter((product) => product.product_model_id !== currentModelId)
+    .filter((product) => {
+      const candidateFamily = normalizeText(product.product_model?.family ?? '')
+      return candidateFamily === normalizeText(normalizedFamily) || candidateFamily.includes(normalizeText(normalizedFamily))
     })
-    .select(productSelect)
-    .single()
+    .sort((a, b) => compareSuggestedProducts(a, b, normalizedCurrentName))
+}
+
+export async function findBarcodeLookup(code: string) {
+  const product = await findVariantByBarcode(code, false)
+
+  if (!product) {
+    return {
+      kind: 'not_found' as const,
+      code: normalizeBarcode(code),
+    }
+  }
+
+  const sameModelVariants = await findVariantsByProductId(product.id, false)
+  const model = product.product_model ?? (product.reference ? await findProductModelByReference(product.reference) : null)
+  const hasSameModelStock = sameModelVariants.some((variant) => variant.stock_quantity > 0)
+  const suggestions = hasSameModelStock || !model?.family ? [] : await findSuggestionsByFamily(model.family, product.id)
+
+  return {
+    kind: 'found' as const,
+    code: normalizeBarcode(code),
+    product,
+    productModel: model,
+    sameModelVariants,
+    suggestions,
+  }
+}
+
+export async function createProductModelIfNeeded(input: ProductInput, user: User | null) {
+  const client = getSupabase()
+  const reference = normalizeNullable(input.reference)
+  const existingModel = reference ? await findProductModelByReference(reference) : null
+  const payload = buildProductModelPayload(input, user, existingModel)
+
+  if (existingModel) {
+    const { data, error } = await client
+      .from('product_models')
+      .update(payload as never)
+      .eq('id', existingModel.id)
+      .select(productModelSelect)
+      .single()
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    const model = normalizeProductModel(data as unknown as ProductModel)
+    await syncProductsForModel(model)
+    return model
+  }
+
+  const { data, error } = await client.from('product_models').insert(payload as never).select(productModelSelect).single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const model = normalizeProductModel(data as unknown as ProductModel)
+  await syncProductsForModel(model)
+  return model
+}
+
+export async function createProductVariant(input: ProductInput, user: User | null, existingProductId?: string) {
+  const client = getSupabase()
+  const existingProduct = existingProductId ? await loadProductById(existingProductId, null) : null
+
+  let model: ProductModel
+  if (existingProduct?.product_model_id) {
+    model = await updateProductModelById(existingProduct.product_model_id, input, user)
+  } else {
+    model = await createProductModelIfNeeded(input, user)
+  }
+
+  const payload = buildProductVariantPayload(input, model, user?.id ?? existingProduct?.user_id ?? null)
+
+  if (existingProductId) {
+    const { data, error } = await client
+      .from('products')
+      .update(payload as never)
+      .eq('id', existingProductId)
+      .select(productSelect)
+      .single()
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return normalizeProduct(data as Product)
+  }
+
+  const { data, error } = await client.from('products').insert(payload as never).select(productSelect).single()
 
   if (error) {
     throw new Error(error.message)
@@ -281,20 +706,12 @@ export async function createProduct(input: ProductInput, user: User | null) {
   return product
 }
 
+export async function createProduct(input: ProductInput, user: User | null) {
+  return createProductVariant(input, user)
+}
+
 export async function updateProduct(id: string, input: ProductInput) {
-  const client = getSupabase()
-  const { data, error } = await client
-    .from('products')
-    .update(toProductPayload(input))
-    .eq('id', id)
-    .select(productSelect)
-    .single()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return normalizeProduct(data as Product)
+  return createProductVariant(input, null, id)
 }
 
 export async function deleteProduct(id: string) {
@@ -307,15 +724,15 @@ export async function deleteProduct(id: string) {
 }
 
 export async function findProductForSale(query: string) {
-  const products = await listProducts({ query: query.trim(), active: true })
-  const normalized = query.trim().toLowerCase()
+  const exact = await findProductByBarcode(query, true)
+  if (exact) {
+    return exact
+  }
 
-  return (
-    products.find((product) => product.barcode?.toLowerCase() === normalized) ??
-    products.find((product) => product.name.toLowerCase() === normalized) ??
-    products[0] ??
-    null
-  )
+  const products = await listProducts({ query: query.trim(), active: true })
+  const normalized = normalizeText(query)
+
+  return products.find((product) => normalizeText(product.name) === normalized) ?? products[0] ?? null
 }
 
 interface StockMovementInput {
@@ -389,6 +806,7 @@ export async function listStockMovements() {
         *,
         product:products(
           *,
+          product_model:product_models(${productModelSelect}),
           brand:brands(id, name, description, active, created_at, updated_at),
           clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
           size:sizes(id, name, sort_order, active, created_at, updated_at),
@@ -497,6 +915,7 @@ const cashMovementSelect = `
       *,
       product:products(
         *,
+        product_model:product_models(${productModelSelect}),
         brand:brands(id, name, description, active, created_at, updated_at),
         clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
         size:sizes(id, name, sort_order, active, created_at, updated_at),

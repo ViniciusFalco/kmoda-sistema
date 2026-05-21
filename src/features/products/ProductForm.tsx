@@ -1,10 +1,13 @@
 import { ChevronDown } from 'lucide-react'
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { BarcodeScanButton } from '../../components/barcode/BarcodeScanButton'
 import { Button } from '../../components/ui/Button'
 import { FormSection } from '../../components/ui/FormSection'
 import { Input } from '../../components/ui/Input'
 import { QuickCreateModal } from '../../components/ui/QuickCreateModal'
 import { SearchableSelect, type SelectOption } from '../../components/ui/SearchableSelect'
+import { normalizeBarcode } from '../../lib/barcode'
+import { findProductModelByReference } from '../../lib/catalog'
 import type { RegistryInput } from '../../lib/catalog'
 import type { Brand, ClothingType, Color, Product, RegistryKind, Size } from '../../types/database'
 
@@ -15,6 +18,7 @@ export interface ProductFormValues {
   barcode: string
   brand_id: string
   clothing_type_id: string
+  family: string
   size_id: string
   color_id: string
   reference: string
@@ -38,6 +42,7 @@ interface ProductFormProps {
   product?: Product | null
   registries: ProductRegistries
   submitting?: boolean
+  initialBarcode?: string
   onCancel: () => void
   onSubmit: (values: ProductFormValues, mode: ProductSubmitMode) => Promise<boolean>
   onQuickCreate: (kind: RegistryKind, values: RegistryInput) => Promise<{ id: string }>
@@ -48,6 +53,7 @@ const initialValues: ProductFormValues = {
   barcode: '',
   brand_id: '',
   clothing_type_id: '',
+  family: '',
   size_id: '',
   color_id: '',
   reference: '',
@@ -64,21 +70,31 @@ export function ProductForm({
   product,
   registries,
   submitting = false,
+  initialBarcode = '',
   onCancel,
   onSubmit,
   onQuickCreate,
 }: ProductFormProps) {
   const nameRef = useRef<HTMLInputElement>(null)
+  const autoFilledReferenceRef = useRef('')
+  const autoFilledValuesRef = useRef({
+    name: '',
+    family: '',
+    brand_id: '',
+    clothing_type_id: '',
+  })
+  const [referenceMessage, setReferenceMessage] = useState('')
   const [values, setValues] = useState<ProductFormValues>(() =>
     product
       ? {
-          name: product.name,
+          name: product.product_model?.name ?? product.name,
           barcode: product.barcode ?? '',
-          brand_id: product.brand_id ?? '',
-          clothing_type_id: product.clothing_type_id ?? '',
+          brand_id: product.product_model?.brand_id ?? product.brand_id ?? '',
+          clothing_type_id: product.product_model?.category_id ?? product.clothing_type_id ?? '',
+          family: product.product_model?.family ?? '',
           size_id: product.size_id ?? '',
           color_id: product.color_id ?? '',
-          reference: product.reference ?? '',
+          reference: product.product_model?.reference ?? product.reference ?? '',
           cost_price: String(product.cost_price ?? 0),
           sale_price: String(product.sale_price ?? ''),
           suggested_price:
@@ -90,13 +106,87 @@ export function ProductForm({
           description: product.description ?? '',
           active: product.active,
         }
-      : initialValues,
+      : {
+          ...initialValues,
+          barcode: normalizeBarcode(initialBarcode),
+        },
   )
   const [errors, setErrors] = useState<Partial<Record<keyof ProductFormValues, string>>>({})
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [quickCreate, setQuickCreate] = useState<{ kind: RegistryKind; title: string } | null>(null)
   const [quickError, setQuickError] = useState('')
   const [quickSubmitting, setQuickSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (product) {
+      return
+    }
+
+    const reference = values.reference.trim()
+
+    if (!reference) {
+      setReferenceMessage('')
+      return
+    }
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const model = await findProductModelByReference(reference)
+
+        if (!model) {
+          if (autoFilledReferenceRef.current && autoFilledReferenceRef.current !== reference) {
+            setValues((current) => {
+              const next = { ...current }
+
+              if (current.name === autoFilledValuesRef.current.name) {
+                next.name = ''
+              }
+
+              if (current.family === autoFilledValuesRef.current.family) {
+                next.family = ''
+              }
+
+              if (current.brand_id === autoFilledValuesRef.current.brand_id) {
+                next.brand_id = ''
+              }
+
+              if (current.clothing_type_id === autoFilledValuesRef.current.clothing_type_id) {
+                next.clothing_type_id = ''
+              }
+
+              return next
+            })
+          }
+
+          setReferenceMessage('')
+          return
+        }
+
+        const autoValues = {
+          name: model.name,
+          family: model.family ?? '',
+          brand_id: model.brand_id ?? '',
+          clothing_type_id: model.category_id ?? '',
+        }
+
+        setValues((current) => ({
+          ...current,
+          name: autoValues.name,
+          family: autoValues.family,
+          brand_id: autoValues.brand_id,
+          clothing_type_id: autoValues.clothing_type_id,
+        }))
+
+        autoFilledReferenceRef.current = reference
+        autoFilledValuesRef.current = autoValues
+        setReferenceMessage('Referência já cadastrada. Dados do modelo preenchidos automaticamente.')
+      } catch {
+        setReferenceMessage('')
+      }
+    }, 250)
+
+    return () => window.clearTimeout(timeout)
+  }, [product, values.reference])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -117,6 +207,7 @@ export function ProductForm({
         ...initialValues,
         brand_id: current.brand_id,
         clothing_type_id: current.clothing_type_id,
+        family: current.family,
         size_id: current.size_id,
         color_id: current.color_id,
         cost_price: current.cost_price,
@@ -125,11 +216,12 @@ export function ProductForm({
         min_stock: current.min_stock,
       }))
       setErrors({})
+      setReferenceMessage('')
       nameRef.current?.focus()
     }
   }
 
-  async function handleQuickCreate(values: { name: string; description: string }) {
+  async function handleQuickCreate(values: { name: string; description: string; extra?: string }) {
     if (!quickCreate) {
       return
     }
@@ -141,6 +233,7 @@ export function ProductForm({
       const item = await onQuickCreate(quickCreate.kind, {
         name: values.name,
         description: values.description,
+        hex: quickCreate.kind === 'colors' ? values.extra ?? null : null,
         active: true,
       })
       updateValue(fieldForKind(quickCreate.kind), item.id)
@@ -182,13 +275,28 @@ export function ProductForm({
                   error={errors.name}
                   required
                 />
-                <Input
-                  label="Código de barras"
-                  name="barcode"
-                  inputMode="text"
-                  value={values.barcode}
-                  onChange={(event) => updateValue('barcode', event.target.value)}
-                />
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-gray-700">Código de barras</span>
+                    <BarcodeScanButton
+                      label="Ler código"
+                      variant="secondary"
+                      onScan={(code) => updateValue('barcode', code)}
+                      className="h-9"
+                    />
+                  </div>
+                  <Input
+                    name="barcode"
+                    inputMode="text"
+                    value={values.barcode}
+                    onChange={(event) => updateValue('barcode', event.target.value)}
+                  />
+                </div>
+                {referenceMessage ? (
+                  <div className="md:col-span-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                    {referenceMessage}
+                  </div>
+                ) : null}
               </div>
             </FormSection>
 
@@ -315,11 +423,16 @@ export function ProductForm({
                   <ChevronDown className={`h-4 w-4 transition ${advancedOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {advancedOpen ? (
-                  <div className="border-t border-gray-100 p-3">
+                  <div className="grid gap-3 border-t border-gray-100 p-3 md:grid-cols-2">
                     <Input
                       label="Referência"
                       value={values.reference}
                       onChange={(event) => updateValue('reference', event.target.value)}
+                    />
+                    <Input
+                      label="Família / grupo"
+                      value={values.family}
+                      onChange={(event) => updateValue('family', event.target.value)}
                     />
                   </div>
                 ) : null}
@@ -350,6 +463,8 @@ export function ProductForm({
       <QuickCreateModal
         open={Boolean(quickCreate)}
         title={quickCreate?.title ?? ''}
+        extraLabel={quickCreate?.kind === 'colors' ? 'Código da cor' : undefined}
+        extraPlaceholder={quickCreate?.kind === 'colors' ? '#000000' : undefined}
         submitting={quickSubmitting}
         error={quickError}
         onClose={() => setQuickCreate(null)}

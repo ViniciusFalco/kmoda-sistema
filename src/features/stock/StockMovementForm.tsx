@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { BarcodeScanButton } from '../../components/barcode/BarcodeScanButton'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { SearchableSelect } from '../../components/ui/SearchableSelect'
@@ -17,6 +18,8 @@ interface StockMovementFormProps {
   submitting?: boolean
   defaultType?: StockMovementType
   defaultReason?: StockMovementReason
+  initialProductId?: string
+  onBarcodeScan?: (code: string) => Promise<void> | void
   onSubmit: (values: StockMovementFormValues) => Promise<void> | void
 }
 
@@ -25,6 +28,8 @@ export function StockMovementForm({
   submitting = false,
   defaultType = 'entrada',
   defaultReason = 'compra',
+  initialProductId = '',
+  onBarcodeScan,
   onSubmit,
 }: StockMovementFormProps) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -42,7 +47,7 @@ export function StockMovementForm({
 
   return (
     <form className="grid gap-4 xl:grid-cols-[2fr_140px_170px_120px_1fr_auto]" onSubmit={handleSubmit}>
-      <ProductField products={products} />
+      <ProductField products={products} initialProductId={initialProductId} onBarcodeScan={onBarcodeScan} />
       <label className="block space-y-1.5">
         <span className="text-sm font-medium text-gray-700">Tipo</span>
         <select
@@ -79,15 +84,25 @@ export function StockMovementForm({
   )
 }
 
-function ProductField({ products }: { products: Product[] }) {
+function ProductField({
+  products,
+  initialProductId,
+  onBarcodeScan,
+}: {
+  products: Product[]
+  initialProductId: string
+  onBarcodeScan?: (code: string) => Promise<void> | void
+}) {
   const [value, setValue] = useState('')
   const options = products.map((product) => ({
     value: product.id,
-    label: product.name,
+    label: product.product_model?.name ?? product.name,
     meta: [
+      product.product_model?.reference,
       product.barcode,
-      product.brand?.name,
-      product.clothing_type?.name,
+      product.product_model?.family,
+      product.product_model?.brand?.name ?? product.brand?.name,
+      product.product_model?.category?.name ?? product.clothing_type?.name,
       product.size?.name,
       product.color?.name,
     ]
@@ -95,16 +110,31 @@ function ProductField({ products }: { products: Product[] }) {
       .join(' • '),
   }))
 
+  useEffect(() => {
+    setValue(initialProductId)
+  }, [initialProductId])
+
   return (
-    <>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-gray-700">Produto</span>
+        {onBarcodeScan ? (
+          <BarcodeScanButton
+            label="Ler código"
+            variant="secondary"
+            onScan={onBarcodeScan}
+            className="h-9"
+          />
+        ) : null}
+      </div>
       <input type="hidden" name="product_id" value={value} required />
-        <SearchableSelect
-          label="Produto"
-          placeholder="Buscar por nome ou código de barras"
-          value={value}
-          options={options}
-          onChange={setValue}
-        />
-    </>
+      <SearchableSelect
+        label=""
+        placeholder="Buscar por nome ou código de barras"
+        value={value}
+        options={options}
+        onChange={setValue}
+      />
+    </div>
   )
 }

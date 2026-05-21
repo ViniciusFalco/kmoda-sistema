@@ -11,7 +11,7 @@ export interface SelectOption {
 }
 
 interface SearchableSelectProps {
-  label: string
+  label?: string
   placeholder: string
   value: string
   options: SelectOption[]
@@ -91,7 +91,7 @@ export function SearchableSelect({
 
   return (
     <div ref={rootRef} className="relative space-y-1.5">
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+      {label ? <span className="text-sm font-medium text-gray-700">{label}</span> : null}
       <div
         className={cn(
           'flex h-10 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-sm transition focus-within:border-gray-400 focus-within:ring-2 focus-within:ring-gray-100',

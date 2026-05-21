@@ -1,11 +1,16 @@
 import { ClipboardList, PackagePlus, Search, SlidersHorizontal } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { BarcodeResultModal, type BarcodeLookupResult } from '../../components/barcode/BarcodeResultModal'
+import { BarcodeScanButton } from '../../components/barcode/BarcodeScanButton'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
 import { Table } from '../../components/ui/Table'
 import {
+  findBarcodeLookup,
+  findProductByBarcode,
   createStockMovement,
   friendlyCatalogError,
   listProducts,
@@ -24,6 +29,8 @@ interface MovementPreset {
 
 export function StockPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [products, setProducts] = useState<Product[]>([])
   const [movements, setMovements] = useState<StockMovement[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,6 +38,11 @@ export function StockPage() {
   const [error, setError] = useState('')
   const [productQuery, setProductQuery] = useState('')
   const [movementPreset, setMovementPreset] = useState<MovementPreset | null>(null)
+  const [movementProductId, setMovementProductId] = useState('')
+  const [barcodeResult, setBarcodeResult] = useState<BarcodeLookupResult | null>(null)
+
+  const autoMovementBarcode = searchParams.get('barcode') ?? ''
+  const autoOpenMovement = searchParams.get('auto') === '1'
 
   const filteredProducts = useMemo(() => {
     const term = productQuery.trim().toLowerCase()
@@ -44,8 +56,12 @@ export function StockPage() {
         [
           product.name,
           product.barcode,
-          product.brand?.name,
-          product.clothing_type?.name,
+          product.reference,
+          product.product_model?.name,
+          product.product_model?.reference,
+          product.product_model?.family,
+          product.product_model?.brand?.name ?? product.brand?.name,
+          product.product_model?.category?.name ?? product.clothing_type?.name,
           product.size?.name,
           product.color?.name,
         ]
@@ -72,6 +88,53 @@ export function StockPage() {
       setLoading(false)
     }
   }, [])
+
+  const openMovementForProduct = useCallback((productId: string) => {
+    setMovementProductId(productId)
+    setMovementPreset({ title: 'Atualizar estoque', type: 'entrada', reason: 'ajuste_manual' })
+  }, [])
+
+  const handleSearchBarcodeScan = useCallback(async (code: string) => {
+    setError('')
+
+    try {
+      setBarcodeResult(await findBarcodeLookup(code))
+    } catch (err) {
+      setError(friendlyCatalogError(err))
+    }
+  }, [])
+
+  const handleMovementBarcodeScan = useCallback(
+    async (code: string) => {
+      setError('')
+
+      try {
+        const product = await findProductByBarcode(code)
+
+        if (!product) {
+          setError('Produto não encontrado para este código.')
+          return
+        }
+
+        openMovementForProduct(product.id)
+      } catch (err) {
+        setError(friendlyCatalogError(err))
+      }
+    },
+    [openMovementForProduct],
+  )
+
+  const closeBarcodeResult = useCallback(() => {
+    setBarcodeResult(null)
+  }, [])
+
+  useEffect(() => {
+    if (!autoOpenMovement || !autoMovementBarcode) {
+      return
+    }
+
+    void handleMovementBarcodeScan(autoMovementBarcode)
+  }, [autoMovementBarcode, autoOpenMovement, handleMovementBarcodeScan])
 
   useEffect(() => {
     let active = true
@@ -124,11 +187,17 @@ export function StockPage() {
       })
       await loadData()
       setMovementPreset(null)
+      setMovementProductId('')
     } catch (err) {
       setError(friendlyCatalogError(err))
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function closeMovementModal() {
+    setMovementPreset(null)
+    setMovementProductId('')
   }
 
   return (
@@ -139,21 +208,32 @@ export function StockPage() {
             <h1 className="text-xl font-semibold text-gray-950">Estoque</h1>
             <p className="mt-1 text-sm text-gray-500">Consulte peças e registre entradas, perdas, trocas ou ajustes controlados.</p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <Button onClick={() => setMovementPreset({ title: 'Entrada de produto', type: 'entrada', reason: 'compra' })}>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <Button
+              onClick={() => {
+                setMovementProductId('')
+                setMovementPreset({ title: 'Entrada de produto', type: 'entrada', reason: 'compra' })
+              }}
+            >
               <PackagePlus className="h-4 w-4" />
               Entrada
             </Button>
             <Button
               variant="secondary"
-              onClick={() => setMovementPreset({ title: 'Ajuste manual', type: 'entrada', reason: 'ajuste_manual' })}
+              onClick={() => {
+                setMovementProductId('')
+                setMovementPreset({ title: 'Ajuste manual', type: 'entrada', reason: 'ajuste_manual' })
+              }}
             >
               <SlidersHorizontal className="h-4 w-4" />
               Ajuste
             </Button>
             <Button
               variant="secondary"
-              onClick={() => setMovementPreset({ title: 'Registrar perda', type: 'saida', reason: 'perda' })}
+              onClick={() => {
+                setMovementProductId('')
+                setMovementPreset({ title: 'Registrar perda', type: 'saida', reason: 'perda' })
+              }}
             >
               <SlidersHorizontal className="h-4 w-4" />
               Perda
@@ -162,6 +242,7 @@ export function StockPage() {
               <Search className="h-4 w-4" />
               Consultar
             </Button>
+            <BarcodeScanButton label="Ler código" variant="secondary" onScan={handleSearchBarcodeScan} />
           </div>
         </div>
       </div>
@@ -191,13 +272,23 @@ export function StockPage() {
                 header: 'Produto',
                 render: (product) => (
                   <div>
-                    <p className="font-medium text-gray-950">{product.name}</p>
-                    <p className="text-xs text-gray-500">{product.barcode ?? 'Sem código de barras'}</p>
+                    <p className="font-medium text-gray-950">{product.product_model?.name ?? product.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {[
+                        product.product_model?.reference,
+                        product.barcode,
+                        product.product_model?.family,
+                        product.product_model?.brand?.name ?? product.brand?.name,
+                        product.product_model?.category?.name ?? product.clothing_type?.name,
+                      ]
+                        .filter(Boolean)
+                        .join(' • ') || 'Sem código de barras'}
+                    </p>
                   </div>
                 ),
               },
-              { key: 'brand', header: 'Marca', render: (product) => product.brand?.name ?? '-' },
-              { key: 'type', header: 'Tipo', render: (product) => product.clothing_type?.name ?? '-' },
+              { key: 'brand', header: 'Marca', render: (product) => product.product_model?.brand?.name ?? product.brand?.name ?? '-' },
+              { key: 'type', header: 'Tipo', render: (product) => product.product_model?.category?.name ?? product.clothing_type?.name ?? '-' },
               { key: 'size', header: 'Tamanho', render: (product) => product.size?.name ?? '-' },
               { key: 'color', header: 'Cor', render: (product) => product.color?.name ?? '-' },
               {
@@ -234,11 +325,14 @@ export function StockPage() {
                 header: 'Produto',
                 render: (movement) => (
                   <div>
-                    <p className="font-medium text-gray-950">{movement.product?.name ?? '-'}</p>
+                    <p className="font-medium text-gray-950">{movement.product?.product_model?.name ?? movement.product?.name ?? '-'}</p>
                     <p className="text-xs text-gray-500">
                       {[
-                        movement.product?.brand?.name,
-                        movement.product?.clothing_type?.name,
+                        movement.product?.product_model?.reference,
+                        movement.product?.barcode,
+                        movement.product?.product_model?.family,
+                        movement.product?.product_model?.brand?.name ?? movement.product?.brand?.name,
+                        movement.product?.product_model?.category?.name ?? movement.product?.clothing_type?.name,
                         movement.product?.size?.name,
                         movement.product?.color?.name,
                       ]
@@ -270,7 +364,7 @@ export function StockPage() {
       <Modal
         open={movementPreset !== null}
         title={movementPreset?.title ?? 'Movimentação de estoque'}
-        onClose={() => setMovementPreset(null)}
+        onClose={closeMovementModal}
         size="5xl"
       >
         <div className="mb-4 flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
@@ -282,9 +376,67 @@ export function StockPage() {
           submitting={submitting}
           defaultType={movementPreset?.type}
           defaultReason={movementPreset?.reason}
+          initialProductId={movementProductId}
+          onBarcodeScan={handleMovementBarcodeScan}
           onSubmit={handleSubmit}
         />
       </Modal>
+
+      <BarcodeResultModal
+        open={barcodeResult !== null}
+        result={barcodeResult}
+        onClose={closeBarcodeResult}
+        actions={
+          barcodeResult?.kind === 'found'
+            ? [
+                {
+                  label: 'Atualizar estoque',
+                  onClick: () => {
+                    if (!barcodeResult) {
+                      return
+                    }
+
+                    openMovementForProduct(barcodeResult.product.id)
+                    closeBarcodeResult()
+                  },
+                },
+                {
+                  label: 'Ver produto',
+                  onClick: () => {
+                    if (!barcodeResult) {
+                      return
+                    }
+
+                    closeBarcodeResult()
+                    navigate(`/produtos?q=${encodeURIComponent(barcodeResult.code)}`)
+                  },
+                },
+                {
+                  label: 'Fechar',
+                  variant: 'secondary',
+                  onClick: closeBarcodeResult,
+                },
+              ]
+            : [
+                {
+                  label: 'Cadastrar produto com este código',
+                  onClick: () => {
+                    if (!barcodeResult) {
+                      return
+                    }
+
+                    closeBarcodeResult()
+                    navigate(`/produtos?create=1&barcode=${encodeURIComponent(barcodeResult.code)}`)
+                  },
+                },
+                {
+                  label: 'Fechar',
+                  variant: 'secondary',
+                  onClick: closeBarcodeResult,
+                },
+              ]
+        }
+      />
     </div>
   )
 }

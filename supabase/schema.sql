@@ -101,12 +101,26 @@ create table if not exists public.colors (
   updated_at timestamptz not null default now()
 );
 
+-- Modelo base do produto: referência, nome e família para agrupar variações.
+create table if not exists public.product_models (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  reference text,
+  name text not null,
+  family text,
+  brand_id uuid references public.brands(id) on delete set null,
+  category_id uuid references public.clothing_types(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- Produtos da loja, incluindo código de barras interno para busca.
 create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete set null,
   name text not null,
   barcode text unique,
+  product_model_id uuid references public.product_models(id) on delete set null,
   brand_id uuid references public.brands(id) on delete set null,
   clothing_type_id uuid references public.clothing_types(id) on delete set null,
   size_id uuid references public.sizes(id) on delete set null,
@@ -125,6 +139,7 @@ create table if not exists public.products (
 
 -- Compatibilidade para bancos criados antes da evolução do cadastro por etiqueta.
 alter table public.products add column if not exists barcode text;
+alter table public.products add column if not exists product_model_id uuid references public.product_models(id) on delete set null;
 alter table public.products add column if not exists brand_id uuid references public.brands(id) on delete set null;
 alter table public.products add column if not exists clothing_type_id uuid references public.clothing_types(id) on delete set null;
 alter table public.products add column if not exists size_id uuid references public.sizes(id) on delete set null;
@@ -154,6 +169,7 @@ alter table public.brands enable row level security;
 alter table public.clothing_types enable row level security;
 alter table public.sizes enable row level security;
 alter table public.colors enable row level security;
+alter table public.product_models enable row level security;
 alter table public.products enable row level security;
 
 drop policy if exists "Authenticated users can view categories." on public.categories;
@@ -236,6 +252,20 @@ for insert to authenticated with check (true);
 create policy "Authenticated users can update colors." on public.colors
 for update to authenticated using (true) with check (true);
 create policy "Authenticated users can delete colors." on public.colors
+for delete to authenticated using (true);
+
+drop policy if exists "Authenticated users can view product models." on public.product_models;
+drop policy if exists "Authenticated users can create product models." on public.product_models;
+drop policy if exists "Authenticated users can update product models." on public.product_models;
+drop policy if exists "Authenticated users can delete product models." on public.product_models;
+
+create policy "Authenticated users can view product models." on public.product_models
+for select to authenticated using (true);
+create policy "Authenticated users can create product models." on public.product_models
+for insert to authenticated with check (true);
+create policy "Authenticated users can update product models." on public.product_models
+for update to authenticated using (true) with check (true);
+create policy "Authenticated users can delete product models." on public.product_models
 for delete to authenticated using (true);
 
 drop policy if exists "Authenticated users can view products." on public.products;
@@ -444,6 +474,10 @@ drop trigger if exists colors_set_updated_at on public.colors;
 create trigger colors_set_updated_at before update on public.colors
 for each row execute function public.set_updated_at();
 
+drop trigger if exists product_models_set_updated_at on public.product_models;
+create trigger product_models_set_updated_at before update on public.product_models
+for each row execute function public.set_updated_at();
+
 drop trigger if exists products_set_updated_at on public.products;
 create trigger products_set_updated_at before update on public.products
 for each row execute function public.set_updated_at();
@@ -469,6 +503,12 @@ create trigger cash_sessions_set_updated_at before update on public.cash_session
 for each row execute function public.set_updated_at();
 
 create index if not exists products_barcode_idx on public.products (barcode);
+create unique index if not exists product_models_reference_key on public.product_models (lower(reference)) where reference is not null and trim(reference) <> '';
+create index if not exists product_models_brand_id_idx on public.product_models (brand_id);
+create index if not exists product_models_category_id_idx on public.product_models (category_id);
+create index if not exists product_models_name_idx on public.product_models (name);
+create index if not exists product_models_family_idx on public.product_models (family);
+create index if not exists products_product_model_id_idx on public.products (product_model_id);
 create index if not exists products_reference_idx on public.products (reference);
 create index if not exists products_brand_id_idx on public.products (brand_id);
 create index if not exists products_clothing_type_id_idx on public.products (clothing_type_id);

@@ -221,7 +221,7 @@ function movementDescription(movement: CashMovement) {
   }
 
   const productNames = movement.sale?.sale_items
-    ?.map((item) => item.product?.name)
+    ?.map((item) => item.product?.product_model?.name ?? item.product?.name)
     .filter(Boolean)
 
   return productNames?.length ? productNames.join(', ') : movement.description

@@ -1,10 +1,12 @@
 import { Search, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { BarcodeScanButton } from '../../components/barcode/BarcodeScanButton'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Table } from '../../components/ui/Table'
 import {
   createCashIncome,
+  findProductByBarcode,
   friendlyCatalogError,
   listProducts,
   registerSaleWithCashAndStock,
@@ -17,6 +19,7 @@ import {
 } from '../../lib/utils'
 import type { PaymentMethod, Product } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
+import { isValidBarcode, normalizeBarcode } from '../../lib/barcode'
 
 type EntryMode = 'product_sale' | 'manual_income'
 
@@ -32,9 +35,16 @@ interface CashSaleFormProps {
   onSaved: () => void
   cashSessionId?: string | null
   sessionClosed?: boolean
+  initialBarcode?: string
 }
 
-export function CashSaleForm({ onCancel, onSaved, cashSessionId, sessionClosed }: CashSaleFormProps) {
+export function CashSaleForm({
+  onCancel,
+  onSaved,
+  cashSessionId,
+  sessionClosed,
+  initialBarcode = '',
+}: CashSaleFormProps) {
   const { user } = useAuth()
   const [mode, setMode] = useState<EntryMode>('product_sale')
   const [query, setQuery] = useState('')
@@ -50,6 +60,49 @@ export function CashSaleForm({ onCancel, onSaved, cashSessionId, sessionClosed }
   const [error, setError] = useState('')
 
   const total = useMemo(() => items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0), [items])
+
+  const handleBarcodeScan = useCallback(async (rawCode: string) => {
+    if (mode !== 'product_sale') {
+      return
+    }
+
+    const code = normalizeBarcode(rawCode)
+
+    if (!isValidBarcode(code)) {
+      setError('Informe um código de barras válido.')
+      return
+    }
+
+    setLoadingProducts(true)
+    setError('')
+
+    try {
+      const product = await findProductByBarcode(code)
+
+      if (!product) {
+        setError('Produto não encontrado para este código.')
+        return
+      }
+
+      addProduct(product)
+    } catch (err) {
+      setError(friendlyCatalogError(err))
+    } finally {
+      setLoadingProducts(false)
+    }
+  }, [mode])
+
+  useEffect(() => {
+    if (mode !== 'product_sale') {
+      return
+    }
+
+    if (!initialBarcode) {
+      return
+    }
+
+    void handleBarcodeScan(initialBarcode)
+  }, [handleBarcodeScan, initialBarcode, mode])
 
   useEffect(() => {
     if (mode !== 'product_sale') {
@@ -237,22 +290,30 @@ export function CashSaleForm({ onCancel, onSaved, cashSessionId, sessionClosed }
       {mode === 'product_sale' ? (
         <>
           <div>
-            <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
-            <Input
-              className="h-12 pl-10 text-base"
-              placeholder="Buscar por produto, código de barras, marca, tipo, tamanho ou cor"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value)
-                if (event.target.value.trim().length < 2) {
-                  setResults([])
-                  setLoadingProducts(false)
-                } else {
-                  setLoadingProducts(true)
-                }
-              }}
-            />
+            <div className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                <Input
+                  className="h-12 pl-10 text-base"
+                  placeholder="Buscar por produto, código de barras, marca, tipo, tamanho ou cor"
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value)
+                    if (event.target.value.trim().length < 2) {
+                      setResults([])
+                      setLoadingProducts(false)
+                    } else {
+                      setLoadingProducts(true)
+                    }
+                  }}
+                />
+              </div>
+              <BarcodeScanButton
+                label="Ler código"
+                variant="secondary"
+                onScan={handleBarcodeScan}
+                className="h-12"
+              />
             </div>
             {query.trim().length >= 2 ? (
               <div className="mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 text-sm shadow-xl">
@@ -269,9 +330,17 @@ export function CashSaleForm({ onCancel, onSaved, cashSessionId, sessionClosed }
                       onClick={() => addProduct(product)}
                     >
                       <span>
-                        <span className="block font-medium text-gray-950">{product.name}</span>
+                        <span className="block font-medium text-gray-950">{product.product_model?.name ?? product.name}</span>
                         <span className="block text-xs text-gray-500">
-                          {[product.barcode, product.brand?.name, product.clothing_type?.name, product.size?.name, product.color?.name]
+                          {[
+                            product.product_model?.reference,
+                            product.barcode,
+                            product.product_model?.family,
+                            product.product_model?.brand?.name ?? product.brand?.name,
+                            product.product_model?.category?.name ?? product.clothing_type?.name,
+                            product.size?.name,
+                            product.color?.name,
+                          ]
                             .filter(Boolean)
                             .join(' • ') || 'Sem detalhes'}
                         </span>
@@ -295,9 +364,17 @@ export function CashSaleForm({ onCancel, onSaved, cashSessionId, sessionClosed }
                 header: 'Produto',
                 render: (item) => (
                   <div>
-                    <p className="font-medium text-gray-950">{item.product.name}</p>
+                    <p className="font-medium text-gray-950">{item.product.product_model?.name ?? item.product.name}</p>
                     <p className="text-xs text-gray-500">
-                      {[item.product.barcode, item.product.brand?.name, item.product.clothing_type?.name, item.product.size?.name, item.product.color?.name]
+                      {[
+                        item.product.product_model?.reference,
+                        item.product.barcode,
+                        item.product.product_model?.family,
+                        item.product.product_model?.brand?.name ?? item.product.brand?.name,
+                        item.product.product_model?.category?.name ?? item.product.clothing_type?.name,
+                        item.product.size?.name,
+                        item.product.color?.name,
+                      ]
                         .filter(Boolean)
                         .join(' • ') || '-'}
                     </p>
