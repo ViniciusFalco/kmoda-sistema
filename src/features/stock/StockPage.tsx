@@ -25,6 +25,7 @@ interface TableColumn<T> {
   key: string
   header: string
   render: (row: T) => ReactNode
+  align?: 'left' | 'center'
 }
 
 interface StockTableProps<T extends { id: string }> {
@@ -70,7 +71,9 @@ function StockTable<T extends { id: string }>({
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className="px-5 py-5 text-center text-[12px] font-semibold uppercase tracking-[0.22em] sm:py-6"
+                  className={`px-5 py-5 text-[12px] font-semibold uppercase tracking-[0.22em] sm:py-6 ${
+                    column.align === 'left' ? 'text-left' : 'text-center'
+                  }`}
                 >
                   {column.header}
                 </th>
@@ -105,7 +108,12 @@ function StockTable<T extends { id: string }>({
                   aria-label={onRowClick ? `Ver detalhes de ${String((row as { name?: string }).name ?? row.id)}` : undefined}
                 >
                   {columns.map((column) => (
-                    <td key={column.key} className="px-5 py-5 align-top text-zinc-700">
+                    <td
+                      key={column.key}
+                      className={`px-5 py-5 align-middle text-zinc-700 ${
+                        column.align === 'left' ? 'text-left' : 'text-center'
+                      }`}
+                    >
                       {column.render(row)}
                     </td>
                   ))}
@@ -397,8 +405,8 @@ export function StockPage() {
         }
       `}</style>
 
-      <div className="overflow-hidden rounded-[2rem] border border-black/10 bg-[linear-gradient(135deg,#050505_0%,#121212_48%,#0a0a0a_100%)] px-6 pb-6 pt-8 text-white shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:px-8 sm:pt-10 lg:px-10 lg:pt-12">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <div className="overflow-hidden rounded-[2rem] border border-black/10 bg-[linear-gradient(135deg,#050505_0%,#121212_48%,#0a0a0a_100%)] px-6 pb-8 pt-8 text-white shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:px-8 sm:pb-10 sm:pt-10 lg:px-10 lg:pt-12">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 text-left">
             <h1 className="text-4xl font-semibold tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl">Estoque</h1>
           </div>
@@ -468,7 +476,7 @@ export function StockPage() {
 
                   <BarcodeScanButton
                     label="Ler código de barras"
-                    variant="secondary"
+                    variant="default"
                     onScan={handleProductBarcodeScan}
                     className="h-12 w-full lg:w-auto"
                   />
@@ -482,13 +490,11 @@ export function StockPage() {
                     {
                       key: 'product',
                       header: 'Produto',
+                      align: 'left',
                       render: (product) => (
-                        <div className="min-w-0">
+                        <div className="min-w-0 text-left">
                           <p className="font-medium text-zinc-950 group-hover:underline group-hover:decoration-zinc-400 group-hover:underline-offset-4">
                             {product.product_model?.name ?? product.name}
-                          </p>
-                          <p className="mt-1 text-xs text-zinc-500">
-                            {product.barcode || product.product_model?.reference || 'Sem código de barras'}
                           </p>
                         </div>
                       ),
@@ -516,56 +522,96 @@ export function StockPage() {
                     },
                   ]}
                 />
+
+                {productQuery.trim() ? (
+                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                    Mostrando <span className="font-semibold text-zinc-950">{filteredProducts.length}</span> produtos filtrados
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_180px_auto]">
-                  <Input
-                    label="Data inicial"
-                    type="date"
-                    value={historyStartDate}
-                    onChange={(event) => setHistoryStartDate(event.target.value)}
-                  />
-                  <Input
-                    label="Data final"
-                    type="date"
-                    value={historyEndDate}
-                    onChange={(event) => setHistoryEndDate(event.target.value)}
-                  />
-                  <label className="block space-y-1.5">
-                    <span className="text-sm font-medium text-gray-700">Tipo</span>
-                    <select
-                      value={historyTypeFilter}
-                      onChange={(event) => {
-                        const nextType = event.target.value as HistoryTypeFilter
-                        setHistoryTypeFilter(nextType)
-                      }}
-                      className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-                    >
-                      <option value="all">Todos os tipos</option>
-                      <option value="entrada">Entrada</option>
-                      <option value="saida">Saída</option>
-                    </select>
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className="text-sm font-medium text-gray-700">Motivo</span>
-                    <select
-                      value={historyReasonFilter}
-                      onChange={(event) => setHistoryReasonFilter(event.target.value as HistoryReasonFilter)}
-                      className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-                    >
-                      {availableHistoryReasonOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <div className="overflow-hidden rounded-[1.75rem] border border-zinc-900/80 bg-[linear-gradient(135deg,#050505_0%,#111111_55%,#080808_100%)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.18)] sm:p-5">
+                  <div className="flex flex-col gap-4">
+                    <div className="text-center">
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">Filtros</p>
+                    </div>
 
-                  <div className="flex items-end">
-                    <Button type="button" variant="secondary" className="w-full" onClick={resetHistoryFilters}>
-                      Limpar filtros
-                    </Button>
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_190px_190px_auto]">
+                      <Input
+                        label="Data inicial"
+                        type="date"
+                        value={historyStartDate}
+                        onChange={(event) => setHistoryStartDate(event.target.value)}
+                        tone="dark"
+                        className={
+                          historyStartDate
+                            ? 'border-white bg-white text-zinc-950 placeholder:text-zinc-400 focus:border-white focus:ring-white/20'
+                            : undefined
+                        }
+                      />
+                      <Input
+                        label="Data final"
+                        type="date"
+                        value={historyEndDate}
+                        onChange={(event) => setHistoryEndDate(event.target.value)}
+                        tone="dark"
+                        className={
+                          historyEndDate
+                            ? 'border-white bg-white text-zinc-950 placeholder:text-zinc-400 focus:border-white focus:ring-white/20'
+                            : undefined
+                        }
+                      />
+                      <label className="block space-y-1.5">
+                        <span className="text-sm font-medium text-white/75">Tipo</span>
+                        <select
+                          value={historyTypeFilter}
+                          onChange={(event) => {
+                            const nextType = event.target.value as HistoryTypeFilter
+                            setHistoryTypeFilter(nextType)
+                          }}
+                          className={`h-10 w-full rounded-md border px-3 text-sm outline-none transition focus:ring-2 ${
+                            historyTypeFilter === 'all'
+                              ? 'border-white/10 bg-white/5 text-white placeholder:text-white/35 focus:border-white/20 focus:ring-white/10'
+                              : 'border-white bg-white text-zinc-950 focus:border-white focus:ring-white/20'
+                          }`}
+                        >
+                          <option value="all" className="text-zinc-950">
+                            Todos os tipos
+                          </option>
+                          <option value="entrada" className="text-zinc-950">
+                            Entrada
+                          </option>
+                          <option value="saida" className="text-zinc-950">
+                            Saída
+                          </option>
+                        </select>
+                      </label>
+                      <label className="block space-y-1.5">
+                        <span className="text-sm font-medium text-white/75">Motivo</span>
+                        <select
+                          value={historyReasonFilter}
+                          onChange={(event) => setHistoryReasonFilter(event.target.value as HistoryReasonFilter)}
+                          className={`h-10 w-full rounded-md border px-3 text-sm outline-none transition focus:ring-2 ${
+                            historyReasonFilter === 'all'
+                              ? 'border-white/10 bg-white/5 text-white focus:border-white/20 focus:ring-white/10'
+                              : 'border-white bg-white text-zinc-950 focus:border-white focus:ring-white/20'
+                          }`}
+                        >
+                          {availableHistoryReasonOptions.map((option) => (
+                            <option key={option.value} value={option.value} className="text-zinc-950">
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <div className="flex items-end">
+                        <Button type="button" variant="secondary" tone="dark" className="w-full" onClick={resetHistoryFilters}>
+                          Limpar filtros
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -578,13 +624,11 @@ export function StockPage() {
                     {
                       key: 'product',
                       header: 'Produto',
+                      align: 'left',
                       render: (movement) => (
-                        <div className="min-w-0">
+                        <div className="min-w-0 text-left">
                           <p className="font-medium text-zinc-950 group-hover:underline group-hover:decoration-zinc-400 group-hover:underline-offset-4">
                             {getStockMovementTitle(movement)}
-                          </p>
-                          <p className="mt-1 text-xs text-zinc-500">
-                            {movement.product?.barcode || movement.product?.product_model?.reference || 'Sem código de barras'}
                           </p>
                         </div>
                       ),
@@ -609,6 +653,12 @@ export function StockPage() {
                     { key: 'notes', header: 'Observação', render: (movement) => movement.notes ?? '-' },
                   ]}
                 />
+
+                {(historyStartDate || historyEndDate || historyTypeFilter !== 'all' || historyReasonFilter !== 'all') ? (
+                  <div className="rounded-2xl border border-white/10 bg-white px-4 py-3 text-center text-sm text-zinc-700 shadow-[0_10px_24px_rgba(0,0,0,0.08)]">
+                    Mostrando <span className="font-semibold text-zinc-950">{filteredMovements.length}</span> linhas filtradas
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
