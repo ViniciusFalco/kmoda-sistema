@@ -4,6 +4,8 @@ import { BarcodeScanButton } from '../../components/barcode/BarcodeScanButton'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Table } from '../../components/ui/Table'
+import { CashSessionBlockedOverlay } from './CashSessionBlockedOverlay'
+import { CashInstallmentModal } from './CashInstallmentModal'
 import {
   createCashIncome,
   findProductByBarcode,
@@ -33,6 +35,7 @@ interface SaleLine {
 interface CashSaleFormProps {
   onCancel: () => void
   onSaved: () => void
+  onOpenCash: () => void
   cashSessionId?: string | null
   sessionClosed?: boolean
   initialBarcode?: string
@@ -41,6 +44,7 @@ interface CashSaleFormProps {
 export function CashSaleForm({
   onCancel,
   onSaved,
+  onOpenCash,
   cashSessionId,
   sessionClosed,
   initialBarcode = '',
@@ -52,14 +56,21 @@ export function CashSaleForm({
   const [items, setItems] = useState<SaleLine[]>([])
   const [description, setDescription] = useState('')
   const [manualAmount, setManualAmount] = useState('')
+  const [salePaymentMode, setSalePaymentMode] = useState<'cash' | 'credit'>('cash')
+  const [saleInstallmentsCount, setSaleInstallmentsCount] = useState(1)
+  const [installmentModalOpen, setInstallmentModalOpen] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('dinheiro')
   const [movementDate, setMovementDate] = useState(getTodayLocalDate())
   const [notes, setNotes] = useState('')
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const cashSessionOpen = Boolean(cashSessionId) && !sessionClosed
+  const isBlocked = !cashSessionOpen
+  const blockedMessage = 'Abra o caixa para registrar vendas ou gastos.'
 
   const total = useMemo(() => items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0), [items])
+  const saleInstallmentValue = salePaymentMode === 'credit' ? total / Math.max(1, saleInstallmentsCount) : total
 
   const handleBarcodeScan = useCallback(async (rawCode: string) => {
     if (mode !== 'product_sale') {
@@ -101,7 +112,11 @@ export function CashSaleForm({
       return
     }
 
-    void handleBarcodeScan(initialBarcode)
+    const frame = window.requestAnimationFrame(() => {
+      void handleBarcodeScan(initialBarcode)
+    })
+
+    return () => window.cancelAnimationFrame(frame)
   }, [handleBarcodeScan, initialBarcode, mode])
 
   useEffect(() => {
@@ -195,6 +210,11 @@ export function CashSaleForm({
   }
 
   async function submitProductSale() {
+    if (!cashSessionOpen) {
+      setError(blockedMessage)
+      return
+    }
+
     if (items.length === 0) {
       setError('Adicione pelo menos um produto.')
       return
@@ -216,7 +236,8 @@ export function CashSaleForm({
           quantity: item.quantity,
           unitPrice: item.unitPrice,
         })),
-        paymentMethod,
+        paymentMethod: salePaymentMode === 'credit' ? 'cartao_credito' : 'dinheiro',
+        installmentsCount: salePaymentMode === 'credit' ? saleInstallmentsCount : 1,
         movementDate,
         notes,
         user,
@@ -231,6 +252,11 @@ export function CashSaleForm({
   }
 
   async function submitManualIncome() {
+    if (!cashSessionOpen) {
+      setError(blockedMessage)
+      return
+    }
+
     const amount = parseCurrencyToNumber(manualAmount)
 
     if (!description.trim()) {
@@ -265,231 +291,307 @@ export function CashSaleForm({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="grid gap-2 rounded-lg border border-gray-200 bg-gray-50 p-1 sm:grid-cols-2">
-        <button
-          type="button"
-          className={`rounded-md px-4 py-3 text-sm font-medium transition ${
-            mode === 'product_sale' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-600 hover:bg-white/70'
-          }`}
-          onClick={() => setMode('product_sale')}
-        >
-          Venda com produto
-        </button>
-        <button
-          type="button"
-          className={`rounded-md px-4 py-3 text-sm font-medium transition ${
-            mode === 'manual_income' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-600 hover:bg-white/70'
-          }`}
-          onClick={() => setMode('manual_income')}
-        >
-          Entrada avulsa
-        </button>
-      </div>
+    <div className="relative space-y-5 text-white">
+      <div className={`space-y-5 ${isBlocked ? 'pointer-events-none blur-[1.5px] select-none' : ''}`}>
+        <div className="grid gap-2 rounded-lg border border-white/10 bg-white/5 p-1 sm:grid-cols-2">
+          <button
+            type="button"
+            className={`rounded-md px-4 py-3 text-sm font-medium transition ${
+              mode === 'product_sale' ? 'bg-white text-gray-950 shadow-sm' : 'text-white/55 hover:bg-white/10'
+            }`}
+            onClick={() => setMode('product_sale')}
+          >
+            Venda com produto
+          </button>
+          <button
+            type="button"
+            className={`rounded-md px-4 py-3 text-sm font-medium transition ${
+              mode === 'manual_income' ? 'bg-white text-gray-950 shadow-sm' : 'text-white/55 hover:bg-white/10'
+            }`}
+            onClick={() => setMode('manual_income')}
+          >
+            Entrada avulsa
+          </button>
+        </div>
 
-      {mode === 'product_sale' ? (
-        <>
-          <div>
-            <div className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
-                <Input
-                  className="h-12 pl-10 text-base"
-                  placeholder="Buscar por produto, código de barras, marca, tipo, tamanho ou cor"
-                  value={query}
-                  onChange={(event) => {
-                    setQuery(event.target.value)
-                    if (event.target.value.trim().length < 2) {
-                      setResults([])
-                      setLoadingProducts(false)
-                    } else {
-                      setLoadingProducts(true)
-                    }
-                  }}
+        {mode === 'product_sale' ? (
+          <>
+            <div>
+              <div className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-white/35" />
+                  <Input
+                    className="h-12 pl-10 text-base"
+                    tone="dark"
+                    placeholder="Buscar por produto, código de barras, marca, tipo, tamanho ou cor"
+                    value={query}
+                    onChange={(event) => {
+                      setQuery(event.target.value)
+                      if (event.target.value.trim().length < 2) {
+                        setResults([])
+                        setLoadingProducts(false)
+                      } else {
+                        setLoadingProducts(true)
+                      }
+                    }}
+                  />
+                </div>
+                <BarcodeScanButton
+                  label="Ler código"
+                  variant="secondary"
+                  tone="light"
+                  onScan={handleBarcodeScan}
+                  className="h-12"
                 />
               </div>
-              <BarcodeScanButton
-                label="Ler código"
-                variant="secondary"
-                onScan={handleBarcodeScan}
-                className="h-12"
-              />
-            </div>
-            {query.trim().length >= 2 ? (
-              <div className="mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 text-sm shadow-xl">
-                {loadingProducts ? (
-                  <div className="px-3 py-3 text-gray-500">Buscando produtos...</div>
-                ) : results.length === 0 ? (
-                  <div className="px-3 py-3 text-gray-500">Nenhum produto encontrado.</div>
-                ) : (
-                  results.map((product) => (
-                    <button
-                      key={product.id}
-                      type="button"
-                      className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left hover:bg-gray-50"
-                      onClick={() => addProduct(product)}
-                    >
-                      <span>
-                        <span className="block font-medium text-gray-950">{product.product_model?.name ?? product.name}</span>
-                        <span className="block text-xs text-gray-500">
-                          {[
-                            product.product_model?.reference,
-                            product.barcode,
-                            product.product_model?.family,
-                            product.product_model?.brand?.name ?? product.brand?.name,
-                            product.product_model?.category?.name ?? product.clothing_type?.name,
-                            product.size?.name,
-                            product.color?.name,
-                          ]
-                            .filter(Boolean)
-                            .join(' • ') || 'Sem detalhes'}
+              {query.trim().length >= 2 ? (
+                <div className="mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-white/10 bg-[#050505] p-1 text-sm shadow-xl">
+                  {loadingProducts ? (
+                    <div className="px-3 py-3 text-white/55">Buscando produtos...</div>
+                  ) : results.length === 0 ? (
+                    <div className="px-3 py-3 text-white/55">Nenhum produto encontrado.</div>
+                  ) : (
+                    results.map((product) => (
+                      <button
+                        key={product.id}
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left text-white transition hover:bg-white/5"
+                        onClick={() => addProduct(product)}
+                      >
+                        <span>
+                          <span className="block font-medium text-white">{product.product_model?.name ?? product.name}</span>
+                          <span className="block text-xs text-white/55">
+                            {[
+                              product.product_model?.reference,
+                              product.barcode,
+                              product.product_model?.family,
+                              product.product_model?.brand?.name ?? product.brand?.name,
+                              product.product_model?.category?.name ?? product.clothing_type?.name,
+                              product.size?.name,
+                              product.color?.name,
+                            ]
+                              .filter(Boolean)
+                              .join(' • ') || 'Sem detalhes'}
+                          </span>
                         </span>
-                      </span>
-                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
-                        Estoque {product.stock_quantity}
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            ) : null}
+                        <span className="shrink-0 rounded-full bg-white/10 px-2 py-1 text-xs font-medium text-white/75">
+                          Estoque {product.stock_quantity}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            <Table
+              tone="dark"
+              data={items}
+              emptyMessage="Nenhum produto adicionado."
+              columns={[
+                {
+                  key: 'product',
+                  header: 'Produto',
+                  render: (item) => (
+                    <div>
+                      <p className="font-medium text-white">{item.product.product_model?.name ?? item.product.name}</p>
+                      <p className="text-xs text-white/55">
+                        {[
+                          item.product.product_model?.reference,
+                          item.product.barcode,
+                          item.product.product_model?.family,
+                          item.product.product_model?.brand?.name ?? item.product.brand?.name,
+                          item.product.product_model?.category?.name ?? item.product.clothing_type?.name,
+                          item.product.size?.name,
+                          item.product.color?.name,
+                        ]
+                          .filter(Boolean)
+                          .join(' • ') || '-'}
+                      </p>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'quantity',
+                  header: 'Qtd.',
+                  render: (item) => (
+                    <Input
+                      className="w-20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      tone="dark"
+                      type="number"
+                      min="1"
+                      max={item.product.stock_quantity}
+                      value={item.quantity}
+                      onChange={(event) => updateQuantity(item.id, Number(event.target.value))}
+                    />
+                  ),
+                },
+                {
+                  key: 'unit',
+                  header: 'Unitário',
+                  render: (item) => (
+                    <Input
+                      className="w-32"
+                      tone="dark"
+                      type="text"
+                      inputMode="numeric"
+                      value={formatCurrencyBRL(item.unitPrice)}
+                      onChange={(event) => updateUnitPrice(item.id, formatCurrencyInput(event.target.value))}
+                    />
+                  ),
+                },
+                { key: 'total', header: 'Total', render: (item) => formatCurrencyBRL(item.quantity * item.unitPrice) },
+                {
+                  key: 'remove',
+                  header: '',
+                  render: (item) => (
+                    <Button
+                      tone="dark"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setItems((current) => current.filter((line) => line.id !== item.id))}
+                      aria-label="Remover produto"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          </>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            <Input tone="dark" label="Descrição" value={description} onChange={(event) => setDescription(event.target.value)} required />
+            <Input
+              tone="dark"
+              label="Valor"
+              type="text"
+              inputMode="numeric"
+              placeholder="R$ 0,00"
+              value={manualAmount}
+              onChange={(event) => setManualAmount(formatCurrencyInput(event.target.value))}
+              required
+            />
+          </div>
+        )}
+
+      {error ? <div className="rounded-md border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div> : null}
+
+      {mode === 'product_sale' ? (
+        <div className="grid gap-4 rounded-lg border border-white/10 bg-white/5 p-4 md:grid-cols-[1.2fr_160px_180px] md:items-end">
+          <div className="space-y-2">
+            <span className="text-sm font-medium text-white/75">Forma de pagamento</span>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                className={`rounded-md px-4 py-3 text-sm font-medium transition ${
+                  salePaymentMode === 'cash' ? 'bg-white text-gray-950 shadow-sm' : 'text-white/55 hover:bg-white/10'
+                }`}
+                onClick={() => {
+                  setSalePaymentMode('cash')
+                  setSaleInstallmentsCount(1)
+                  setInstallmentModalOpen(false)
+                }}
+              >
+                Dinheiro
+              </button>
+              <button
+                type="button"
+                className={`rounded-md px-4 py-3 text-sm font-medium transition ${
+                  salePaymentMode === 'credit' ? 'bg-white text-gray-950 shadow-sm' : 'text-white/55 hover:bg-white/10'
+                }`}
+                onClick={() => {
+                  setSalePaymentMode('credit')
+                  setInstallmentModalOpen(true)
+                }}
+              >
+                Crédito
+              </button>
+            </div>
+            <p className="text-xs text-white/45">
+              {salePaymentMode === 'credit'
+                ? `${saleInstallmentsCount}x de ${formatCurrencyBRL(saleInstallmentValue)}`
+                : 'Pagamento em dinheiro para conferência do caixa.'}
+            </p>
           </div>
 
-          <Table
-            data={items}
-            emptyMessage="Nenhum produto adicionado."
-            columns={[
-              {
-                key: 'product',
-                header: 'Produto',
-                render: (item) => (
-                  <div>
-                    <p className="font-medium text-gray-950">{item.product.product_model?.name ?? item.product.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {[
-                        item.product.product_model?.reference,
-                        item.product.barcode,
-                        item.product.product_model?.family,
-                        item.product.product_model?.brand?.name ?? item.product.brand?.name,
-                        item.product.product_model?.category?.name ?? item.product.clothing_type?.name,
-                        item.product.size?.name,
-                        item.product.color?.name,
-                      ]
-                        .filter(Boolean)
-                        .join(' • ') || '-'}
-                    </p>
-                  </div>
-                ),
-              },
-              {
-                key: 'quantity',
-                header: 'Qtd.',
-                render: (item) => (
-                  <Input
-                    className="w-20"
-                    type="number"
-                    min="1"
-                    max={item.product.stock_quantity}
-                    value={item.quantity}
-                    onChange={(event) => updateQuantity(item.id, Number(event.target.value))}
-                  />
-                ),
-              },
-              {
-                key: 'unit',
-                header: 'Unitário',
-                render: (item) => (
-                  <Input
-                    className="w-32"
-                    type="text"
-                    inputMode="numeric"
-                    value={formatCurrencyBRL(item.unitPrice)}
-                    onChange={(event) => updateUnitPrice(item.id, formatCurrencyInput(event.target.value))}
-                  />
-                ),
-              },
-              { key: 'total', header: 'Total', render: (item) => formatCurrencyBRL(item.quantity * item.unitPrice) },
-              {
-                key: 'remove',
-                header: '',
-                render: (item) => (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setItems((current) => current.filter((line) => line.id !== item.id))}
-                    aria-label="Remover produto"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                ),
-              },
-            ]}
-          />
-        </>
+          <Input tone="dark" label="Data" type="date" value={movementDate} onChange={(event) => setMovementDate(event.target.value)} />
+
+          <div>
+            <p className="text-sm text-white/55">Total da venda</p>
+            <p className="text-3xl font-semibold text-white">{formatCurrencyBRL(total)}</p>
+            <p className="mt-1 text-xs text-white/45">
+              {salePaymentMode === 'credit'
+                ? `${saleInstallmentsCount} parcelas de ${formatCurrencyBRL(saleInstallmentValue)}`
+                : 'À vista'}
+            </p>
+          </div>
+        </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Input label="Descrição" value={description} onChange={(event) => setDescription(event.target.value)} required />
-          <Input
-            label="Valor"
-            type="text"
-            inputMode="numeric"
-            placeholder="R$ 0,00"
-            value={manualAmount}
-            onChange={(event) => setManualAmount(formatCurrencyInput(event.target.value))}
-            required
-          />
+        <div className="grid gap-4 rounded-lg border border-white/10 bg-white/5 p-4 md:grid-cols-[1fr_160px_180px] md:items-end">
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-white/75">Forma de pagamento</span>
+            <select
+              className="h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white outline-none transition focus:border-white/20 focus:ring-2 focus:ring-white/10"
+              value={paymentMethod}
+              onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+            >
+              <option value="dinheiro">Dinheiro</option>
+              <option value="pix">Pix</option>
+              <option value="cartao_debito">Cartão de débito</option>
+              <option value="cartao_credito">Cartão de crédito</option>
+              <option value="outro">Outro</option>
+            </select>
+          </label>
+          <Input tone="dark" label="Data" type="date" value={movementDate} onChange={(event) => setMovementDate(event.target.value)} />
+          <div>
+            <p className="text-sm text-white/55">Total da entrada</p>
+            <p className="text-3xl font-semibold text-white">{formatCurrencyBRL(parseCurrencyToNumber(manualAmount))}</p>
+          </div>
         </div>
       )}
 
-      {sessionClosed ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          O caixa do dia está fechado. O lançamento será registrado sem vínculo com caixa aberto.
-        </div>
-      ) : null}
-
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-
-      <div className="grid gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 md:grid-cols-[1fr_160px_180px] md:items-end">
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-gray-700">Forma de pagamento</span>
-          <select
-            className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm"
-            value={paymentMethod}
-            onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
-          >
-            <option value="dinheiro">Dinheiro</option>
-            <option value="pix">Pix</option>
-            <option value="cartao_debito">Cartão de débito</option>
-            <option value="cartao_credito">Cartão de crédito</option>
-            <option value="outro">Outro</option>
-          </select>
-        </label>
-        <Input label="Data" type="date" value={movementDate} onChange={(event) => setMovementDate(event.target.value)} />
-        <div>
-          <p className="text-sm text-gray-500">{mode === 'product_sale' ? 'Total da venda' : 'Total da entrada'}</p>
-          <p className="text-3xl font-semibold text-gray-950">
-            {formatCurrencyBRL(mode === 'product_sale' ? total : parseCurrencyToNumber(manualAmount))}
-          </p>
-        </div>
-      </div>
-
       <label className="block space-y-1.5">
-        <span className="text-sm font-medium text-gray-700">Observação</span>
+        <span className="text-sm font-medium text-white/75">Observação</span>
         <textarea
-          className="min-h-20 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition placeholder:text-gray-400 focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+          className="min-h-20 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-white/20 focus:ring-2 focus:ring-white/10"
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
         />
       </label>
 
-      <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
-        <Button variant="secondary" onClick={onCancel}>
+      <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
+        <Button tone="dark" variant="secondary" type="button" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button onClick={() => void handleSubmit()} disabled={submitting || (mode === 'product_sale' && items.length === 0)}>
+        <Button
+          tone="dark"
+          onClick={() => void handleSubmit()}
+          disabled={submitting || !cashSessionOpen || (mode === 'product_sale' && items.length === 0)}
+        >
           {submitting ? 'Registrando...' : mode === 'product_sale' ? 'Registrar venda' : 'Registrar entrada'}
         </Button>
       </div>
+
+      <CashInstallmentModal
+        open={installmentModalOpen}
+        total={total}
+        installmentsCount={saleInstallmentsCount}
+        onSelectInstallmentsCount={setSaleInstallmentsCount}
+        onCancel={() => {
+          setInstallmentModalOpen(false)
+          setSalePaymentMode('cash')
+          setSaleInstallmentsCount(1)
+        }}
+        onConfirm={(count) => {
+          setSaleInstallmentsCount(count)
+          setSalePaymentMode('credit')
+          setInstallmentModalOpen(false)
+        }}
+      />
+      </div>
+
+      {isBlocked ? <CashSessionBlockedOverlay onOpenCash={onOpenCash} /> : null}
     </div>
   )
 }

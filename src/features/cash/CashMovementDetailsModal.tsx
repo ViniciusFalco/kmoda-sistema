@@ -2,54 +2,67 @@ import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Table } from '../../components/ui/Table'
 import { formatCurrencyBRL, formatDateBR } from '../../lib/utils'
-import type { CashMovement } from '../../types/database'
+import type { CashHistoryEntry, CashMovement } from '../../types/database'
 import type { ReactNode } from 'react'
 
 interface CashMovementDetailsModalProps {
-  movement: CashMovement | null
+  entry: CashHistoryEntry | null
   onClose: () => void
 }
 
-export function CashMovementDetailsModal({ movement, onClose }: CashMovementDetailsModalProps) {
-  if (!movement) {
+export function CashMovementDetailsModal({ entry, onClose }: CashMovementDetailsModalProps) {
+  if (!entry) {
     return null
   }
 
-  const saleItems = movement.sale?.sale_items ?? []
-  const isIncome = movement.type === 'income'
+  const isSession = entry.kind === 'session'
+  const movement = isSession ? null : entry
+  const saleItems = movement?.sale?.sale_items ?? []
+  const isIncome = movement?.type === 'income'
 
   return (
     <Modal
-      open={Boolean(movement)}
-      title={`Lançamento ${movement.movement_code ?? shortCode(movement.id)}`}
+      open={Boolean(entry)}
+      title={isSession ? (entry.eventType === 'open' ? 'Abertura de caixa' : 'Fechamento de caixa') : `Lançamento ${entry.movement_code ?? shortCode(entry.id)}`}
       onClose={onClose}
       size="5xl"
+      tone="dark"
     >
       <div className="space-y-5">
         <div className="grid gap-3 md:grid-cols-3">
-          <Detail label="ID" value={movement.movement_code ?? shortCode(movement.id)} />
+          <Detail label="ID" value={entry.movement_code ?? shortCode(entry.id)} />
           <Detail
             label="Tipo"
-            value={<Badge variant={isIncome ? 'success' : 'warning'}>{movementLabel(movement)}</Badge>}
+            value={
+              isSession ? (
+                <Badge variant="neutral">{entry.eventType === 'open' ? 'Abertura' : 'Fechamento'}</Badge>
+              ) : (
+                <Badge variant={isIncome ? 'success' : 'warning'}>{movementLabel(movement)}</Badge>
+              )
+            }
           />
-          <Detail label="Origem" value={originLabel(movement.origin)} />
-          <Detail label="Descrição" value={movementDescription(movement)} />
-          <Detail label="Valor" value={formatCurrencyBRL(movement.amount)} />
-          <Detail label="Data" value={formatDateBR(movement.movement_date)} />
-          <Detail label="Pagamento" value={paymentLabel(movement.payment_method)} />
-          <Detail label="Criado em" value={formatDateBR(movement.created_at)} />
-          <Detail label="Atualizado em" value={formatDateBR(movement.updated_at)} />
+          <Detail label="Origem" value={isSession ? (entry.eventType === 'open' ? 'Abertura de caixa' : 'Fechamento de caixa') : originLabel(movement?.origin)} />
+          <Detail label="Descrição" value={isSession ? entry.description : movementDescription(movement)} />
+          <Detail label="Valor" value={formatCurrencyBRL(entry.amount)} />
+          <Detail label="Data" value={formatDateBR(entry.movement_date)} />
+          <Detail label="Pagamento" value={isSession ? '-' : paymentLabel(movement?.payment_method, movement?.sale?.installments_count)} />
+          <Detail label="Criado em" value={formatDateBR(entry.created_at)} />
+          <Detail
+            label="Atualizado em"
+            value={isSession ? formatDateBR(entry.updated_at ?? entry.created_at) : formatDateBR(movement?.updated_at)}
+          />
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-          <p className="text-sm font-medium text-gray-700">Observação</p>
-          <p className="mt-1 text-sm text-gray-600">{movement.notes || 'Sem observação.'}</p>
+        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+          <p className="text-sm font-medium text-white/75">Observação</p>
+          <p className="mt-1 text-sm text-white/60">{isSession ? entry.notes || 'Sem observação.' : movement?.notes || 'Sem observação.'}</p>
         </div>
 
         {saleItems.length > 0 ? (
           <div>
-            <h3 className="mb-3 text-sm font-semibold text-gray-950">Produtos da venda</h3>
+            <h3 className="mb-3 text-sm font-semibold text-white">Produtos da venda</h3>
             <Table
+              tone="dark"
               data={saleItems}
               columns={[
                 {
@@ -57,8 +70,8 @@ export function CashMovementDetailsModal({ movement, onClose }: CashMovementDeta
                   header: 'Produto',
                   render: (item) => (
                     <div>
-                      <p className="font-medium text-gray-950">{item.product?.product_model?.name ?? item.product?.name ?? '-'}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="font-medium text-white">{item.product?.product_model?.name ?? item.product?.name ?? '-'}</p>
+                      <p className="text-xs text-white/55">
                         {[
                           item.product?.product_model?.reference,
                           item.product?.barcode,
@@ -88,9 +101,9 @@ export function CashMovementDetailsModal({ movement, onClose }: CashMovementDeta
 
 function Detail({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3">
-      <p className="text-xs font-medium uppercase text-gray-400">{label}</p>
-      <div className="mt-1 text-sm font-medium text-gray-900">{value || '-'}</div>
+    <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+      <p className="text-xs font-medium uppercase text-white/35">{label}</p>
+      <div className="mt-1 text-sm font-medium text-white">{value || '-'}</div>
     </div>
   )
 }
@@ -105,20 +118,34 @@ function originLabel(origin?: string | null) {
     manual_expense: 'Gasto manual',
     manual_income: 'Entrada avulsa',
     stock: 'Estoque',
+    session_open: 'Abertura de caixa',
+    session_close: 'Fechamento de caixa',
   }
 
   return origin ? labels[origin] ?? origin : '-'
 }
 
-function movementLabel(movement: CashMovement) {
+function movementLabel(movement: CashMovement | null) {
+  if (!movement) {
+    return '-'
+  }
+
   if (movement.type === 'expense') {
     return 'Gasto'
+  }
+
+  if (movement.origin === 'sale' && movement.sale?.installments_count && movement.sale.installments_count > 1) {
+    return `Venda ${movement.sale.installments_count}x`
   }
 
   return movement.origin === 'sale' ? 'Venda' : 'Entrada avulsa'
 }
 
-function movementDescription(movement: CashMovement) {
+function movementDescription(movement: CashMovement | null) {
+  if (!movement) {
+    return '-'
+  }
+
   if (movement.origin !== 'sale') {
     return movement.description
   }
@@ -127,10 +154,14 @@ function movementDescription(movement: CashMovement) {
     ?.map((item) => item.product?.product_model?.name ?? item.product?.name)
     .filter(Boolean)
 
-  return productNames?.length ? productNames.join(', ') : movement.description
+  const installments = movement.sale?.installments_count && movement.sale.installments_count > 1
+    ? ` · ${movement.sale.installments_count}x`
+    : ''
+
+  return `${productNames?.length ? productNames.join(', ') : movement.description}${installments}`
 }
 
-function paymentLabel(method?: string | null) {
+function paymentLabel(method?: string | null, installmentsCount?: number | null) {
   const labels: Record<string, string> = {
     dinheiro: 'Dinheiro',
     pix: 'Pix',
@@ -139,5 +170,15 @@ function paymentLabel(method?: string | null) {
     outro: 'Outro',
   }
 
-  return method ? labels[method] ?? method : '-'
+  if (!method) {
+    return '-'
+  }
+
+  const base = labels[method] ?? method
+
+  if (method === 'cartao_credito' && installmentsCount && installmentsCount > 1) {
+    return `${base} (${installmentsCount}x)`
+  }
+
+  return base
 }

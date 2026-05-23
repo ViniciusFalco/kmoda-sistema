@@ -314,6 +314,7 @@ create table if not exists public.sales (
   customer_id uuid references public.customers(id) on delete set null,
   total_amount numeric(12, 2) not null default 0,
   payment_method text not null check (payment_method in ('dinheiro', 'pix', 'cartao_credito', 'cartao_debito', 'outro')),
+  installments_count integer not null default 1 check (installments_count >= 1),
   status text not null default 'finalizada' check (status in ('aberta', 'finalizada', 'cancelada')),
   sale_date timestamptz not null default now(),
   created_at timestamptz not null default now(),
@@ -530,6 +531,7 @@ create unique index if not exists cash_sessions_one_open_per_day_idx on public.c
 create or replace function public.register_sale_with_cash_and_stock(
   p_items jsonb,
   p_payment_method text,
+  p_installments_count integer default 1,
   p_movement_date date default current_date,
   p_notes text default null,
   p_user_id uuid default auth.uid(),
@@ -548,6 +550,7 @@ declare
   v_sale_id uuid;
   v_cash_movement_id uuid;
   v_movement_code text;
+  v_sale_reference text;
   v_total numeric(12, 2);
   v_item jsonb;
   v_product_id uuid;
@@ -568,6 +571,10 @@ begin
     raise exception 'Forma de pagamento inválida.';
   end if;
 
+  if p_installments_count is null or p_installments_count < 1 then
+    raise exception 'Quantidade de parcelas inválida.';
+  end if;
+
   select coalesce(sum(((item->>'quantity')::integer) * ((item->>'unit_price')::numeric)), 0)
   into v_total
   from jsonb_array_elements(p_items) as item;
@@ -576,38 +583,42 @@ begin
     raise exception 'Total da venda deve ser maior que zero.';
   end if;
 
-  insert into public.sales (user_id, total_amount, payment_method, status, sale_date)
-  values (coalesce(p_user_id, auth.uid()), v_total, p_payment_method, 'finalizada', coalesce(p_movement_date, current_date))
+  insert into public.sales (user_id, total_amount, payment_method, installments_count, status, sale_date)
+  values (coalesce(p_user_id, auth.uid()), v_total, p_payment_method, p_installments_count, 'finalizada', coalesce(p_movement_date, current_date))
   returning id into v_sale_id;
 
-  insert into public.cash_movements (
-    user_id,
-    created_by,
-    cash_session_id,
-    sale_id,
-    type,
-    origin,
-    description,
-    amount,
-    movement_date,
-    payment_method,
-    notes
-  )
-  values (
-    coalesce(p_user_id, auth.uid()),
-    auth.uid(),
-    p_cash_session_id,
-    v_sale_id,
-    'income',
-    'sale',
-    'Venda',
-    v_total,
-    coalesce(p_movement_date, current_date),
-    p_payment_method,
-    p_notes
-  )
-  returning public.cash_movements.id, public.cash_movements.movement_code
-  into v_cash_movement_id, v_movement_code;
+  v_sale_reference := 'VD-' || upper(substr(v_sale_id::text, 1, 8));
+
+  if p_payment_method = 'dinheiro' then
+    insert into public.cash_movements (
+      user_id,
+      created_by,
+      cash_session_id,
+      sale_id,
+      type,
+      origin,
+      description,
+      amount,
+      movement_date,
+      payment_method,
+      notes
+    )
+    values (
+      coalesce(p_user_id, auth.uid()),
+      auth.uid(),
+      p_cash_session_id,
+      v_sale_id,
+      'income',
+      'sale',
+      'Venda',
+      v_total,
+      coalesce(p_movement_date, current_date),
+      p_payment_method,
+      p_notes
+    )
+    returning public.cash_movements.id, public.cash_movements.movement_code
+    into v_cash_movement_id, v_movement_code;
+  end if;
 
   for v_item in select * from jsonb_array_elements(p_items)
   loop
@@ -658,7 +669,7 @@ begin
       'saida',
       'venda',
       v_quantity,
-      'Venda ' || v_movement_code
+      'Venda ' || coalesce(v_movement_code, v_sale_reference)
     );
   end loop;
 
@@ -673,7 +684,7 @@ begin
         where si.sale_id = v_sale_id
       ) as product_names
     ),
-    'Venda ' || v_movement_code
+    'Venda ' || coalesce(v_movement_code, v_sale_reference)
   )
   where id = v_cash_movement_id;
 
@@ -681,4 +692,34 @@ begin
 end;
 $$;
 
-grant execute on function public.register_sale_with_cash_and_stock(jsonb, text, date, text, uuid, uuid) to authenticated;
+grant execute on function public.register_sale_with_cash_and_stock(jsonb, text, integer, date, text, uuid, uuid) to authenticated;
+
+create or replace function public.get_sales_total(
+  p_start_date date default null,
+  p_end_date date default null
+)
+returns numeric
+language sql
+stable
+as $$
+  select coalesce(sum(total_amount), 0)
+  from public.sales
+  where status = 'finalizada'
+    and (p_start_date is null or sale_date::date >= p_start_date)
+    and (p_end_date is null or sale_date::date < p_end_date)
+$$;
+
+create or replace function public.get_cash_expense_total(
+  p_start_date date default null,
+  p_end_date date default null
+)
+returns numeric
+language sql
+stable
+as $$
+  select coalesce(sum(amount), 0)
+  from public.cash_movements
+  where type = 'expense'
+    and (p_start_date is null or movement_date >= p_start_date)
+    and (p_end_date is null or movement_date < p_end_date)
+$$;

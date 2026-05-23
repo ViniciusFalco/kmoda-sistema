@@ -14,16 +14,17 @@ import {
   createRegistryItem,
   findBarcodeLookup,
   friendlyCatalogError,
+  getMonthSalesTotal,
   getTodayCashSession,
-  listProducts,
+  getTodaySalesTotal,
   listStockMovements,
   listTodayCashMovements,
   loadProductRegistries,
   type ProductInput,
   type RegistryInput,
 } from '../../lib/catalog'
-import { formatCurrency } from '../../lib/utils'
-import type { Brand, CashMovement, CashSession, ClothingType, Color, Product, RegistryKind, Size, StockMovement } from '../../types/database'
+import { formatCurrency, todayISODate } from '../../lib/utils'
+import type { Brand, CashMovement, CashSession, ClothingType, Color, RegistryKind, Size, StockMovement } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import { ProductForm, type ProductFormValues, type ProductSubmitMode } from '../products/ProductForm'
@@ -58,27 +59,15 @@ export function DashboardPage() {
     useBarcodeScanner()
   const [productModalOpen, setProductModalOpen] = useState(false)
   const [registries, setRegistries] = useState<ProductRegistries>(emptyRegistries)
-  const [products, setProducts] = useState<Product[]>([])
   const [cashSession, setCashSession] = useState<CashSession | null>(null)
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([])
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([])
+  const [salesTodayTotal, setSalesTodayTotal] = useState(0)
+  const [monthSalesTotal, setMonthSalesTotal] = useState(0)
   const [barcodeResult, setBarcodeResult] = useState<BarcodeLookupResult | null>(null)
   const [productBarcodePrefill, setProductBarcodePrefill] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-
-  const totalStockQuantity = useMemo(
-    () => products.reduce((sum, product) => sum + product.stock_quantity, 0),
-    [products],
-  )
-
-  const salesToday = useMemo(
-    () =>
-      cashMovements
-        .filter((movement) => movement.type === 'income' && movement.origin === 'sale')
-        .reduce((sum, movement) => sum + movement.amount, 0),
-    [cashMovements],
-  )
 
   const incomeToday = useMemo(
     () =>
@@ -138,18 +127,21 @@ export function DashboardPage() {
   const loadData = useCallback(async () => {
     setError('')
     try {
-      const [registryRows, productRows, sessionRows, cashRows, stockRows] = await Promise.all([
+      const today = todayISODate()
+      const [registryRows, sessionRows, cashRows, stockRows, salesTotal, monthSales] = await Promise.all([
         loadProductRegistries(),
-        listProducts({ active: true }),
         getTodayCashSession(),
         listTodayCashMovements(),
         listStockMovements(),
+        getTodaySalesTotal(today),
+        getMonthSalesTotal(today),
       ])
       setRegistries(registryRows)
-      setProducts(productRows)
       setCashSession(sessionRows)
       setCashMovements(cashRows)
       setStockMovements(stockRows)
+      setSalesTodayTotal(salesTotal)
+      setMonthSalesTotal(monthSales)
     } catch (err) {
       setError(friendlyCatalogError(err))
     }
@@ -160,19 +152,22 @@ export function DashboardPage() {
 
     async function loadInitial() {
       try {
-        const [registryRows, productRows, sessionRows, cashRows, stockRows] = await Promise.all([
+        const today = todayISODate()
+        const [registryRows, sessionRows, cashRows, stockRows, salesTotal, monthSales] = await Promise.all([
           loadProductRegistries(),
-          listProducts({ active: true }),
           getTodayCashSession(),
           listTodayCashMovements(),
           listStockMovements(),
+          getTodaySalesTotal(today),
+          getMonthSalesTotal(today),
         ])
         if (active) {
           setRegistries(registryRows)
-          setProducts(productRows)
           setCashSession(sessionRows)
           setCashMovements(cashRows)
           setStockMovements(stockRows)
+          setSalesTodayTotal(salesTotal)
+          setMonthSalesTotal(monthSales)
         }
       } catch (err) {
         if (active) {
@@ -245,9 +240,16 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl  text-center font-semibold text-gray-950">Central da loja</h1>
-        <p className="mt-2 text-gray-500 text-center">Escolha uma ação para começar.</p>
+      <div className="overflow-hidden rounded-[2rem] border border-black/10 bg-[linear-gradient(135deg,#050505_0%,#151515_45%,#0b0b0b_100%)] px-6 py-8 text-white shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:px-8 sm:py-10 lg:px-10 lg:py-12">
+        <div className="max-w-3xl text-left">
+          <h1 className="mt-5 text-4xl font-semibold tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl">
+            Central da loja
+          </h1>
+
+          <p className="mt-4 max-w-2xl text-base leading-7 text-white/60 sm:text-lg">
+            Acompanhe vendas, estoque e movimentações.
+          </p>
+        </div>
       </div>
 
       {error ? (
@@ -259,6 +261,7 @@ export function DashboardPage() {
           title="Adicionar produto"
           description="Cadastre uma nova peça no estoque"
           icon={<PackagePlus className="h-6 w-6" />}
+          appearance="classic"
           onClick={() => {
             setProductBarcodePrefill('')
             setProductModalOpen(true)
@@ -268,26 +271,29 @@ export function DashboardPage() {
           title="Atualizar estoque"
           description="Registre entrada, saída ou ajuste"
           icon={<Boxes className="h-6 w-6" />}
+          appearance="classic"
           onClick={() => navigate('/estoque')}
         />
         <ActionCard
           title="Ler código de barras"
           description="Consultar produto pelo código"
           icon={<Barcode className="h-6 w-6" />}
+          appearance="classic"
           onClick={() => openScanner()}
         />
         <ActionCard
           title="Realizar venda"
           description="Abra o caixa e registre uma nova venda"
           icon={<ShoppingCart className="h-6 w-6" />}
+          appearance="classic"
           onClick={() => navigate('/caixa?acao=nova-venda')}
         />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <SummaryCard label="Vendas de hoje" value={formatCurrency(salesToday)} icon={<Receipt className="h-5 w-5" />} />
-        <SummaryCard label="Saldo do caixa" value={formatCurrency(balanceToday)} icon={<Wallet className="h-5 w-5" />} />
-        <SummaryCard label="Estoque total" value={String(totalStockQuantity)} icon={<Boxes className="h-5 w-5" />} />
+        <SummaryCard label="Vendas de hoje" value={formatCurrency(salesTodayTotal)} icon={<Receipt className="h-5 w-5" />} tone="dark" />
+        <SummaryCard label="Saldo do caixa" value={formatCurrency(balanceToday)} icon={<Wallet className="h-5 w-5" />} tone="dark" />
+        <SummaryCard label="Total de vendas do mês" value={formatCurrency(monthSalesTotal)} icon={<ShoppingCart className="h-5 w-5" />} tone="dark" />
       </div>
 
       <Card title="Últimas movimentações" description="Resumo operacional do dia.">
@@ -312,7 +318,7 @@ export function DashboardPage() {
 
       <Modal
         open={productModalOpen}
-        title="Adicionar produto"
+        title=" produto"
         onClose={() => {
           setProductBarcodePrefill('')
           setProductModalOpen(false)

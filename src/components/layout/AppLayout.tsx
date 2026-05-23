@@ -7,10 +7,10 @@ export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <div className="min-h-screen bg-slate-50 text-gray-950">
+    <div className="min-h-screen bg-white text-gray-950">
       <Topbar onMenuClick={() => setMenuOpen(true)} />
       <MenuDrawer open={menuOpen} onClose={() => setMenuOpen(false)} />
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 lg:px-8">
+      <main className="w-full px-2 py-6 sm:px-3 lg:px-4 xl:px-5">
         <Outlet />
       </main>
     </div>

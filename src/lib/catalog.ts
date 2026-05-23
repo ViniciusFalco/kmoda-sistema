@@ -4,7 +4,10 @@ import { supabase } from './supabase'
 import type {
   Brand,
   CashMovement,
+  CashHistoryEntry,
+  CashHistoryMovement,
   CashSession,
+  CashSessionHistoryEvent,
   CashMovementType,
   ClothingType,
   Color,
@@ -19,7 +22,7 @@ import type {
   StockMovementReason,
   StockMovementType,
 } from '../types/database'
-import { getNowLocalTimestamp, todayISODate } from './utils'
+import { formatDateBR, getNowLocalTimestamp, todayISODate } from './utils'
 
 type RegistryTableMap = {
   brands: Brand
@@ -93,6 +96,7 @@ function normalizeCashMovement(movement: CashMovement): CashMovement {
       ? {
           ...movement.sale,
           total_amount: normalizeNumber(movement.sale.total_amount),
+          installments_count: normalizeNumber(movement.sale.installments_count, 1),
           sale_items: movement.sale.sale_items?.map((item) => ({
             ...item,
             quantity: normalizeNumber(item.quantity),
@@ -107,6 +111,18 @@ function normalizeCashMovement(movement: CashMovement): CashMovement {
 
 function normalizeText(value: string) {
   return value.trim().toLowerCase()
+}
+
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
+function requireUuid(value: string | null | undefined) {
+  if (!value || !isUuidLike(value)) {
+    throw new Error(`Abra o caixa para registrar vendas ou gastos.`)
+  }
+
+  return value
 }
 
 function sameProductModel(product: Product, model: ProductModel) {
@@ -621,6 +637,29 @@ export async function findBarcodeLookup(code: string) {
   }
 }
 
+export async function findBarcodeLookupByProductId(productId: string) {
+  const product = await loadProductById(productId, false)
+
+  if (!product) {
+    return null
+  }
+
+  const code = normalizeBarcode(product.barcode ?? product.reference ?? product.product_model?.reference ?? '')
+  const sameModelVariants = await findVariantsByProductId(product.id, false)
+  const model = product.product_model ?? (product.reference ? await findProductModelByReference(product.reference) : null)
+  const hasSameModelStock = sameModelVariants.some((variant) => variant.stock_quantity > 0)
+  const suggestions = hasSameModelStock || !model?.family ? [] : await findSuggestionsByFamily(model.family, product.id)
+
+  return {
+    kind: 'found' as const,
+    code,
+    product,
+    productModel: model,
+    sameModelVariants,
+    suggestions,
+  }
+}
+
 export async function createProductModelIfNeeded(input: ProductInput, user: User | null) {
   const client = getSupabase()
   const reference = normalizeNullable(input.reference)
@@ -812,7 +851,7 @@ export async function listStockMovements() {
           size:sizes(id, name, sort_order, active, created_at, updated_at),
           color:colors(id, name, hex, active, created_at, updated_at)
         ),
-        sale:sales(id, total_amount, payment_method, status, sale_date, created_at, updated_at),
+        sale:sales(id, total_amount, payment_method, installments_count, status, sale_date, created_at, updated_at),
         cash_movement:cash_movements(id, movement_code, description, amount, movement_date)
       `,
     )
@@ -858,6 +897,7 @@ export interface CashIncomeInput {
 export interface SaleRegistrationInput {
   items: SaleLineInput[]
   paymentMethod: PaymentMethod
+  installmentsCount?: number
   movementDate: string
   notes?: string | null
   user?: User | null
@@ -907,10 +947,21 @@ export interface CashMovementSearchResult {
   pageSize: number
 }
 
+export interface CashHistoryFilters extends Omit<CashMovementFilters, 'type'> {
+  type?: CashMovementFilters['type'] | 'session_open' | 'session_close'
+}
+
+export interface CashHistorySearchResult {
+  data: CashHistoryEntry[]
+  count: number
+  page: number
+  pageSize: number
+}
+
 const cashMovementSelect = `
   *,
   sale:sales(
-    *,
+    *, installments_count,
     sale_items(
       *,
       product:products(
@@ -932,6 +983,55 @@ function normalizeCashSession(session: CashSession): CashSession {
     closing_amount: session.closing_amount === null || session.closing_amount === undefined ? null : Number(session.closing_amount),
     expected_amount: session.expected_amount === null || session.expected_amount === undefined ? null : Number(session.expected_amount),
     difference_amount: session.difference_amount === null || session.difference_amount === undefined ? null : Number(session.difference_amount),
+  }
+}
+
+function normalizeCashHistoryMovement(movement: CashMovement): CashHistoryMovement {
+  return {
+    ...normalizeCashMovement(movement),
+    kind: 'movement',
+  }
+}
+
+function buildCashSessionHistoryEvent(session: CashSession, eventType: 'open' | 'close'): CashSessionHistoryEvent {
+  const timestamp = eventType === 'open' ? session.opened_at : session.closed_at ?? session.opened_at
+  const amount = eventType === 'open' ? session.opening_amount : session.closing_amount ?? session.expected_amount ?? 0
+  const shortId = session.id.slice(0, 8).toUpperCase()
+
+  return {
+    kind: 'session',
+    eventType,
+    session,
+    id: `session-${eventType}-${session.id}`,
+    movement_code: `${eventType === 'open' ? 'ABR' : 'FEC'}-${shortId}`,
+    type: 'session',
+    origin: eventType === 'open' ? 'session_open' : 'session_close',
+    description: eventType === 'open' ? 'Abertura de caixa' : 'Fechamento de caixa',
+    amount: normalizeNumber(amount),
+    movement_date:
+      eventType === 'open'
+        ? session.session_date
+        : (session.closed_at?.split('T')[0] ?? session.session_date),
+    payment_method: null,
+    notes: session.notes ?? null,
+    created_at: timestamp,
+    updated_at: session.updated_at,
+    sale: null,
+  }
+}
+
+function sortCashHistoryEntries(a: CashHistoryEntry, b: CashHistoryEntry) {
+  return b.created_at.localeCompare(a.created_at)
+}
+
+function normalizeMonthBounds(date = todayISODate()) {
+  const current = new Date(`${date}T00:00:00`)
+  const start = new Date(current.getFullYear(), current.getMonth(), 1)
+  const end = new Date(current.getFullYear(), current.getMonth() + 1, 1)
+
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
   }
 }
 
@@ -1019,6 +1119,24 @@ export async function getTodayCashSession(date = todayISODate()) {
   return data ? normalizeCashSession(data as CashSession) : null
 }
 
+export async function getOpenCashSession(date = todayISODate()) {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('cash_sessions')
+    .select('*')
+    .eq('status', 'open')
+    .eq('session_date', date)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data ? normalizeCashSession(data as CashSession) : null
+}
+
 export async function getPreviousOpenCashSession(date = todayISODate()) {
   const client = getSupabase()
   const { data, error } = await client
@@ -1037,8 +1155,46 @@ export async function getPreviousOpenCashSession(date = todayISODate()) {
   return data ? normalizeCashSession(data as CashSession) : null
 }
 
+export async function getLastClosedCashSession() {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('cash_sessions')
+    .select('*')
+    .eq('status', 'closed')
+    .order('closed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data ? normalizeCashSession(data as CashSession) : null
+}
+
 export async function openCashSession(input: OpenCashSessionInput) {
   const client = getSupabase()
+  const existingOpenSession = await client
+    .from('cash_sessions')
+    .select('id, session_date, opened_at')
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (existingOpenSession.error) {
+    throw new Error(existingOpenSession.error.message)
+  }
+
+  if (existingOpenSession.data) {
+    const sessionDate = (existingOpenSession.data as { session_date?: string | null }).session_date
+    throw new Error(
+      sessionDate
+        ? `Já existe um caixa aberto em ${formatDateBR(sessionDate)}. Feche-o antes de abrir outro.`
+        : 'Já existe um caixa aberto. Feche-o antes de abrir outro.',
+    )
+  }
+
   const { data, error } = await client
     .from('cash_sessions')
     .insert({
@@ -1060,6 +1216,7 @@ export async function openCashSession(input: OpenCashSessionInput) {
 
 export async function closeCashSession(input: CloseCashSessionInput) {
   const client = getSupabase()
+  const sessionId = requireUuid(input.sessionId)
   const { data, error } = await client
     .from('cash_sessions')
     .update({
@@ -1071,7 +1228,7 @@ export async function closeCashSession(input: CloseCashSessionInput) {
       closed_by: input.user?.id ?? null,
       notes: normalizeNullable(input.notes),
     })
-    .eq('id', input.sessionId)
+    .eq('id', sessionId)
     .select()
     .single()
 
@@ -1097,12 +1254,52 @@ export async function listTodayCashMovements(date = todayISODate()) {
   return ((data ?? []) as CashMovement[]).map(normalizeCashMovement)
 }
 
+export async function listCashSessionHistoryEvents(date = todayISODate()) {
+  const client = getSupabase()
+  const nextDate = new Date(`${date}T00:00:00`)
+  nextDate.setDate(nextDate.getDate() + 1)
+  const nextDateISO = nextDate.toISOString().slice(0, 10)
+
+  const [openedResponse, closedResponse] = await Promise.all([
+    client.from('cash_sessions').select('*').eq('session_date', date).order('opened_at', { ascending: false }),
+    client
+      .from('cash_sessions')
+      .select('*')
+      .gte('closed_at', `${date}T00:00:00`)
+      .lt('closed_at', `${nextDateISO}T00:00:00`)
+      .order('closed_at', { ascending: false }),
+  ])
+
+  if (openedResponse.error) {
+    throw new Error(openedResponse.error.message)
+  }
+
+  if (closedResponse.error) {
+    throw new Error(closedResponse.error.message)
+  }
+
+  const openedEvents = ((openedResponse.data ?? []) as CashSession[]).map((session) =>
+    buildCashSessionHistoryEvent(normalizeCashSession(session), 'open'),
+  )
+  const closedEvents = ((closedResponse.data ?? []) as CashSession[]).map((session) =>
+    buildCashSessionHistoryEvent(normalizeCashSession(session), 'close'),
+  )
+
+  return [...openedEvents, ...closedEvents].sort(sortCashHistoryEntries)
+}
+
+export async function listTodayCashHistory(date = todayISODate()) {
+  const [movements, sessionEvents] = await Promise.all([listTodayCashMovements(date), listCashSessionHistoryEvents(date)])
+  return [...movements.map((movement) => ({ ...movement, kind: 'movement' as const })), ...sessionEvents].sort(sortCashHistoryEntries)
+}
+
 export async function searchCashMovements(filters: CashMovementFilters): Promise<CashMovementSearchResult> {
   const client = getSupabase()
   const page = filters.page ?? 1
   const pageSize = filters.pageSize ?? 25
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
+  const movementType = filters.type === 'income' || filters.type === 'expense' ? filters.type : 'all'
 
   let request = client
     .from('cash_movements')
@@ -1111,8 +1308,8 @@ export async function searchCashMovements(filters: CashMovementFilters): Promise
     .order('created_at', { ascending: false })
     .range(from, to)
 
-  if (filters.type && filters.type !== 'all') {
-    request = request.eq('type', filters.type)
+  if (movementType !== 'all') {
+    request = request.eq('type', movementType)
   }
 
   if (filters.description?.trim()) {
@@ -1153,14 +1350,198 @@ export async function searchCashMovements(filters: CashMovementFilters): Promise
   }
 }
 
+async function listCashMovementsForHistory(filters: CashHistoryFilters) {
+  if (filters.type === 'session_open' || filters.type === 'session_close') {
+    return []
+  }
+
+  const client = getSupabase()
+  const movementType = filters.type === 'income' || filters.type === 'expense' ? filters.type : 'all'
+
+  let request = client
+    .from('cash_movements')
+    .select(cashMovementSelect)
+    .order('movement_date', { ascending: false })
+    .order('created_at', { ascending: false })
+
+  if (movementType !== 'all') {
+    request = request.eq('type', movementType)
+  }
+
+  if (filters.description?.trim()) {
+    request = request.ilike('description', `%${filters.description.trim()}%`)
+  }
+
+  if (filters.minAmount !== null && filters.minAmount !== undefined) {
+    request = request.gte('amount', filters.minAmount)
+  }
+
+  if (filters.maxAmount !== null && filters.maxAmount !== undefined) {
+    request = request.lte('amount', filters.maxAmount)
+  }
+
+  if (filters.startDate) {
+    request = request.gte('movement_date', filters.startDate)
+  }
+
+  if (filters.endDate) {
+    request = request.lte('movement_date', filters.endDate)
+  }
+
+  if (filters.paymentMethod && filters.paymentMethod !== 'all') {
+    request = request.eq('payment_method', filters.paymentMethod)
+  }
+
+  const { data, error } = await request
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return ((data ?? []) as CashMovement[]).map(normalizeCashHistoryMovement)
+}
+
+async function listCashSessionHistoryEventsForSearch(filters: CashHistoryFilters) {
+  const client = getSupabase()
+  const { data, error } = await client.from('cash_sessions').select('*').order('session_date', { ascending: false }).order('opened_at', { ascending: false })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const entries = ((data ?? []) as CashSession[])
+    .map((session) => normalizeCashSession(session))
+    .flatMap((session) => {
+      const openEvent = buildCashSessionHistoryEvent(session, 'open')
+      const closeEvent = session.closed_at ? [buildCashSessionHistoryEvent(session, 'close')] : []
+      return [openEvent, ...closeEvent]
+    })
+    .filter((event) => {
+      const description = normalizeText(`${event.description} ${event.notes ?? ''}`)
+
+      if (filters.description?.trim() && !description.includes(normalizeText(filters.description))) {
+        return false
+      }
+
+      if (filters.minAmount !== null && filters.minAmount !== undefined && event.amount < filters.minAmount) {
+        return false
+      }
+
+      if (filters.maxAmount !== null && filters.maxAmount !== undefined && event.amount > filters.maxAmount) {
+        return false
+      }
+
+      if (filters.startDate && event.movement_date < filters.startDate) {
+        return false
+      }
+
+      if (filters.endDate && event.movement_date > filters.endDate) {
+        return false
+      }
+
+      return true
+    })
+
+  return entries
+}
+
+export async function searchCashHistory(filters: CashHistoryFilters): Promise<CashHistorySearchResult> {
+  const page = filters.page ?? 1
+  const pageSize = filters.pageSize ?? 25
+  const typeFilter = filters.type ?? 'all'
+
+  const [movementEntries, sessionEvents] = await Promise.all([
+    listCashMovementsForHistory(filters),
+    listCashSessionHistoryEventsForSearch(filters),
+  ])
+
+  const filteredMovementEntries =
+    typeFilter === 'session_open' || typeFilter === 'session_close'
+      ? []
+      : movementEntries
+
+  const filteredSessionItems = sessionEvents.filter((event) => {
+    if (typeFilter === 'session_open') {
+      return event.eventType === 'open'
+    }
+
+    if (typeFilter === 'session_close') {
+      return event.eventType === 'close'
+    }
+
+    return typeFilter === 'all'
+  })
+
+  const data = [...filteredMovementEntries, ...filteredSessionItems].sort(sortCashHistoryEntries)
+  const from = (page - 1) * pageSize
+  const pageData = data.slice(from, from + pageSize)
+
+  return {
+    data: pageData,
+    count: data.length,
+    page,
+    pageSize,
+  }
+}
+
+export async function getSalesTotal(startDate?: string | null, endDate?: string | null) {
+  const client = getSupabase()
+  const { data, error } = await client.rpc('get_sales_total', {
+    p_start_date: startDate ?? null,
+    p_end_date: endDate ?? null,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return normalizeNumber(data)
+}
+
+export async function getCashExpenseTotal(startDate?: string | null, endDate?: string | null) {
+  const client = getSupabase()
+  const { data, error } = await client.rpc('get_cash_expense_total', {
+    p_start_date: startDate ?? null,
+    p_end_date: endDate ?? null,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return normalizeNumber(data)
+}
+
+export async function getMonthSalesTotal(date = todayISODate()) {
+  const { startDate, endDate } = normalizeMonthBounds(date)
+  return getSalesTotal(startDate, endDate)
+}
+
+export async function getTodaySalesTotal(date = todayISODate()) {
+  const current = new Date(`${date}T00:00:00`)
+  const next = new Date(current)
+  next.setDate(current.getDate() + 1)
+
+  return getSalesTotal(date, next.toISOString().slice(0, 10))
+}
+
+export async function getAllTimeSalesTotal() {
+  return getSalesTotal()
+}
+
+export async function getAllTimeCashExpenseTotal() {
+  return getCashExpenseTotal()
+}
+
 export async function createCashExpense(input: CashExpenseInput) {
+  const sessionId = requireUuid(input.cashSessionId)
   const client = getSupabase()
   const { data, error } = await client
     .from('cash_movements')
     .insert({
       user_id: input.user?.id ?? null,
       created_by: input.user?.id ?? null,
-      cash_session_id: input.cashSessionId ?? null,
+      cash_session_id: sessionId,
       type: 'expense',
       origin: 'manual_expense',
       description: input.description.trim(),
@@ -1180,13 +1561,14 @@ export async function createCashExpense(input: CashExpenseInput) {
 }
 
 export async function createCashIncome(input: CashIncomeInput) {
+  const sessionId = requireUuid(input.cashSessionId)
   const client = getSupabase()
   const { data, error } = await client
     .from('cash_movements')
     .insert({
       user_id: input.user?.id ?? null,
       created_by: input.user?.id ?? null,
-      cash_session_id: input.cashSessionId ?? null,
+      cash_session_id: sessionId,
       type: 'income',
       origin: 'manual_income',
       description: input.description.trim(),
@@ -1210,6 +1592,8 @@ export async function registerSaleWithCashAndStock(input: SaleRegistrationInput)
     throw new Error('Adicione pelo menos um item para registrar a venda.')
   }
 
+  const sessionId = requireUuid(input.cashSessionId)
+
   const client = getSupabase()
   const rpcItems = input.items.map((item) => ({
     product_id: item.product.id,
@@ -1220,17 +1604,18 @@ export async function registerSaleWithCashAndStock(input: SaleRegistrationInput)
   const { data, error } = await client.rpc('register_sale_with_cash_and_stock', {
     p_items: rpcItems,
     p_payment_method: input.paymentMethod,
+    p_installments_count: input.installmentsCount ?? 1,
     p_movement_date: input.movementDate,
     p_notes: normalizeNullable(input.notes),
     p_user_id: input.user?.id ?? null,
-    p_cash_session_id: input.cashSessionId ?? null,
+    p_cash_session_id: sessionId,
   } as never)
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return data as { sale_id: string; cash_movement_id: string; movement_code: string }
+  return data as { sale_id: string; cash_movement_id: string | null; movement_code: string | null }
 }
 
 export async function finalizeSale(

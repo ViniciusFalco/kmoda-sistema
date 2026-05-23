@@ -131,6 +131,7 @@ export interface Sale {
   customer_id?: string | null
   total_amount: number
   payment_method: PaymentMethod
+  installments_count: number
   status: SaleStatus
   sale_date: string
   created_at: string
@@ -201,3 +202,29 @@ export interface CashSession {
   created_at: string
   updated_at: string
 }
+
+export interface CashHistoryMovement extends CashMovement {
+  kind: 'movement'
+}
+
+export type CashSessionEventType = 'open' | 'close'
+
+export interface CashSessionHistoryEvent {
+  kind: 'session'
+  eventType: CashSessionEventType
+  session: CashSession
+  id: string
+  movement_code: string
+  type: 'session'
+  origin: 'session_open' | 'session_close'
+  description: string
+  amount: number
+  movement_date: string
+  payment_method: null
+  notes?: string | null
+  created_at: string
+  updated_at?: string | null
+  sale?: null
+}
+
+export type CashHistoryEntry = CashHistoryMovement | CashSessionHistoryEvent
