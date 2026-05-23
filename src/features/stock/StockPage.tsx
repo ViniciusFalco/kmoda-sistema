@@ -39,20 +39,34 @@ interface StockTableProps<T extends { id: string }> {
 const stockReasonLabels: Record<StockMovementReason, string> = {
   cadastro_inicial: 'Cadastro inicial',
   compra: 'Compra',
+  devolucao: 'Devolução',
+  ajuste_positivo: 'Ajuste positivo',
+  correcao_estoque: 'Correção de estoque',
   venda: 'Venda',
+  venda_manual: 'Venda manual',
   ajuste_manual: 'Ajuste manual',
   troca: 'Troca',
   perda: 'Perda',
+  avaria: 'Avaria',
+  ajuste_negativo: 'Ajuste negativo',
+  devolucao_ao_fornecedor: 'Devolução ao fornecedor',
 }
 
 const historyReasonOptions: Array<{ value: HistoryReasonFilter; label: string; type?: StockMovementType }> = [
   { value: 'all', label: 'Todos os motivos' },
   { value: 'cadastro_inicial', label: stockReasonLabels.cadastro_inicial, type: 'entrada' },
   { value: 'compra', label: stockReasonLabels.compra, type: 'entrada' },
+  { value: 'devolucao', label: stockReasonLabels.devolucao, type: 'entrada' },
+  { value: 'ajuste_positivo', label: stockReasonLabels.ajuste_positivo, type: 'entrada' },
+  { value: 'correcao_estoque', label: stockReasonLabels.correcao_estoque },
   { value: 'ajuste_manual', label: stockReasonLabels.ajuste_manual },
   { value: 'venda', label: stockReasonLabels.venda, type: 'saida' },
+  { value: 'venda_manual', label: stockReasonLabels.venda_manual, type: 'saida' },
   { value: 'troca', label: stockReasonLabels.troca, type: 'saida' },
   { value: 'perda', label: stockReasonLabels.perda, type: 'saida' },
+  { value: 'avaria', label: stockReasonLabels.avaria, type: 'saida' },
+  { value: 'ajuste_negativo', label: stockReasonLabels.ajuste_negativo, type: 'saida' },
+  { value: 'devolucao_ao_fornecedor', label: stockReasonLabels.devolucao_ao_fornecedor, type: 'saida' },
 ]
 
 function StockTable<T extends { id: string }>({
@@ -671,16 +685,14 @@ export function StockPage() {
         </div>
       ) : null}
 
-      <Modal open={movementModalOpen} title="Atualizar estoque" onClose={closeMovementModal} size="2xl">
-        <div className="mb-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-          Busque o produto, escolha o tipo, selecione o motivo e confirme a quantidade.
-        </div>
+      <Modal open={movementModalOpen} title="Atualizar estoque" onClose={closeMovementModal} size="5xl" tone="dark">
         <StockMovementForm
           key={movementProductId || 'empty'}
           products={products}
           submitting={submitting}
           initialProductId={movementProductId}
           onBarcodeScan={handleMovementBarcodeScan}
+          onCancel={closeMovementModal}
           onSubmit={handleSubmit}
         />
       </Modal>
@@ -690,20 +702,15 @@ export function StockPage() {
         title={selectedProduct ? selectedProduct.product_model?.name ?? selectedProduct.name : 'Produto'}
         onClose={closeProductDetails}
         size="2xl"
+        tone="dark"
       >
         {selectedProduct ? (
           <div className="space-y-5">
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Produto</p>
-                  <h3 className="mt-2 text-2xl font-semibold text-zinc-950">
-                    {selectedProduct.product_model?.name ?? selectedProduct.name}
-                  </h3>
-                </div>
-                <span className="inline-flex w-fit rounded-full bg-black px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white">
-                  Estoque {selectedProduct.stock_quantity}
-                </span>
+            <div className="rounded-2xl border border-white/10 bg-white px-4 py-4 text-center text-zinc-950">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <h3 className="text-2xl font-semibold text-zinc-950">
+                  {selectedProduct.product_model?.name ?? selectedProduct.name}
+                </h3>
               </div>
             </div>
 
@@ -719,10 +726,11 @@ export function StockPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button variant="secondary" onClick={closeProductDetails}>
+              <Button variant="secondary" tone="dark" onClick={closeProductDetails}>
                 Fechar
               </Button>
               <Button
+                tone="dark"
                 onClick={() => {
                   openMovementModal(selectedProduct.id)
                   closeProductDetails()
@@ -741,23 +749,18 @@ export function StockPage() {
         title={selectedMovement ? `Movimentação ${selectedMovement.cash_movement?.movement_code ?? selectedMovement.id.slice(0, 8).toUpperCase()}` : 'Movimentação'}
         onClose={closeMovementDetails}
         size="2xl"
+        tone="dark"
       >
         {selectedMovement ? (
           <div className="space-y-5">
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Movimentação</p>
-                  <h3 className="mt-2 text-2xl font-semibold text-zinc-950">
-                    {selectedMovement.type === 'entrada' ? 'Entrada de estoque' : 'Saída de estoque'}
-                  </h3>
-                  <p className="mt-2 text-sm text-zinc-600">
-                    {getStockMovementTitle(selectedMovement)}
-                  </p>
-                </div>
-                <span className="inline-flex w-fit rounded-full bg-black px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white">
-                  {stockReasonLabels[selectedMovement.reason] ?? selectedMovement.reason}
-                </span>
+            <div className="rounded-2xl border border-white/10 bg-white px-4 py-4 text-center text-zinc-950">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <h3 className="text-2xl font-semibold text-zinc-950">
+                  {selectedMovement.type === 'entrada' ? 'Entrada de estoque' : 'Saída de estoque'}
+                </h3>
+                <p className="text-sm text-zinc-600">
+                  {getStockMovementTitle(selectedMovement)}
+                </p>
               </div>
             </div>
 
@@ -773,17 +776,18 @@ export function StockPage() {
               />
             </div>
 
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+            <div className="rounded-2xl border border-white/10 bg-white px-4 py-4 text-center text-zinc-950">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Observação</p>
-              <p className="mt-2 text-sm text-zinc-700">{selectedMovement.notes ?? 'Sem observação.'}</p>
+              <p className="mt-2 text-sm text-zinc-950">{selectedMovement.notes ?? 'Sem observação.'}</p>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button variant="secondary" onClick={closeMovementDetails}>
+              <Button variant="secondary" tone="dark" onClick={closeMovementDetails}>
                 Fechar
               </Button>
               {selectedMovement.product ? (
                 <Button
+                  tone="dark"
                   onClick={() => {
                     if (selectedMovement.product) {
                       openProductDetails(selectedMovement.product)
@@ -804,9 +808,9 @@ export function StockPage() {
 
 function DetailCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+    <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-center shadow-[0_10px_24px_rgba(0,0,0,0.08)]">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-zinc-950">{value || '-'}</p>
+      <p className="mt-2 text-sm font-semibold text-zinc-950">{value || '-'}</p>
     </div>
   )
 }

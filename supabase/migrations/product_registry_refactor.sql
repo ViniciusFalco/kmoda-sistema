@@ -155,7 +155,23 @@ end $$;
 alter table public.stock_movements drop constraint if exists stock_movements_reason_check;
 alter table public.stock_movements
 add constraint stock_movements_reason_check
-check (reason in ('cadastro_inicial', 'compra', 'venda', 'ajuste_manual', 'troca', 'perda'));
+check (
+  reason in (
+    'cadastro_inicial',
+    'compra',
+    'devolucao',
+    'ajuste_positivo',
+    'correcao_estoque',
+    'venda',
+    'venda_manual',
+    'ajuste_manual',
+    'troca',
+    'perda',
+    'avaria',
+    'ajuste_negativo',
+    'devolucao_ao_fornecedor'
+  )
+);
 
 alter table public.brands enable row level security;
 alter table public.clothing_types enable row level security;

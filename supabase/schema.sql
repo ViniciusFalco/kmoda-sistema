@@ -339,7 +339,23 @@ create table if not exists public.stock_movements (
   product_id uuid not null references public.products(id) on delete restrict,
   sale_id uuid references public.sales(id) on delete set null,
   type text not null check (type in ('entrada', 'saida')),
-  reason text not null check (reason in ('cadastro_inicial', 'compra', 'venda', 'ajuste_manual', 'troca', 'perda')),
+  reason text not null check (
+    reason in (
+      'cadastro_inicial',
+      'compra',
+      'devolucao',
+      'ajuste_positivo',
+      'correcao_estoque',
+      'venda',
+      'venda_manual',
+      'ajuste_manual',
+      'troca',
+      'perda',
+      'avaria',
+      'ajuste_negativo',
+      'devolucao_ao_fornecedor'
+    )
+  ),
   quantity integer not null check (quantity > 0),
   notes text,
   created_at timestamptz not null default now()
@@ -348,7 +364,23 @@ create table if not exists public.stock_movements (
 alter table public.stock_movements drop constraint if exists stock_movements_reason_check;
 alter table public.stock_movements
 add constraint stock_movements_reason_check
-check (reason in ('cadastro_inicial', 'compra', 'venda', 'ajuste_manual', 'troca', 'perda'));
+check (
+  reason in (
+    'cadastro_inicial',
+    'compra',
+    'devolucao',
+    'ajuste_positivo',
+    'correcao_estoque',
+    'venda',
+    'venda_manual',
+    'ajuste_manual',
+    'troca',
+    'perda',
+    'avaria',
+    'ajuste_negativo',
+    'devolucao_ao_fornecedor'
+  )
+);
 
 -- Movimentações financeiras do caixa.
 create table if not exists public.cash_movements (

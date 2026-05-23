@@ -437,7 +437,7 @@ function movementDescription(movement: CashMovement) {
 
 function stockMovementDescription(movement: StockMovement) {
   const productName = movement.product?.product_model?.name ?? movement.product?.name ?? 'Produto'
-  const detail = movement.reason === 'venda' ? 'Baixa por venda' : stockReasonLabel(movement.reason)
+  const detail = movement.reason === 'venda' || movement.reason === 'venda_manual' ? 'Baixa por venda' : stockReasonLabel(movement.reason)
   const reference = movement.cash_movement?.movement_code ? ` · ${movement.cash_movement.movement_code}` : ''
   const modelReference = movement.product?.product_model?.reference
     ? ` · Ref. ${movement.product.product_model.reference}`
@@ -450,10 +450,17 @@ function stockReasonLabel(reason: StockMovement['reason']) {
   const labels: Record<StockMovement['reason'], string> = {
     cadastro_inicial: 'Cadastro inicial',
     compra: 'Compra',
+    devolucao: 'Devolução',
+    ajuste_positivo: 'Ajuste positivo',
+    correcao_estoque: 'Correção de estoque',
     venda: 'Venda',
+    venda_manual: 'Venda manual',
     ajuste_manual: 'Ajuste manual',
     troca: 'Troca',
     perda: 'Perda',
+    avaria: 'Avaria',
+    ajuste_negativo: 'Ajuste negativo',
+    devolucao_ao_fornecedor: 'Devolução ao fornecedor',
   }
 
   return labels[reason]

@@ -809,7 +809,7 @@ export async function createStockMovement({
     const nextStock = type === 'entrada' ? currentStock + quantity : currentStock - quantity
 
     if (nextStock < 0) {
-      throw new Error('Estoque insuficiente para registrar esta saída.')
+      throw new Error('Quantidade maior que o estoque disponível.')
     }
 
     const { error: updateError } = await client
