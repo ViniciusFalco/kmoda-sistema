@@ -4,7 +4,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarcodeResultModal, type BarcodeLookupResult } from '../../components/barcode/BarcodeResultModal'
 import { BarcodeScanButton } from '../../components/barcode/BarcodeScanButton'
 import { Button } from '../../components/ui/Button'
-import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
@@ -65,6 +64,7 @@ export function ProductsPage() {
 
   useEffect(() => {
     const q = searchParams.get('q') ?? ''
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuery(q)
   }, [searchParams])
 
@@ -73,6 +73,7 @@ export function ProductsPage() {
       return
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEditingProduct(null)
     setInitialBarcode(createBarcodeParam)
     setModalOpen(true)
@@ -235,93 +236,124 @@ export function ProductsPage() {
 
   return (
     <div className="space-y-6">
-      <Card
-        title="Produtos"
-        description="Cadastro rápido de peças por etiqueta, código de barras e atributos da roupa."
-        action={
-          <div className="flex flex-wrap justify-end gap-2">
-            <BarcodeScanButton label="Ler código" variant="secondary" onScan={handleBarcodeScan} />
-            <Button onClick={openCreateModal}>
+      <section className="overflow-hidden rounded-[2rem] bg-[linear-gradient(135deg,#090909_0%,#050505_48%,#121212_100%)] px-6 py-7 text-white shadow-[0_30px_90px_rgba(0,0,0,0.22)] ring-1 ring-white/10 sm:px-8 sm:py-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/35">
+              Cadastro e consulta
+            </p>
+            <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">
+              Produtos
+            </h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-white/60 sm:text-base">
+              Cadastro rápido de peças por etiqueta, código de barras e atributos da roupa.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+            <BarcodeScanButton label="Ler código" variant="secondary" tone="dark" onScan={handleBarcodeScan} />
+            <Button tone="dark" onClick={openCreateModal}>
               <Plus className="h-4 w-4" />
               Adicionar produto
             </Button>
           </div>
-        }
-      >
-        {error ? (
-          <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {error}
-          </div>
-        ) : null}
+        </div>
+      </section>
 
-        <div className="mb-4 grid gap-3 xl:grid-cols-[1fr_160px_180px_130px_150px_150px_auto]">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              className="pl-9"
-              placeholder="Buscar por nome, código, marca, tipo, cor ou tamanho"
-              value={query}
-              onChange={(event) => {
-                setLoading(true)
-                setQuery(event.target.value)
-              }}
-            />
-          </div>
-          <FilterSelect value={brandId} onChange={setBrandId} label="Todas as marcas" items={registries.brands} />
-          <FilterSelect
-            value={clothingTypeId}
-            onChange={setClothingTypeId}
-            label="Todos os tipos"
-            items={registries.clothingTypes}
-          />
-          <FilterSelect value={sizeId} onChange={setSizeId} label="Tamanhos" items={registries.sizes} />
-          <FilterSelect value={colorId} onChange={setColorId} label="Cores" items={registries.colors} />
-          <select
-            className="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-            value={activeFilter}
-            onChange={(event) => {
-              setLoading(true)
-              setActiveFilter(event.target.value)
-            }}
-          >
-            <option value="">Todos os status</option>
-            <option value="active">Ativos</option>
-            <option value="inactive">Inativos</option>
-          </select>
-          <label className="flex h-10 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={lowStock}
-              onChange={(event) => {
-                setLoading(true)
-                setLowStock(event.target.checked)
-              }}
-              className="h-4 w-4 rounded border-gray-300"
-            />
-            Baixo
-          </label>
+      {error ? (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {error}
+        </div>
+      ) : null}
+
+      <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-[#050505] shadow-[0_24px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/5">
+        <div className="border-b border-white/10 px-6 py-5 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/35">
+            Filtros
+          </p>
         </div>
 
-        {loading ? (
-          <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-            Carregando produtos...
+        <div className="space-y-4 px-6 py-5 text-white">
+          <div className="grid gap-3 xl:grid-cols-[1.15fr_160px_180px_130px_150px_150px_auto]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-white/35" />
+              <Input
+                tone="dark"
+                className="pl-9"
+                placeholder="Buscar por nome, código, marca, tipo, cor ou tamanho"
+                value={query}
+                onChange={(event) => {
+                  setLoading(true)
+                  setQuery(event.target.value)
+                }}
+              />
+            </div>
+            <FilterSelect
+              tone="dark"
+              value={brandId}
+              onChange={setBrandId}
+              label="Todas as marcas"
+              items={registries.brands}
+            />
+            <FilterSelect
+              tone="dark"
+              value={clothingTypeId}
+              onChange={setClothingTypeId}
+              label="Todos os tipos"
+              items={registries.clothingTypes}
+            />
+            <FilterSelect tone="dark" value={sizeId} onChange={setSizeId} label="Tamanhos" items={registries.sizes} />
+            <FilterSelect tone="dark" value={colorId} onChange={setColorId} label="Cores" items={registries.colors} />
+            <select
+              className="h-10 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-white/20 focus:ring-2 focus:ring-white/10"
+              value={activeFilter}
+              onChange={(event) => {
+                setLoading(true)
+                setActiveFilter(event.target.value)
+              }}
+            >
+              <option value="">Todos os status</option>
+              <option value="active">Ativos</option>
+              <option value="inactive">Inativos</option>
+            </select>
+            <label className="flex h-10 items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white/80">
+              <input
+                type="checkbox"
+                checked={lowStock}
+                onChange={(event) => {
+                  setLoading(true)
+                  setLowStock(event.target.checked)
+                }}
+                className="h-4 w-4 rounded border-white/20 bg-transparent accent-white"
+              />
+              Baixo
+            </label>
           </div>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-[2rem] border border-gray-200 bg-white shadow-sm">
+        {loading ? (
+          <div className="p-8 text-center text-sm text-gray-500">Carregando produtos...</div>
         ) : products.length === 0 ? (
-          <EmptyState
-            title="Nenhum produto encontrado."
-            description="Cadastre um produto ou ajuste os filtros da busca."
-            action={<Button onClick={openCreateModal}>Adicionar produto</Button>}
-          />
+          <div className="p-5">
+            <EmptyState
+              title="Nenhum produto encontrado."
+              description="Cadastre um produto ou ajuste os filtros da busca."
+              action={<Button onClick={openCreateModal}>Adicionar produto</Button>}
+            />
+          </div>
         ) : (
           <ProductTable products={products} onEdit={openEditModal} onDelete={(product) => void handleDelete(product)} />
         )}
-      </Card>
+      </section>
 
       <Modal
         open={modalOpen}
         title={editingProduct ? 'Editar produto' : 'Adicionar produto'}
         onClose={closeModal}
         size="6xl"
+        tone="dark"
       >
         <ProductForm
           key={editingProduct?.id ?? (initialBarcode || 'new-product')}
@@ -403,15 +435,21 @@ function FilterSelect({
   onChange,
   label,
   items,
+  tone = 'light',
 }: {
   value: string
   onChange: (value: string) => void
   label: string
   items: Array<{ id: string; name: string }>
+  tone?: 'light' | 'dark'
 }) {
   return (
     <select
-      className="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+      className={`h-10 rounded-md px-3 text-sm outline-none transition focus:ring-2 ${
+        tone === 'dark'
+          ? 'border border-white/10 bg-white/[0.04] text-white focus:border-white/20 focus:ring-white/10'
+          : 'border border-gray-200 bg-white text-gray-700 focus:border-gray-400 focus:ring-gray-100'
+      }`}
       value={value}
       onChange={(event) => onChange(event.target.value)}
     >

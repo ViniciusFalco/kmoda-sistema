@@ -13,6 +13,7 @@ interface QuickCreateModalProps {
   error?: string
   onClose: () => void
   onSubmit: (values: { name: string; description: string; extra?: string }) => Promise<void> | void
+  tone?: 'light' | 'dark'
 }
 
 export function QuickCreateModal({
@@ -25,6 +26,7 @@ export function QuickCreateModal({
   error,
   onClose,
   onSubmit,
+  tone = 'light',
 }: QuickCreateModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -46,16 +48,23 @@ export function QuickCreateModal({
   }
 
   return (
-    <Modal open={open} title={title} onClose={onClose} size="md">
+    <Modal open={open} title={title} onClose={onClose} size="md" tone={tone}>
       <form className="space-y-4" onSubmit={handleSubmit}>
         {error ? (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div
+            className={`rounded-md border p-3 text-sm ${
+              tone === 'dark'
+                ? 'border-red-500/20 bg-red-500/10 text-red-200'
+                : 'border-red-200 bg-red-50 text-red-700'
+            }`}
+          >
             {error}
           </div>
         ) : null}
         <Input
           label="Nome"
           value={name}
+          tone={tone}
           autoFocus
           onChange={(event) => {
             setName(event.target.value)
@@ -66,6 +75,7 @@ export function QuickCreateModal({
         <Input
           label={descriptionLabel}
           value={description}
+          tone={tone}
           onChange={(event) => setDescription(event.target.value)}
         />
         {extraLabel ? (
@@ -73,14 +83,15 @@ export function QuickCreateModal({
             label={extraLabel}
             placeholder={extraPlaceholder}
             value={extra}
+            tone={tone}
             onChange={(event) => setExtra(event.target.value)}
           />
         ) : null}
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={submitting}>
+          <Button variant="secondary" tone={tone} onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" tone={tone} disabled={submitting}>
             {submitting ? 'Salvando...' : 'Salvar'}
           </Button>
         </div>

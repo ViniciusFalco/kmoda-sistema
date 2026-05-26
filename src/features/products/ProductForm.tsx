@@ -125,6 +125,7 @@ export function ProductForm({
     const reference = values.reference.trim()
 
     if (!reference) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReferenceMessage('')
       return
     }
@@ -260,14 +261,19 @@ export function ProductForm({
 
   return (
     <>
-      <form className="flex max-h-[calc(92vh-73px)] flex-col" onSubmit={handleSubmit}>
+      <form className="flex max-h-[calc(92vh-73px)] flex-col text-white" onSubmit={handleSubmit}>
         <div className="grid flex-1 gap-5 overflow-y-auto p-1 pb-5 xl:grid-cols-[1fr_1fr]">
           <div className="space-y-5">
-            <FormSection title="Identificação" description="Informações que aparecem na etiqueta e na busca.">
+            <FormSection
+              title="Identificação"
+              description="Informações que aparecem na etiqueta e na busca."
+              tone="dark"
+            >
               <div className="grid gap-4 md:grid-cols-2">
                 <Input
                   ref={nameRef}
                   label="Nome do produto"
+                  tone="dark"
                   name="name"
                   value={values.name}
                   autoFocus
@@ -277,15 +283,17 @@ export function ProductForm({
                 />
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium text-gray-700">Código de barras</span>
+                    <span className="text-sm font-medium text-white/75">Código de barras</span>
                     <BarcodeScanButton
                       label="Ler código"
                       variant="secondary"
+                      tone="dark"
                       onScan={(code) => updateValue('barcode', code)}
                       className="h-9"
                     />
                   </div>
                   <Input
+                    tone="dark"
                     name="barcode"
                     inputMode="text"
                     value={values.barcode}
@@ -293,17 +301,22 @@ export function ProductForm({
                   />
                 </div>
                 {referenceMessage ? (
-                  <div className="md:col-span-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                  <div className="md:col-span-2 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/65">
                     {referenceMessage}
                   </div>
                 ) : null}
               </div>
             </FormSection>
 
-            <FormSection title="Classificação" description="Use cadastros auxiliares para acelerar lançamentos.">
+            <FormSection
+              title="Classificação"
+              description="Use cadastros auxiliares para acelerar lançamentos."
+              tone="dark"
+            >
               <div className="grid gap-4 md:grid-cols-2">
                 <SearchableSelect
                   label="Marca"
+                  tone="dark"
                   placeholder="Selecione a marca"
                   value={values.brand_id}
                   options={brandOptions}
@@ -313,6 +326,7 @@ export function ProductForm({
                 />
                 <SearchableSelect
                   label="Tipo de roupa"
+                  tone="dark"
                   placeholder="Selecione o tipo"
                   value={values.clothing_type_id}
                   options={typeOptions}
@@ -322,6 +336,7 @@ export function ProductForm({
                 />
                 <SearchableSelect
                   label="Tamanho"
+                  tone="dark"
                   placeholder="Selecione o tamanho"
                   value={values.size_id}
                   options={sizeOptions}
@@ -331,6 +346,7 @@ export function ProductForm({
                 />
                 <SearchableSelect
                   label="Cor"
+                  tone="dark"
                   placeholder="Selecione a cor"
                   value={values.color_id}
                   options={colorOptions}
@@ -343,10 +359,15 @@ export function ProductForm({
           </div>
 
           <div className="space-y-5">
-            <FormSection title="Preços e estoque" description="Valores usados nas vendas e alertas de reposição.">
+            <FormSection
+              title="Preços e estoque"
+              description="Valores usados nas vendas e alertas de reposição."
+              tone="dark"
+            >
               <div className="grid gap-4 md:grid-cols-2">
                 <Input
                   label="Preço de custo"
+                  tone="dark"
                   type="number"
                   min="0"
                   step="0.01"
@@ -356,6 +377,7 @@ export function ProductForm({
                 />
                 <Input
                   label="Preço de venda"
+                  tone="dark"
                   type="number"
                   min="0"
                   step="0.01"
@@ -366,6 +388,7 @@ export function ProductForm({
                 />
                 <Input
                   label="Preço sugerido"
+                  tone="dark"
                   type="number"
                   min="0"
                   step="0.01"
@@ -375,6 +398,7 @@ export function ProductForm({
                 />
                 <Input
                   label="Quantidade inicial em estoque"
+                  tone="dark"
                   type="number"
                   min="0"
                   value={values.stock_quantity}
@@ -384,6 +408,7 @@ export function ProductForm({
                 />
                 <Input
                   label="Estoque mínimo"
+                  tone="dark"
                   type="number"
                   min="0"
                   value={values.min_stock}
@@ -394,43 +419,45 @@ export function ProductForm({
               </div>
             </FormSection>
 
-            <FormSection title="Informações extras">
+            <FormSection title="Informações extras" tone="dark">
               <label className="block space-y-1.5">
-                <span className="text-sm font-medium text-gray-700">Descrição</span>
+                <span className="text-sm font-medium text-white/75">Descrição</span>
                 <textarea
                   rows={4}
                   value={values.description}
                   onChange={(event) => updateValue('description', event.target.value)}
-                  className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+                  className="w-full rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/20 focus:ring-2 focus:ring-white/10"
                 />
               </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
+              <label className="flex items-center gap-2 text-sm text-white/80">
                 <input
                   type="checkbox"
                   checked={values.active}
                   onChange={(event) => updateValue('active', event.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300"
+                  className="h-4 w-4 rounded border-white/20 bg-transparent accent-white"
                 />
                 Produto ativo
               </label>
-              <div className="rounded-md border border-gray-100">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03]">
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-gray-700"
+                  className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-white/80"
                   onClick={() => setAdvancedOpen((current) => !current)}
                 >
                   Detalhes avançados
                   <ChevronDown className={`h-4 w-4 transition ${advancedOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {advancedOpen ? (
-                  <div className="grid gap-3 border-t border-gray-100 p-3 md:grid-cols-2">
+                  <div className="grid gap-3 border-t border-white/10 p-3 md:grid-cols-2">
                     <Input
                       label="Referência"
+                      tone="dark"
                       value={values.reference}
                       onChange={(event) => updateValue('reference', event.target.value)}
                     />
                     <Input
                       label="Família / grupo"
+                      tone="dark"
                       value={values.family}
                       onChange={(event) => updateValue('family', event.target.value)}
                     />
@@ -441,20 +468,16 @@ export function ProductForm({
           </div>
         </div>
 
-        <div className="sticky bottom-0 -mx-5 flex justify-end gap-2 border-t border-gray-100 bg-white px-5 py-4">
-          <Button variant="secondary" onClick={onCancel} disabled={submitting}>
+        <div className="sticky bottom-0 -mx-5 flex justify-end gap-2 border-t border-white/10 bg-[#050505] px-5 py-4">
+          <Button variant="secondary" tone="dark" onClick={onCancel} disabled={submitting}>
             Cancelar
           </Button>
           {!product ? (
-            <Button
-              variant="secondary"
-              onClick={() => void submit('another')}
-              disabled={submitting}
-            >
+            <Button variant="secondary" tone="dark" onClick={() => void submit('another')} disabled={submitting}>
               Salvar e cadastrar outro
             </Button>
           ) : null}
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" tone="dark" disabled={submitting}>
             {submitting ? 'Salvando...' : 'Salvar produto'}
           </Button>
         </div>
@@ -467,6 +490,7 @@ export function ProductForm({
         extraPlaceholder={quickCreate?.kind === 'colors' ? '#000000' : undefined}
         submitting={quickSubmitting}
         error={quickError}
+        tone="dark"
         onClose={() => setQuickCreate(null)}
         onSubmit={handleQuickCreate}
       />
