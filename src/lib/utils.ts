@@ -36,6 +36,20 @@ export function formatDateBR(value?: string | null) {
   }).format(new Date(value))
 }
 
+export function formatDateTimeBR(value?: string | null) {
+  if (!value) {
+    return '-'
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
 export function getTodayLocalDate() {
   const date = new Date()
   const year = date.getFullYear()

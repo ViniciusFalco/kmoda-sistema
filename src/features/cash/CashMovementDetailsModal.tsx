@@ -26,7 +26,6 @@ export function CashMovementDetailsModal({ entry, onClose }: CashMovementDetails
       title={isSession ? (entry.eventType === 'open' ? 'Abertura de caixa' : 'Fechamento de caixa') : `Lançamento ${entry.movement_code ?? shortCode(entry.id)}`}
       onClose={onClose}
       size="5xl"
-      tone="dark"
     >
       <div className="space-y-5">
         <div className="grid gap-3 md:grid-cols-3">
@@ -53,16 +52,15 @@ export function CashMovementDetailsModal({ entry, onClose }: CashMovementDetails
           />
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <p className="text-sm font-medium text-white/75">Observação</p>
-          <p className="mt-1 text-sm text-white/60">{isSession ? entry.notes || 'Sem observação.' : movement?.notes || 'Sem observação.'}</p>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <p className="text-sm font-medium text-gray-700">Observação</p>
+          <p className="mt-1 text-sm text-gray-600">{isSession ? entry.notes || 'Sem observação.' : movement?.notes || 'Sem observação.'}</p>
         </div>
 
         {saleItems.length > 0 ? (
           <div>
-            <h3 className="mb-3 text-sm font-semibold text-white">Produtos da venda</h3>
+            <h3 className="mb-3 text-sm font-semibold text-gray-950">Produtos da venda</h3>
             <Table
-              tone="dark"
               data={saleItems}
               columns={[
                 {
@@ -70,8 +68,8 @@ export function CashMovementDetailsModal({ entry, onClose }: CashMovementDetails
                   header: 'Produto',
                   render: (item) => (
                     <div>
-                      <p className="font-medium text-white">{item.product?.product_model?.name ?? item.product?.name ?? '-'}</p>
-                      <p className="text-xs text-white/55">
+                      <p className="font-medium text-gray-950">{item.product?.product_model?.name ?? item.product?.name ?? '-'}</p>
+                      <p className="text-xs text-gray-500">
                         {[
                           item.product?.product_model?.reference,
                           item.product?.barcode,
@@ -101,9 +99,9 @@ export function CashMovementDetailsModal({ entry, onClose }: CashMovementDetails
 
 function Detail({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-      <p className="text-xs font-medium uppercase text-white/35">{label}</p>
-      <div className="mt-1 text-sm font-medium text-white">{value || '-'}</div>
+    <div className="rounded-lg border border-gray-200 bg-white p-3">
+      <p className="text-xs font-medium uppercase text-gray-500">{label}</p>
+      <div className="mt-1 text-sm font-medium text-gray-950">{value || '-'}</div>
     </div>
   )
 }

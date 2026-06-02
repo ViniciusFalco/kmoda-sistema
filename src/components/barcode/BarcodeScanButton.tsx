@@ -13,6 +13,7 @@ interface BarcodeScanButtonProps {
   className?: string
   disabled?: boolean
   tone?: 'light' | 'dark'
+  layout?: 'stacked' | 'inline'
 }
 
 export function BarcodeScanButton({
@@ -23,6 +24,7 @@ export function BarcodeScanButton({
   className,
   disabled,
   tone = 'light',
+  layout = 'stacked',
 }: BarcodeScanButtonProps) {
   const { open, barcode, setBarcode, openScanner, closeScanner } = useBarcodeScanner()
 
@@ -40,7 +42,7 @@ export function BarcodeScanButton({
       : 'hover:-translate-y-0.5 hover:shadow-md active:translate-y-0'
 
   return (
-    <div className="inline-flex flex-col gap-1">
+    <div className={layout === 'inline' ? 'inline-flex items-start gap-2' : 'inline-flex flex-col gap-1'}>
       <Button
         type="button"
         variant={buttonVariant}

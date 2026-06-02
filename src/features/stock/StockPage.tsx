@@ -77,15 +77,15 @@ function StockTable<T extends { id: string }>({
   onRowClick,
 }: StockTableProps<T>) {
   return (
-    <div className="overflow-hidden rounded-[1.75rem] border border-zinc-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+    <div className="overflow-hidden rounded-xl border-2 border-gray-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
       <div className="overflow-x-auto">
         <table className={`w-full border-collapse bg-white text-sm ${minWidthClassName}`}>
           <thead>
-            <tr className="bg-black text-white">
+            <tr className="bg-gray-50 text-gray-700">
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className={`px-5 py-5 text-[12px] font-semibold uppercase tracking-[0.22em] sm:py-6 ${
+                  className={`px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.18em] sm:py-5 ${
                     column.align === 'left' ? 'text-left' : 'text-center'
                   }`}
                 >
@@ -394,10 +394,10 @@ export function StockPage() {
 
   const tabButtonClass = (active: boolean) =>
     [
-      'rounded-full px-4 py-2 text-sm font-semibold transition',
+      'border-r border-gray-200 px-4 py-2.5 text-sm font-semibold transition sm:px-5',
       active
-        ? 'bg-black text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)]'
-        : 'bg-transparent text-zinc-600 hover:bg-zinc-200 hover:text-zinc-950',
+        ? 'bg-black text-white'
+        : 'bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-950',
     ].join(' ')
 
   const panelAnimation = {
@@ -419,40 +419,30 @@ export function StockPage() {
         }
       `}</style>
 
-      <div className="overflow-hidden rounded-[2rem] border border-black/10 bg-[linear-gradient(135deg,#050505_0%,#121212_48%,#0a0a0a_100%)] px-6 pb-8 pt-8 text-white shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:px-8 sm:pb-10 sm:pt-10 lg:px-10 lg:pt-12">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 text-left">
-            <h1 className="text-4xl font-semibold tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl">Estoque</h1>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => openMovementModal()}
-            className="group inline-flex w-full items-center justify-between gap-4 rounded-[1.5rem] border border-white/10 bg-white px-4 py-4 text-left text-zinc-950 shadow-[0_18px_45px_rgba(0,0,0,0.24)] transition-transform duration-300 hover:-translate-y-0.5 hover:shadow-[0_24px_55px_rgba(0,0,0,0.28)] lg:w-auto"
-          >
-            <span className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-950 text-white">
-                <PackagePlus className="h-5 w-5" />
-              </span>
-              <span className="flex flex-col items-start">
-                <span className="text-sm font-semibold leading-none">Atualizar estoque</span>
-                <span className="mt-1 text-xs text-zinc-500">Entrada e saída</span>
-              </span>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => openMovementModal()}
+          className="group inline-flex w-full items-center justify-between gap-4 rounded-xl border-2 border-gray-300 bg-white px-4 py-3 text-left text-gray-950 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:bg-gray-50 lg:w-auto"
+        >
+          <span className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-900">
+              <PackagePlus className="h-5 w-5" />
             </span>
-            <span className="text-lg text-zinc-400 transition-transform duration-300 group-hover:translate-x-0.5">
-              →
+            <span className="flex flex-col items-start">
+              <span className="text-sm font-semibold leading-none">Atualizar estoque</span>
+              <span className="mt-1 text-xs text-gray-500">Entrada e saída</span>
             </span>
-          </button>
-        </div>
+          </span>
+          <span className="text-lg text-gray-400 transition-transform duration-300 group-hover:translate-x-0.5">
+            →
+          </span>
+        </button>
       </div>
 
-      <section className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-        <div className="border-b border-zinc-200 px-5 py-6 text-center sm:px-6">
-          <h2 className="text-2xl font-semibold tracking-[-0.03em] text-zinc-950">
-            {activeTab === 'products' ? 'Lista de Produtos' : 'Histórico de movimentações'}
-          </h2>
-
-          <div className="mt-4 inline-flex w-full justify-center rounded-full border border-zinc-200 bg-zinc-100 p-1 sm:w-auto">
+      <section className="overflow-hidden rounded-xl border-2 border-gray-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+        <div className="border-b-2 border-gray-100 px-5 py-4 text-center sm:px-6">
+          <div className="inline-flex w-full justify-center overflow-hidden border-2 border-gray-200 bg-white sm:w-auto">
             <button
               type="button"
               aria-pressed={activeTab === 'products'}
@@ -478,7 +468,7 @@ export function StockPage() {
               <div className="space-y-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div className="relative w-full max-w-2xl">
-                    <Search className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-zinc-400" />
+                    <Search className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
                     <Input
                       id="stock-search"
                       className="h-12 pl-10 text-base"
@@ -507,7 +497,7 @@ export function StockPage() {
                       align: 'left',
                       render: (product) => (
                         <div className="min-w-0 text-left">
-                          <p className="font-medium text-zinc-950 group-hover:underline group-hover:decoration-zinc-400 group-hover:underline-offset-4">
+                          <p className="font-medium text-gray-950 group-hover:underline group-hover:decoration-gray-400 group-hover:underline-offset-4">
                             {product.product_model?.name ?? product.name}
                           </p>
                         </div>
@@ -529,7 +519,7 @@ export function StockPage() {
                       key: 'stock',
                       header: 'Estoque',
                       render: (product) => (
-                        <span className={product.stock_quantity <= product.min_stock ? 'font-semibold text-rose-600' : 'text-zinc-950'}>
+                        <span className={product.stock_quantity <= product.min_stock ? 'font-semibold text-rose-600' : 'text-gray-950'}>
                           {product.stock_quantity}
                         </span>
                       ),
@@ -538,17 +528,17 @@ export function StockPage() {
                 />
 
                 {productQuery.trim() ? (
-                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-                    Mostrando <span className="font-semibold text-zinc-950">{filteredProducts.length}</span> produtos filtrados
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                    Mostrando <span className="font-semibold text-gray-950">{filteredProducts.length}</span> produtos filtrados
                   </div>
                 ) : null}
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="overflow-hidden rounded-[1.75rem] border border-zinc-900/80 bg-[linear-gradient(135deg,#050505_0%,#111111_55%,#080808_100%)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.18)] sm:p-5">
+                <div className="overflow-hidden rounded-xl border-2 border-gray-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.05)] sm:p-5">
                   <div className="flex flex-col gap-4">
                     <div className="text-center">
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">Filtros</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-500">Filtros</p>
                     </div>
 
                     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_190px_190px_auto]">
@@ -557,10 +547,9 @@ export function StockPage() {
                         type="date"
                         value={historyStartDate}
                         onChange={(event) => setHistoryStartDate(event.target.value)}
-                        tone="dark"
                         className={
                           historyStartDate
-                            ? 'border-white bg-white text-zinc-950 placeholder:text-zinc-400 focus:border-white focus:ring-white/20'
+                            ? 'border-gray-300 bg-white text-gray-950 placeholder:text-gray-400 focus:border-gray-400 focus:ring-gray-100'
                             : undefined
                         }
                       />
@@ -569,51 +558,42 @@ export function StockPage() {
                         type="date"
                         value={historyEndDate}
                         onChange={(event) => setHistoryEndDate(event.target.value)}
-                        tone="dark"
                         className={
                           historyEndDate
-                            ? 'border-white bg-white text-zinc-950 placeholder:text-zinc-400 focus:border-white focus:ring-white/20'
+                            ? 'border-gray-300 bg-white text-gray-950 placeholder:text-gray-400 focus:border-gray-400 focus:ring-gray-100'
                             : undefined
                         }
                       />
                       <label className="block space-y-1.5">
-                        <span className="text-sm font-medium text-white/75">Tipo</span>
+                        <span className="text-sm font-medium text-gray-700">Tipo</span>
                         <select
                           value={historyTypeFilter}
                           onChange={(event) => {
                             const nextType = event.target.value as HistoryTypeFilter
                             setHistoryTypeFilter(nextType)
                           }}
-                          className={`h-10 w-full rounded-md border px-3 text-sm outline-none transition focus:ring-2 ${
-                            historyTypeFilter === 'all'
-                              ? 'border-white/10 bg-white/5 text-white placeholder:text-white/35 focus:border-white/20 focus:ring-white/10'
-                              : 'border-white bg-white text-zinc-950 focus:border-white focus:ring-white/20'
-                          }`}
+                          className="h-10 w-full rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
                         >
-                          <option value="all" className="text-zinc-950">
+                          <option value="all" className="text-gray-950">
                             Todos os tipos
                           </option>
-                          <option value="entrada" className="text-zinc-950">
+                          <option value="entrada" className="text-gray-950">
                             Entrada
                           </option>
-                          <option value="saida" className="text-zinc-950">
+                          <option value="saida" className="text-gray-950">
                             Saída
                           </option>
                         </select>
                       </label>
                       <label className="block space-y-1.5">
-                        <span className="text-sm font-medium text-white/75">Motivo</span>
+                        <span className="text-sm font-medium text-gray-700">Motivo</span>
                         <select
                           value={historyReasonFilter}
                           onChange={(event) => setHistoryReasonFilter(event.target.value as HistoryReasonFilter)}
-                          className={`h-10 w-full rounded-md border px-3 text-sm outline-none transition focus:ring-2 ${
-                            historyReasonFilter === 'all'
-                              ? 'border-white/10 bg-white/5 text-white focus:border-white/20 focus:ring-white/10'
-                              : 'border-white bg-white text-zinc-950 focus:border-white focus:ring-white/20'
-                          }`}
+                          className="h-10 w-full rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
                         >
                           {availableHistoryReasonOptions.map((option) => (
-                            <option key={option.value} value={option.value} className="text-zinc-950">
+                            <option key={option.value} value={option.value} className="text-gray-950">
                               {option.label}
                             </option>
                           ))}
@@ -621,7 +601,7 @@ export function StockPage() {
                       </label>
 
                       <div className="flex items-end">
-                        <Button type="button" variant="secondary" tone="dark" className="w-full" onClick={resetHistoryFilters}>
+                        <Button type="button" variant="secondary" className="w-full" onClick={resetHistoryFilters}>
                           Limpar filtros
                         </Button>
                       </div>
@@ -641,7 +621,7 @@ export function StockPage() {
                       align: 'left',
                       render: (movement) => (
                         <div className="min-w-0 text-left">
-                          <p className="font-medium text-zinc-950 group-hover:underline group-hover:decoration-zinc-400 group-hover:underline-offset-4">
+                          <p className="font-medium text-gray-950 group-hover:underline group-hover:decoration-gray-400 group-hover:underline-offset-4">
                             {getStockMovementTitle(movement)}
                           </p>
                         </div>
@@ -669,8 +649,8 @@ export function StockPage() {
                 />
 
                 {(historyStartDate || historyEndDate || historyTypeFilter !== 'all' || historyReasonFilter !== 'all') ? (
-                  <div className="rounded-2xl border border-white/10 bg-white px-4 py-3 text-center text-sm text-zinc-700 shadow-[0_10px_24px_rgba(0,0,0,0.08)]">
-                    Mostrando <span className="font-semibold text-zinc-950">{filteredMovements.length}</span> linhas filtradas
+                  <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-center text-sm text-gray-700 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                    Mostrando <span className="font-semibold text-gray-950">{filteredMovements.length}</span> linhas filtradas
                   </div>
                 ) : null}
               </div>
@@ -680,12 +660,12 @@ export function StockPage() {
       </section>
 
       {error ? (
-        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100 shadow-[0_16px_40px_rgba(0,0,0,0.16)]">
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
           {error}
         </div>
       ) : null}
 
-      <Modal open={movementModalOpen} title="Atualizar estoque" onClose={closeMovementModal} size="5xl" tone="dark">
+      <Modal open={movementModalOpen} title="Atualizar estoque" onClose={closeMovementModal} size="5xl">
         <StockMovementForm
           key={movementProductId || 'empty'}
           products={products}
@@ -702,13 +682,12 @@ export function StockPage() {
         title={selectedProduct ? selectedProduct.product_model?.name ?? selectedProduct.name : 'Produto'}
         onClose={closeProductDetails}
         size="2xl"
-        tone="dark"
       >
         {selectedProduct ? (
           <div className="space-y-5">
-            <div className="rounded-2xl border border-white/10 bg-white px-4 py-4 text-center text-zinc-950">
+            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4 text-center text-gray-950">
               <div className="flex flex-col items-center gap-3 text-center">
-                <h3 className="text-2xl font-semibold text-zinc-950">
+                <h3 className="text-2xl font-semibold text-gray-950">
                   {selectedProduct.product_model?.name ?? selectedProduct.name}
                 </h3>
               </div>
@@ -726,11 +705,10 @@ export function StockPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button variant="secondary" tone="dark" onClick={closeProductDetails}>
+              <Button variant="secondary" onClick={closeProductDetails}>
                 Fechar
               </Button>
               <Button
-                tone="dark"
                 onClick={() => {
                   openMovementModal(selectedProduct.id)
                   closeProductDetails()
@@ -749,16 +727,15 @@ export function StockPage() {
         title={selectedMovement ? `Movimentação ${selectedMovement.cash_movement?.movement_code ?? selectedMovement.id.slice(0, 8).toUpperCase()}` : 'Movimentação'}
         onClose={closeMovementDetails}
         size="2xl"
-        tone="dark"
       >
         {selectedMovement ? (
           <div className="space-y-5">
-            <div className="rounded-2xl border border-white/10 bg-white px-4 py-4 text-center text-zinc-950">
+            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4 text-center text-gray-950">
               <div className="flex flex-col items-center gap-3 text-center">
-                <h3 className="text-2xl font-semibold text-zinc-950">
+                <h3 className="text-2xl font-semibold text-gray-950">
                   {selectedMovement.type === 'entrada' ? 'Entrada de estoque' : 'Saída de estoque'}
                 </h3>
-                <p className="text-sm text-zinc-600">
+                <p className="text-sm text-gray-600">
                   {getStockMovementTitle(selectedMovement)}
                 </p>
               </div>
@@ -776,18 +753,17 @@ export function StockPage() {
               />
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white px-4 py-4 text-center text-zinc-950">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Observação</p>
-              <p className="mt-2 text-sm text-zinc-950">{selectedMovement.notes ?? 'Sem observação.'}</p>
+            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4 text-center text-gray-950">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Observação</p>
+              <p className="mt-2 text-sm text-gray-950">{selectedMovement.notes ?? 'Sem observação.'}</p>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button variant="secondary" tone="dark" onClick={closeMovementDetails}>
+              <Button variant="secondary" onClick={closeMovementDetails}>
                 Fechar
               </Button>
               {selectedMovement.product ? (
                 <Button
-                  tone="dark"
                   onClick={() => {
                     if (selectedMovement.product) {
                       openProductDetails(selectedMovement.product)
@@ -808,9 +784,9 @@ export function StockPage() {
 
 function DetailCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-center shadow-[0_10px_24px_rgba(0,0,0,0.08)]">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-zinc-950">{value || '-'}</p>
+    <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4 text-center shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-gray-950">{value || '-'}</p>
     </div>
   )
 }

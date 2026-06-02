@@ -96,13 +96,13 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
   const totalPages = result ? Math.max(1, Math.ceil(result.count / result.pageSize)) : 1
 
   return (
-    <Modal open={open} title="Buscar histórico" onClose={onClose} size="6xl" tone="dark">
+    <Modal open={open} title="Buscar histórico" onClose={onClose} size="6xl">
       <div className="space-y-5">
         <form className="grid gap-4 lg:grid-cols-4" onSubmit={handleSubmit}>
           <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-white/75">Tipo</span>
+            <span className="text-sm font-medium text-gray-700">Tipo</span>
             <select
-              className="h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white outline-none transition focus:border-white/20 focus:ring-2 focus:ring-white/10"
+              className="h-10 w-full rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
               value={type}
               onChange={(event) => setType(event.target.value as CashHistoryFilters['type'])}
             >
@@ -113,15 +113,15 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
               <option value="session_close">Fechamento de caixa</option>
             </select>
           </label>
-          <Input tone="dark" label="Descrição" value={description} onChange={(event) => setDescription(event.target.value)} />
-          <Input tone="dark" label="Valor mínimo" inputMode="decimal" value={minAmount} onChange={(event) => setMinAmount(event.target.value)} />
-          <Input tone="dark" label="Valor máximo" inputMode="decimal" value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} />
-          <Input tone="dark" label="Data inicial" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-          <Input tone="dark" label="Data final" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          <Input label="Descrição" value={description} onChange={(event) => setDescription(event.target.value)} />
+          <Input label="Valor mínimo" inputMode="decimal" value={minAmount} onChange={(event) => setMinAmount(event.target.value)} />
+          <Input label="Valor máximo" inputMode="decimal" value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} />
+          <Input label="Data inicial" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          <Input label="Data final" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
           <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-white/75">Pagamento</span>
+            <span className="text-sm font-medium text-gray-700">Pagamento</span>
             <select
-              className="h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white outline-none transition focus:border-white/20 focus:ring-2 focus:ring-white/10"
+              className="h-10 w-full rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
               value={paymentMethod}
               onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod | 'all')}
             >
@@ -134,38 +134,38 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
             </select>
           </label>
           <div className="flex items-end gap-2">
-            <Button type="submit" tone="dark" disabled={loading}>
+            <Button type="submit" disabled={loading}>
               {loading ? 'Buscando...' : 'Aplicar filtros'}
             </Button>
-            <Button type="button" tone="dark" variant="secondary" onClick={clearFilters} disabled={loading}>
+            <Button type="button" variant="secondary" onClick={clearFilters} disabled={loading}>
               Limpar filtros
             </Button>
           </div>
         </form>
 
-        {error ? <div className="rounded-md border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div> : null}
+        {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
         {result ? (
           <div className="space-y-3">
             {result.data.length === 0 ? (
-              <div className="rounded-lg border border-white/10 bg-white/5 p-8 text-center text-sm text-white/55">
+              <div className="rounded-lg border-2 border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
                 Nenhum lançamento encontrado.
               </div>
             ) : (
-              <div className="overflow-hidden rounded-lg border border-white/10">
+              <div className="overflow-hidden rounded-lg border-2 border-gray-200">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] border-collapse bg-[#050505] text-left text-sm text-white">
-                    <thead className="bg-black text-xs uppercase text-white">
+                  <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm text-gray-700">
+                    <thead className="bg-gray-50 text-[11px] uppercase tracking-[0.14em] text-gray-500">
                       <tr>
-                        <th className="px-4 py-3 font-bold tracking-[0.08em]">ID</th>
-                        <th className="px-4 py-3 font-bold tracking-[0.08em]">Tipo</th>
-                        <th className="px-4 py-3 font-bold tracking-[0.08em]">Descrição</th>
-                        <th className="px-4 py-3 font-bold tracking-[0.08em]">Valor</th>
-                        <th className="px-4 py-3 font-bold tracking-[0.08em]">Data</th>
-                        <th className="px-4 py-3 font-bold tracking-[0.08em]">Pagamento</th>
+                        <th className="px-4 py-3 font-semibold">ID</th>
+                        <th className="px-4 py-3 font-semibold">Tipo</th>
+                        <th className="px-4 py-3 font-semibold">Descrição</th>
+                        <th className="px-4 py-3 font-semibold">Valor</th>
+                        <th className="px-4 py-3 font-semibold">Data</th>
+                        <th className="px-4 py-3 font-semibold">Pagamento</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/10">
+                    <tbody className="divide-y divide-gray-100">
                       {result.data.map((entry) => {
                         const isSession = entry.kind === 'session'
                         const isIncome = !isSession && entry.type === 'income'
@@ -175,38 +175,38 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
                             key={entry.id}
                             className={`cursor-pointer transition ${
                               isSession
-                                ? 'bg-zinc-800/85 hover:bg-zinc-700/85'
+                                ? 'bg-gray-50 hover:bg-gray-100'
                                 : isIncome
-                                  ? 'bg-emerald-500/10 hover:bg-emerald-500/15'
-                                  : 'bg-rose-500/10 hover:bg-rose-500/15'
+                                  ? 'bg-emerald-50 hover:bg-emerald-100'
+                                  : 'bg-rose-50 hover:bg-rose-100'
                             }`}
                             onClick={() => onSelectEntry(entry)}
                           >
-                            <td className={`px-4 py-3 text-xs font-medium ${isSession ? 'text-white/65' : 'text-white/55'}`}>
+                            <td className={`px-4 py-3 text-xs font-medium text-gray-500`}>
                               {entry.movement_code ?? shortCode(entry.id)}
                             </td>
                             <td className="px-4 py-3">
                               {isSession ? (
-                                <Badge tone="dark" variant="neutral">{entry.eventType === 'open' ? 'Abertura' : 'Fechamento'}</Badge>
+                                <Badge variant="neutral">{entry.eventType === 'open' ? 'Abertura' : 'Fechamento'}</Badge>
                               ) : (
-                                <Badge tone="dark" variant={entry.type === 'income' ? 'success' : 'warning'}>
+                                <Badge variant={entry.type === 'income' ? 'success' : 'warning'}>
                                   {movementLabel(entry)}
                                 </Badge>
                               )}
                             </td>
-                            <td className={`px-4 py-3 font-medium ${isSession ? 'text-white' : 'text-white'}`}>
+                            <td className="px-4 py-3 font-medium text-gray-900">
                               {isSession
                                 ? entry.eventType === 'open'
                                   ? 'Abertura de caixa'
                                   : 'Fechamento de caixa'
                                 : movementDescription(entry)}
                             </td>
-                            <td className={`px-4 py-3 ${isSession ? 'text-white/75' : isIncome ? 'text-emerald-300' : 'text-rose-300'}`}>
+                            <td className={`px-4 py-3 ${isSession ? 'text-gray-700' : isIncome ? 'text-emerald-700' : 'text-rose-700'}`}>
                               {isSession ? '' : entry.type === 'income' ? '+' : '-'}
                               {formatCurrencyBRL(entry.amount)}
                             </td>
-                            <td className="px-4 py-3 text-white/75">{formatDateBR(entry.movement_date)}</td>
-                            <td className="px-4 py-3 text-white/75">{isSession ? '-' : paymentLabel(entry.payment_method, entry.sale?.installments_count)}</td>
+                            <td className="px-4 py-3 text-gray-600">{formatDateBR(entry.movement_date)}</td>
+                            <td className="px-4 py-3 text-gray-600">{isSession ? '-' : paymentLabel(entry.payment_method, entry.sale?.installments_count)}</td>
                           </tr>
                         )
                       })}
@@ -216,7 +216,7 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
               </div>
             )}
 
-            <div className="flex items-center justify-between text-sm text-white/55">
+            <div className="flex items-center justify-between text-sm text-gray-500">
               <p>
                 Página {currentPage} de {totalPages} · {result.count} resultado(s)
               </p>
@@ -224,7 +224,6 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
                 <Button
                   variant="secondary"
                   size="sm"
-                  tone="dark"
                   onClick={() => void runSearch(currentPage - 1)}
                   disabled={loading || currentPage <= 1}
                 >
@@ -233,7 +232,6 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
                 <Button
                   variant="secondary"
                   size="sm"
-                  tone="dark"
                   onClick={() => void runSearch(currentPage + 1)}
                   disabled={loading || currentPage >= totalPages}
                 >
@@ -243,7 +241,7 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border border-white/10 bg-white/5 p-8 text-center text-sm text-white/55">
+          <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
             Aplique pelo menos um filtro para carregar o histórico.
           </div>
         )}

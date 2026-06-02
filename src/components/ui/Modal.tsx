@@ -42,22 +42,24 @@ export function Modal({ open, title, children, onClose, size = '2xl', position =
     }
 
     if (open) {
-      setShouldRender(true)
-      setPhase('opening')
-
       entryFrameRef.current = window.requestAnimationFrame(() => {
+        setShouldRender(true)
+        setPhase('opening')
+
         entryFrameRef.current = window.requestAnimationFrame(() => {
           setPhase('open')
           entryFrameRef.current = null
         })
       })
     } else if (shouldRender) {
-      setPhase('closing')
-      exitTimerRef.current = window.setTimeout(() => {
-        setShouldRender(false)
-        setPhase('closed')
-        exitTimerRef.current = null
-      }, 260)
+      entryFrameRef.current = window.requestAnimationFrame(() => {
+        setPhase('closing')
+        exitTimerRef.current = window.setTimeout(() => {
+          setShouldRender(false)
+          setPhase('closed')
+          exitTimerRef.current = null
+        }, 260)
+      })
     }
 
     return undefined
@@ -84,7 +86,7 @@ export function Modal({ open, title, children, onClose, size = '2xl', position =
   return createPortal(
     <div
       className={`fixed inset-0 z-[100] overflow-y-auto transition-opacity duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-        tone === 'dark' ? 'bg-black/70 backdrop-blur-sm' : 'bg-gray-950/30'
+        tone === 'dark' ? 'bg-gray-950/45 backdrop-blur-sm' : 'bg-gray-900/20 backdrop-blur-[2px]'
       } ${isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
       aria-hidden={phase !== 'open'}
     >
@@ -105,10 +107,10 @@ export function Modal({ open, title, children, onClose, size = '2xl', position =
         }}
       >
         <div
-          className={`max-h-[calc(100vh-2rem)] w-full ${sizes[size]} overflow-y-auto rounded-3xl shadow-[0_30px_90px_rgba(0,0,0,0.35)] transition-[transform,opacity] duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          className={`kmoda-scrollbar max-h-[calc(100vh-2rem)] w-full ${sizes[size]} overflow-y-scroll rounded-2xl border-2 border-gray-200 shadow-[0_30px_90px_rgba(0,0,0,0.28)] transition-[transform,opacity] duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
             tone === 'dark'
-              ? 'bg-[#050505] text-white ring-1 ring-white/10'
-              : 'bg-white text-gray-950 shadow-xl'
+              ? 'bg-white text-gray-950 ring-0'
+              : 'bg-white text-gray-950 shadow-xl ring-0'
           } ${
             isOpen
               ? 'translate-y-0 scale-100 opacity-100'
@@ -118,25 +120,25 @@ export function Modal({ open, title, children, onClose, size = '2xl', position =
           }`}
         >
           <div
-            className={`sticky top-0 z-10 flex items-center justify-between border-b px-5 py-4 ${
-              tone === 'dark'
-                ? 'border-white/10 bg-[#050505]'
-                : 'border-gray-100 bg-white'
+            className={`sticky top-0 z-10 flex items-center justify-between border-b-2 px-5 py-4 ${
+            tone === 'dark'
+                ? 'border-gray-200 bg-white'
+                : 'border-gray-200 bg-white'
             }`}
           >
-            <h2 className={`text-base font-semibold ${tone === 'dark' ? 'text-white' : 'text-gray-950'}`}>{title}</h2>
+            <h2 className="text-sm font-semibold text-gray-950 sm:text-base">{title}</h2>
             <Button
               variant="ghost"
               size="sm"
               onClick={onClose}
               aria-label="Fechar modal"
-              tone={tone === 'dark' ? 'dark' : 'light'}
-              className={tone === 'dark' ? 'text-white/70 hover:bg-white/10 hover:text-white' : undefined}
+              tone="light"
+              className="h-10 w-10 px-0 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5" />
             </Button>
           </div>
-          <div className={tone === 'dark' ? 'p-5 text-white' : 'p-5'}>{children}</div>
+          <div className="p-4 text-gray-900 sm:p-5">{children}</div>
         </div>
       </div>
     </div>,

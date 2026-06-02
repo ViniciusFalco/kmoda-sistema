@@ -19,6 +19,22 @@ export type CashMovementType = 'income' | 'expense'
 export type CashMovementOrigin = 'sale' | 'manual_expense' | 'manual_income' | 'stock'
 export type CashSessionStatus = 'open' | 'closed'
 export type SaleStatus = 'aberta' | 'finalizada' | 'cancelada'
+export type MonitoringSpaceStatus = 'normal' | 'attention' | 'warning' | 'critical'
+export type MonitoringPauseRisk = 'baixo' | 'médio' | 'alto' | 'crítico'
+export type AppActivityType =
+  | 'login'
+  | 'product_create'
+  | 'product_update'
+  | 'sale'
+  | 'sale_update'
+  | 'expense'
+  | 'expense_update'
+  | 'cash_movement'
+  | 'cash_movement_update'
+  | 'stock_movement'
+  | 'stock_movement_update'
+  | 'customer_create'
+  | 'customer_update'
 
 export interface UserProfile {
   id: string
@@ -235,3 +251,28 @@ export interface CashSessionHistoryEvent {
 }
 
 export type CashHistoryEntry = CashHistoryMovement | CashSessionHistoryEvent
+
+export interface AppActivity {
+  id: string
+  activity_type: AppActivityType | string
+  source_table?: string | null
+  record_id?: string | null
+  actor_user_id?: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
+export interface KmodaStorageUsage {
+  used_bytes: number
+  used_mb: number
+  limit_mb: number
+  percent_used: number
+  status: MonitoringSpaceStatus
+}
+
+export interface AppPauseRisk {
+  last_activity_at: string | null
+  estimated_pause_at: string | null
+  estimated_days_until_pause: number | null
+  pause_risk: MonitoringPauseRisk
+}

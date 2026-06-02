@@ -291,13 +291,13 @@ export function CashSaleForm({
   }
 
   return (
-    <div className="relative space-y-5 text-white">
-      <div className={`space-y-5 ${isBlocked ? 'pointer-events-none blur-[1.5px] select-none' : ''}`}>
-        <div className="grid gap-2 rounded-lg border border-white/10 bg-white/5 p-1 sm:grid-cols-2">
+    <div className="relative space-y-5 text-gray-950">
+      <div className={`space-y-5 ${isBlocked ? 'pointer-events-none blur-[1px] select-none' : ''}`}>
+        <div className="grid gap-2 rounded-lg border border-gray-200 bg-white p-1 sm:grid-cols-2">
           <button
             type="button"
             className={`rounded-md px-4 py-3 text-sm font-medium transition ${
-              mode === 'product_sale' ? 'bg-white text-gray-950 shadow-sm' : 'text-white/55 hover:bg-white/10'
+              mode === 'product_sale' ? 'bg-gray-100 text-gray-950 shadow-sm' : 'text-gray-600 hover:bg-gray-100'
             }`}
             onClick={() => setMode('product_sale')}
           >
@@ -306,7 +306,7 @@ export function CashSaleForm({
           <button
             type="button"
             className={`rounded-md px-4 py-3 text-sm font-medium transition ${
-              mode === 'manual_income' ? 'bg-white text-gray-950 shadow-sm' : 'text-white/55 hover:bg-white/10'
+              mode === 'manual_income' ? 'bg-gray-100 text-gray-950 shadow-sm' : 'text-gray-600 hover:bg-gray-100'
             }`}
             onClick={() => setMode('manual_income')}
           >
@@ -319,10 +319,9 @@ export function CashSaleForm({
             <div>
               <div className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end">
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-white/35" />
+                  <Search className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
                   <Input
                     className="h-12 pl-10 text-base"
-                    tone="dark"
                     placeholder="Buscar por produto, código de barras, marca, tipo, tamanho ou cor"
                     value={query}
                     onChange={(event) => {
@@ -336,31 +335,25 @@ export function CashSaleForm({
                     }}
                   />
                 </div>
-                <BarcodeScanButton
-                  label="Ler código"
-                  variant="secondary"
-                  tone="light"
-                  onScan={handleBarcodeScan}
-                  className="h-12"
-                />
+                <BarcodeScanButton label="Ler código" variant="secondary" onScan={handleBarcodeScan} className="h-12" />
               </div>
               {query.trim().length >= 2 ? (
-                <div className="mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-white/10 bg-[#050505] p-1 text-sm shadow-xl">
+                <div className="mt-1 max-h-80 w-full overflow-y-auto rounded-lg border-2 border-gray-200 bg-white p-1 text-sm shadow-xl">
                   {loadingProducts ? (
-                    <div className="px-3 py-3 text-white/55">Buscando produtos...</div>
+                    <div className="px-3 py-3 text-gray-500">Buscando produtos...</div>
                   ) : results.length === 0 ? (
-                    <div className="px-3 py-3 text-white/55">Nenhum produto encontrado.</div>
+                    <div className="px-3 py-3 text-gray-500">Nenhum produto encontrado.</div>
                   ) : (
                     results.map((product) => (
                       <button
                         key={product.id}
                         type="button"
-                        className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left text-white transition hover:bg-white/5"
+                        className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left text-gray-900 transition hover:bg-gray-50"
                         onClick={() => addProduct(product)}
                       >
                         <span>
-                          <span className="block font-medium text-white">{product.product_model?.name ?? product.name}</span>
-                          <span className="block text-xs text-white/55">
+                          <span className="block font-medium text-gray-950">{product.product_model?.name ?? product.name}</span>
+                          <span className="block text-xs text-gray-500">
                             {[
                               product.product_model?.reference,
                               product.barcode,
@@ -374,7 +367,7 @@ export function CashSaleForm({
                               .join(' • ') || 'Sem detalhes'}
                           </span>
                         </span>
-                        <span className="shrink-0 rounded-full bg-white/10 px-2 py-1 text-xs font-medium text-white/75">
+                        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
                           Estoque {product.stock_quantity}
                         </span>
                       </button>
@@ -385,7 +378,6 @@ export function CashSaleForm({
             </div>
 
             <Table
-              tone="dark"
               data={items}
               emptyMessage="Nenhum produto adicionado."
               columns={[
@@ -394,8 +386,8 @@ export function CashSaleForm({
                   header: 'Produto',
                   render: (item) => (
                     <div>
-                      <p className="font-medium text-white">{item.product.product_model?.name ?? item.product.name}</p>
-                      <p className="text-xs text-white/55">
+                      <p className="font-medium text-gray-950">{item.product.product_model?.name ?? item.product.name}</p>
+                      <p className="text-xs text-gray-500">
                         {[
                           item.product.product_model?.reference,
                           item.product.barcode,
@@ -417,7 +409,6 @@ export function CashSaleForm({
                   render: (item) => (
                     <Input
                       className="w-20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                      tone="dark"
                       type="number"
                       min="1"
                       max={item.product.stock_quantity}
@@ -432,7 +423,6 @@ export function CashSaleForm({
                   render: (item) => (
                     <Input
                       className="w-32"
-                      tone="dark"
                       type="text"
                       inputMode="numeric"
                       value={formatCurrencyBRL(item.unitPrice)}
@@ -446,7 +436,6 @@ export function CashSaleForm({
                   header: '',
                   render: (item) => (
                     <Button
-                      tone="dark"
                       variant="ghost"
                       size="sm"
                       onClick={() => setItems((current) => current.filter((line) => line.id !== item.id))}
@@ -461,9 +450,8 @@ export function CashSaleForm({
           </>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            <Input tone="dark" label="Descrição" value={description} onChange={(event) => setDescription(event.target.value)} required />
+            <Input label="Descrição" value={description} onChange={(event) => setDescription(event.target.value)} required />
             <Input
-              tone="dark"
               label="Valor"
               type="text"
               inputMode="numeric"
@@ -475,120 +463,119 @@ export function CashSaleForm({
           </div>
         )}
 
-      {error ? <div className="rounded-md border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div> : null}
+        {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
-      {mode === 'product_sale' ? (
-        <div className="grid gap-4 rounded-lg border border-white/10 bg-white/5 p-4 md:grid-cols-[1.2fr_160px_180px] md:items-end">
-          <div className="space-y-2">
-            <span className="text-sm font-medium text-white/75">Forma de pagamento</span>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                className={`rounded-md px-4 py-3 text-sm font-medium transition ${
-                  salePaymentMode === 'cash' ? 'bg-white text-gray-950 shadow-sm' : 'text-white/55 hover:bg-white/10'
-                }`}
-                onClick={() => {
-                  setSalePaymentMode('cash')
-                  setSaleInstallmentsCount(1)
-                  setInstallmentModalOpen(false)
-                }}
-              >
-                Dinheiro
-              </button>
-              <button
-                type="button"
-                className={`rounded-md px-4 py-3 text-sm font-medium transition ${
-                  salePaymentMode === 'credit' ? 'bg-white text-gray-950 shadow-sm' : 'text-white/55 hover:bg-white/10'
-                }`}
-                onClick={() => {
-                  setSalePaymentMode('credit')
-                  setInstallmentModalOpen(true)
-                }}
-              >
-                Crédito
-              </button>
+        {mode === 'product_sale' ? (
+          <div className="grid gap-4 rounded-lg border-2 border-gray-200 bg-white p-4 md:grid-cols-[1.2fr_160px_180px] md:items-end">
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-gray-700">Forma de pagamento</span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  className={`rounded-md px-4 py-3 text-sm font-medium transition ${
+                    salePaymentMode === 'cash' ? 'bg-gray-100 text-gray-950 shadow-sm' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                  onClick={() => {
+                    setSalePaymentMode('cash')
+                    setSaleInstallmentsCount(1)
+                    setInstallmentModalOpen(false)
+                  }}
+                >
+                  Dinheiro
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md px-4 py-3 text-sm font-medium transition ${
+                    salePaymentMode === 'credit' ? 'bg-gray-100 text-gray-950 shadow-sm' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                  onClick={() => {
+                    setSalePaymentMode('credit')
+                    setInstallmentModalOpen(true)
+                  }}
+                >
+                  Crédito
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                {salePaymentMode === 'credit'
+                  ? `${saleInstallmentsCount}x de ${formatCurrencyBRL(saleInstallmentValue)}`
+                  : 'Pagamento em dinheiro para conferência do caixa.'}
+              </p>
             </div>
-            <p className="text-xs text-white/45">
-              {salePaymentMode === 'credit'
-                ? `${saleInstallmentsCount}x de ${formatCurrencyBRL(saleInstallmentValue)}`
-                : 'Pagamento em dinheiro para conferência do caixa.'}
-            </p>
-          </div>
 
-          <Input tone="dark" label="Data" type="date" value={movementDate} onChange={(event) => setMovementDate(event.target.value)} />
+            <Input label="Data" type="date" value={movementDate} onChange={(event) => setMovementDate(event.target.value)} />
 
-          <div>
-            <p className="text-sm text-white/55">Total da venda</p>
-            <p className="text-3xl font-semibold text-white">{formatCurrencyBRL(total)}</p>
-            <p className="mt-1 text-xs text-white/45">
-              {salePaymentMode === 'credit'
-                ? `${saleInstallmentsCount} parcelas de ${formatCurrencyBRL(saleInstallmentValue)}`
-                : 'À vista'}
-            </p>
+            <div>
+              <p className="text-sm text-gray-500">Total da venda</p>
+              <p className="text-3xl font-semibold text-gray-950">{formatCurrencyBRL(total)}</p>
+              <p className="mt-1 text-xs text-gray-500">
+                {salePaymentMode === 'credit'
+                  ? `${saleInstallmentsCount} parcelas de ${formatCurrencyBRL(saleInstallmentValue)}`
+                  : 'À vista'}
+              </p>
+            </div>
           </div>
+        ) : (
+          <div className="grid gap-4 rounded-lg border-2 border-gray-200 bg-white p-4 md:grid-cols-[1fr_160px_180px] md:items-end">
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-gray-700">Forma de pagamento</span>
+              <select
+                className="h-10 w-full rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+                value={paymentMethod}
+                onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+              >
+                <option value="dinheiro">Dinheiro</option>
+                <option value="pix">Pix</option>
+                <option value="cartao_debito">Cartão de débito</option>
+                <option value="cartao_credito">Cartão de crédito</option>
+                <option value="outro">Outro</option>
+              </select>
+            </label>
+            <Input label="Data" type="date" value={movementDate} onChange={(event) => setMovementDate(event.target.value)} />
+            <div>
+              <p className="text-sm text-gray-500">Total da entrada</p>
+              <p className="text-3xl font-semibold text-gray-950">{formatCurrencyBRL(parseCurrencyToNumber(manualAmount))}</p>
+            </div>
+          </div>
+        )}
+
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-gray-700">Observação</span>
+          <textarea
+            className="min-h-20 w-full rounded-md border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
+        </label>
+
+        <div className="flex justify-end gap-2 border-t border-gray-200 pt-4">
+          <Button variant="secondary" type="button" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={() => void handleSubmit()}
+            disabled={submitting || !cashSessionOpen || (mode === 'product_sale' && items.length === 0)}
+          >
+            {submitting ? 'Registrando...' : mode === 'product_sale' ? 'Registrar venda' : 'Registrar entrada'}
+          </Button>
         </div>
-      ) : (
-        <div className="grid gap-4 rounded-lg border border-white/10 bg-white/5 p-4 md:grid-cols-[1fr_160px_180px] md:items-end">
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-white/75">Forma de pagamento</span>
-            <select
-              className="h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white outline-none transition focus:border-white/20 focus:ring-2 focus:ring-white/10"
-              value={paymentMethod}
-              onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
-            >
-              <option value="dinheiro">Dinheiro</option>
-              <option value="pix">Pix</option>
-              <option value="cartao_debito">Cartão de débito</option>
-              <option value="cartao_credito">Cartão de crédito</option>
-              <option value="outro">Outro</option>
-            </select>
-          </label>
-          <Input tone="dark" label="Data" type="date" value={movementDate} onChange={(event) => setMovementDate(event.target.value)} />
-          <div>
-            <p className="text-sm text-white/55">Total da entrada</p>
-            <p className="text-3xl font-semibold text-white">{formatCurrencyBRL(parseCurrencyToNumber(manualAmount))}</p>
-          </div>
-        </div>
-      )}
 
-      <label className="block space-y-1.5">
-        <span className="text-sm font-medium text-white/75">Observação</span>
-        <textarea
-          className="min-h-20 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-white/20 focus:ring-2 focus:ring-white/10"
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
+        <CashInstallmentModal
+          open={installmentModalOpen}
+          total={total}
+          installmentsCount={saleInstallmentsCount}
+          onSelectInstallmentsCount={setSaleInstallmentsCount}
+          onCancel={() => {
+            setInstallmentModalOpen(false)
+            setSalePaymentMode('cash')
+            setSaleInstallmentsCount(1)
+          }}
+          onConfirm={(count) => {
+            setSaleInstallmentsCount(count)
+            setSalePaymentMode('credit')
+            setInstallmentModalOpen(false)
+          }}
         />
-      </label>
-
-      <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
-        <Button tone="dark" variant="secondary" type="button" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button
-          tone="dark"
-          onClick={() => void handleSubmit()}
-          disabled={submitting || !cashSessionOpen || (mode === 'product_sale' && items.length === 0)}
-        >
-          {submitting ? 'Registrando...' : mode === 'product_sale' ? 'Registrar venda' : 'Registrar entrada'}
-        </Button>
-      </div>
-
-      <CashInstallmentModal
-        open={installmentModalOpen}
-        total={total}
-        installmentsCount={saleInstallmentsCount}
-        onSelectInstallmentsCount={setSaleInstallmentsCount}
-        onCancel={() => {
-          setInstallmentModalOpen(false)
-          setSalePaymentMode('cash')
-          setSaleInstallmentsCount(1)
-        }}
-        onConfirm={(count) => {
-          setSaleInstallmentsCount(count)
-          setSalePaymentMode('credit')
-          setInstallmentModalOpen(false)
-        }}
-      />
       </div>
 
       {isBlocked ? <CashSessionBlockedOverlay onOpenCash={onOpenCash} /> : null}

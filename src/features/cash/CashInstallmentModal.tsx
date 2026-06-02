@@ -28,17 +28,16 @@ export function CashInstallmentModal({
       title="Parcelamento"
       onClose={onCancel}
       size="lg"
-      tone="dark"
     >
       <div className="space-y-5">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/45">
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-500">
             Total da venda
           </p>
-          <p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">
+          <p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-gray-950">
             {formatCurrencyBRL(total)}
           </p>
-          <p className="mt-2 text-sm text-white/55">
+          <p className="mt-2 text-sm text-gray-600">
             Selecione a quantidade de parcelas para a venda no crédito.
           </p>
         </div>
@@ -50,8 +49,8 @@ export function CashInstallmentModal({
               type="button"
               className={`rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
                 installmentsCount === count
-                  ? 'border-white bg-white text-zinc-950 shadow-sm'
-                  : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                  ? 'border-gray-300 bg-white text-gray-950 shadow-sm'
+                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-950'
               }`}
               onClick={() => onSelectInstallmentsCount(count)}
             >
@@ -60,23 +59,23 @@ export function CashInstallmentModal({
           ))}
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#0b0b0b] px-4 py-4 text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/45">
+        <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4 text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-500">
             Valor por parcela
           </p>
-          <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
+          <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-gray-950">
             {formatCurrencyBRL(installmentValue)}
           </p>
-          <p className="mt-1 text-sm text-white/55">
+          <p className="mt-1 text-sm text-gray-600">
             {installmentsCount} parcelas
           </p>
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button type="button" tone="dark" variant="secondary" onClick={onCancel}>
+          <Button type="button" variant="secondary" onClick={onCancel}>
             Cancelar
           </Button>
-          <Button type="button" tone="dark" onClick={() => onConfirm(installmentsCount)}>
+          <Button type="button" onClick={() => onConfirm(installmentsCount)}>
             Confirmar parcelas
           </Button>
         </div>

@@ -100,10 +100,10 @@ export function CustomersPage() {
           description={query ? 'Tente outro termo de busca no cabeçalho.' : 'Crie o primeiro cliente para começar.'}
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200">
+        <div className="overflow-hidden rounded-xl border border-gray-200">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <thead className="bg-gray-50 text-[11px] uppercase tracking-[0.14em] text-gray-500">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Nome</th>
                   <th className="px-4 py-3 font-semibold">Telefone</th>

@@ -54,14 +54,14 @@ export function BarcodeResultModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-black/45 p-4 pt-14 backdrop-blur-sm"
+      className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-gray-900/20 p-4 pt-14 backdrop-blur-sm"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose()
         }
       }}
     >
-      <div className="w-full max-w-4xl overflow-hidden rounded-3xl bg-[#050505] text-white shadow-[0_30px_90px_rgba(0,0,0,0.28)] ring-1 ring-white/10">
+      <div className="w-full max-w-4xl overflow-hidden rounded-3xl bg-white text-gray-950 shadow-[0_30px_90px_rgba(15,23,42,0.18)] ring-1 ring-gray-200">
         {result.kind === 'found' ? (
           <FoundContent
             result={result}
@@ -73,7 +73,7 @@ export function BarcodeResultModal({
         )}
 
         {resolvedActions.length > 0 ? (
-          <div className="flex flex-col-reverse gap-2 border-t border-white/10 bg-[#0b0b0b] px-6 py-4 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4 sm:flex-row sm:justify-end">
             {resolvedActions.map((action) => (
               <ActionButton key={action.label} action={action} />
             ))}
@@ -104,19 +104,19 @@ function FoundContent({
 
   return (
     <>
-      <header className="relative bg-[#050505] px-6 py-6 text-white">
+      <header className="relative bg-gray-50 px-6 py-6 text-gray-950">
         <button
           type="button"
           onClick={onClose}
           aria-label="Fechar modal"
-          className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/60 transition hover:bg-white/15 hover:text-white"
+          className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
         >
           <X className="h-4 w-4" />
         </button>
 
         <div className="flex flex-col gap-5 pr-10 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/70">
+            <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600">
               <Barcode className="h-3.5 w-3.5" />
               Código encontrado
             </div>
@@ -125,7 +125,7 @@ function FoundContent({
               {productName}
             </h2>
 
-            <p className="mt-2 text-sm text-white/55">
+            <p className="mt-2 text-sm text-gray-500">
               Ref. {reference} · {category} · {brand}
             </p>
           </div>
@@ -133,18 +133,18 @@ function FoundContent({
           <div
             className={
               hasStock
-                ? 'inline-flex w-fit items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-200'
-                : 'inline-flex w-fit items-center gap-2 rounded-full bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-200'
+                ? 'inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700'
+                : 'inline-flex w-fit items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700'
             }
           >
-            <span className={hasStock ? 'h-2 w-2 rounded-full bg-emerald-300' : 'h-2 w-2 rounded-full bg-amber-300'} />
+            <span className={hasStock ? 'h-2 w-2 rounded-full bg-emerald-500' : 'h-2 w-2 rounded-full bg-amber-500'} />
             {hasStock ? 'Em estoque' : 'Sem estoque'}
           </div>
         </div>
       </header>
 
       <main className="space-y-5 px-6 py-6">
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-center">
+        <section className="grid gap-3 text-center sm:grid-cols-2 lg:grid-cols-4">
           <MainInfo label="Cor" value={product.color?.name ?? '-'} />
           <MainInfo label="Tamanho" value={product.size?.name ?? '-'} />
           <MainInfo
@@ -154,12 +154,12 @@ function FoundContent({
           <MainInfo label="Preço" value={formatCurrencyBRL(product.sale_price)} strong />
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-[#0b0b0b] p-4 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/35">
+        <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">
             Código lido
           </p>
 
-          <p className="mt-2 font-mono text-sm font-bold text-white">
+          <p className="mt-2 font-mono text-sm font-bold text-gray-950">
             {result.code}
           </p>
         </section>
@@ -206,17 +206,17 @@ function FoundContent({
 function NotFoundContent({ code, onClose }: { code: string; onClose: () => void }) {
   return (
     <>
-      <header className="relative bg-[#050505] px-6 py-6 text-white">
+      <header className="relative bg-gray-50 px-6 py-6 text-gray-950">
         <button
           type="button"
           onClick={onClose}
           aria-label="Fechar modal"
-          className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/60 transition hover:bg-white/15 hover:text-white"
+          className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
         >
           <X className="h-4 w-4" />
         </button>
 
-        <div className="inline-flex items-center gap-2 rounded-full bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-200">
+        <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
           <AlertTriangle className="h-3.5 w-3.5" />
           Código não encontrado
         </div>
@@ -225,18 +225,18 @@ function NotFoundContent({ code, onClose }: { code: string; onClose: () => void 
           Produto não localizado
         </h2>
 
-        <p className="mt-2 max-w-xl text-sm leading-6 text-white/55">
+        <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500">
           Nenhum item cadastrado no estoque com este código.
         </p>
       </header>
 
       <main className="px-6 py-6">
-        <div className="rounded-2xl border border-white/10 bg-[#0b0b0b] p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/35">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">
             Código lido
           </p>
 
-          <p className="mt-2 font-mono text-sm font-medium text-white">
+          <p className="mt-2 font-mono text-sm font-medium text-gray-950">
             {code}
           </p>
         </div>
@@ -255,12 +255,12 @@ function MainInfo({
   strong?: boolean
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0b0b0b] p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/35">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
         {label}
       </p>
 
-      <p className={strong ? 'mt-2 text-lg font-semibold text-white' : 'mt-2 text-base font-medium text-white'}>
+      <p className={strong ? 'mt-2 text-lg font-semibold text-gray-950' : 'mt-2 text-base font-medium text-gray-950'}>
         {value}
       </p>
     </div>
@@ -281,22 +281,22 @@ function ResultSection({
   children: ReactNode
 }) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm">
+    <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-semibold text-white">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white/75">
+        <div className="flex items-center gap-2 text-sm font-semibold text-gray-950">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-gray-700 ring-1 ring-gray-200">
             {icon}
           </span>
           {title}
         </div>
 
-        <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white/10 px-2 text-xs font-semibold text-white/70">
+        <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white px-2 text-xs font-semibold text-gray-700 ring-1 ring-gray-200">
           {count}
         </span>
       </div>
 
       {count === 0 ? (
-        <div className="rounded-xl border border-dashed border-white/10 bg-white/5 px-4 py-4 text-sm text-white/55">
+        <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-4 text-sm text-gray-500">
           {emptyMessage}
         </div>
       ) : (
@@ -320,29 +320,29 @@ function ProductRow({
   const content = (
     <>
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-white">
+        <p className="truncate text-sm font-medium text-gray-950">
           {title}
         </p>
 
-        <p className="mt-1 truncate text-xs text-white/55">
+        <p className="mt-1 truncate text-xs text-gray-500">
           {subtitle}
         </p>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
         {badge ? (
-          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/70 ring-1 ring-white/10">
-            {badge}
-          </span>
-        ) : null}
-        {onClick ? <ChevronRight className="h-4 w-4 text-white/30" /> : null}
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200">
+              {badge}
+            </span>
+          ) : null}
+        {onClick ? <ChevronRight className="h-4 w-4 text-gray-400" /> : null}
       </div>
     </>
   )
 
   if (!onClick) {
     return (
-      <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3">
         {content}
       </div>
     )
@@ -352,7 +352,7 @@ function ProductRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/10"
+      className="flex w-full cursor-pointer items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left transition hover:border-gray-300 hover:bg-gray-50"
     >
       <span className="flex w-full items-center justify-between gap-4">
         {content}
@@ -366,17 +366,17 @@ function ActionButton({ action }: { action: BarcodeResultAction }) {
 
   const classNameByVariant: Record<NonNullable<BarcodeResultAction['variant']>, string> = {
     primary:
-      'border border-white/10 bg-white text-black shadow-sm hover:bg-gray-100 focus:ring-white/30',
+      'border border-gray-200 bg-white text-gray-950 shadow-sm hover:bg-gray-50 focus:ring-gray-100',
     success:
       'border border-emerald-700 bg-emerald-500 text-white shadow-[0_10px_24px_rgba(16,185,129,0.22)] hover:bg-emerald-600 focus:ring-emerald-500',
     info:
       'border border-sky-700 bg-sky-500 text-white shadow-[0_10px_24px_rgba(14,165,233,0.22)] hover:bg-sky-600 focus:ring-sky-500',
     light:
-      'border border-white/10 bg-white text-black shadow-sm hover:bg-gray-100 focus:ring-white/30',
+      'border border-gray-200 bg-white text-gray-950 shadow-sm hover:bg-gray-50 focus:ring-gray-100',
     secondary:
-      'border border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10 focus:ring-white/30',
+      'border border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 focus:ring-gray-100',
     ghost:
-      'bg-transparent text-white/60 hover:bg-white/10 hover:text-white focus:ring-white/20',
+      'bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:ring-gray-100',
     danger:
       'border border-red-400/20 bg-red-500/15 text-red-200 hover:bg-red-500/25 focus:ring-red-300',
   }
@@ -391,8 +391,8 @@ function ActionButton({ action }: { action: BarcodeResultAction }) {
           <span
             className={
               variant === 'light'
-              ? 'mr-3 flex h-8 w-8 items-center justify-center rounded-xl bg-black/10 text-black ring-1 ring-white/10'
-              : 'mr-3 flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-white'
+              ? 'mr-3 flex h-8 w-8 items-center justify-center rounded-xl bg-gray-100 text-gray-700 ring-1 ring-gray-200'
+              : 'mr-3 flex h-8 w-8 items-center justify-center rounded-xl bg-gray-100 text-gray-700 ring-1 ring-gray-200'
           }
         >
           {action.icon}

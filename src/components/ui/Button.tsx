@@ -12,10 +12,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variants: Record<ButtonVariant, string> = {
-  primary: 'bg-gray-900 text-white hover:bg-gray-800 border-gray-900',
-  secondary: 'bg-white text-gray-800 hover:bg-gray-50 border-gray-200',
+  primary: 'bg-zinc-900 text-white hover:bg-zinc-800 border-zinc-900 shadow-sm',
+  secondary: 'bg-white text-gray-800 hover:bg-gray-50 border-gray-300 shadow-sm',
   ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 border-transparent',
-  danger: 'bg-red-600 text-white hover:bg-red-700 border-red-600',
+  danger: 'bg-red-600 text-white hover:bg-red-700 border-red-600 shadow-sm',
 }
 
 const darkVariants: Record<ButtonVariant, string> = {
@@ -26,8 +26,8 @@ const darkVariants: Record<ButtonVariant, string> = {
 }
 
 const sizes: Record<ButtonSize, string> = {
-  sm: 'h-9 px-3 text-sm',
-  md: 'h-10 px-4 text-sm',
+  sm: 'h-8 px-3 text-xs sm:text-sm',
+  md: 'h-9 px-4 text-sm',
 }
 
 export function Button({
@@ -42,7 +42,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-md border font-medium transition disabled:cursor-not-allowed disabled:opacity-60',
+        'inline-flex items-center justify-center gap-2 rounded-md border-2 font-medium transition duration-150 disabled:cursor-not-allowed disabled:opacity-60',
         tone === 'dark' ? darkVariants[variant] : variants[variant],
         sizes[size],
         className,

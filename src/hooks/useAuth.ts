@@ -8,6 +8,7 @@ import {
   type PropsWithChildren,
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
+import { recordAppActivity } from '../lib/monitoring'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 
 interface AuthContextValue {
@@ -65,6 +66,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
         const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         setSession(data.session)
+
+        if (!error) {
+          void recordAppActivity('login', data.user?.id ?? data.session?.user.id ?? null, {
+            source: 'auth',
+          }).catch((activityError) => {
+            console.warn('Não foi possível registrar a atividade de login:', activityError)
+          })
+        }
+
         return error ? { error: error.message } : {}
       },
       async signOut() {

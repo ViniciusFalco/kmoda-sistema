@@ -10,22 +10,22 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const lightVariants: Record<BadgeVariant, string> = {
-  neutral: 'bg-gray-100 text-gray-700',
-  success: 'bg-emerald-50 text-emerald-700',
-  warning: 'bg-amber-50 text-amber-700',
+  neutral: 'bg-gray-100 text-gray-700 border border-gray-200',
+  success: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  warning: 'bg-amber-50 text-amber-700 border border-amber-200',
 }
 
 const darkVariants: Record<BadgeVariant, string> = {
-  neutral: 'bg-white/10 text-white/80',
-  success: 'bg-emerald-500/15 text-emerald-200',
-  warning: 'bg-amber-500/15 text-amber-200',
+  neutral: 'bg-gray-100 text-gray-700 border border-gray-200',
+  success: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  warning: 'bg-amber-50 text-amber-700 border border-amber-200',
 }
 
 export function Badge({ variant = 'neutral', tone = 'light', className, ...props }: BadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex rounded-full px-2 py-1 text-xs font-medium',
+        'inline-flex rounded-full border-2 px-2.5 py-0.5 text-[11px] font-medium',
         tone === 'dark' ? darkVariants[variant] : lightVariants[variant],
         className,
       )}

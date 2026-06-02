@@ -1,8 +1,6 @@
-import { Barcode, Boxes, PackagePlus, Receipt, ShoppingCart, Wallet } from 'lucide-react'
+import { Boxes, PackagePlus, Receipt, ShoppingCart, Users, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarcodeResultModal, type BarcodeLookupResult } from '../../components/barcode/BarcodeResultModal'
-import { BarcodeScanModal } from '../../components/barcode/BarcodeScanModal'
 import { ActionCard } from '../../components/ui/ActionCard'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -12,21 +10,32 @@ import { Table } from '../../components/ui/Table'
 import {
   createProduct,
   createRegistryItem,
-  findBarcodeLookup,
   friendlyCatalogError,
   getMonthSalesTotal,
   getTodayCashSession,
   getTodaySalesTotal,
+  listCustomers,
+  listProducts,
   listStockMovements,
   listTodayCashMovements,
   loadProductRegistries,
   type ProductInput,
   type RegistryInput,
 } from '../../lib/catalog'
-import { formatCurrency, todayISODate } from '../../lib/utils'
-import type { Brand, CashMovement, CashSession, ClothingType, Color, RegistryKind, Size, StockMovement } from '../../types/database'
+import { formatCurrency, formatDateBR, todayISODate } from '../../lib/utils'
+import type {
+  Brand,
+  CashMovement,
+  CashSession,
+  ClothingType,
+  Color,
+  Customer,
+  Product,
+  RegistryKind,
+  Size,
+  StockMovement,
+} from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
-import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import { ProductForm, type ProductFormValues, type ProductSubmitMode } from '../products/ProductForm'
 
 interface ProductRegistries {
@@ -47,24 +56,24 @@ interface DashboardMovementRow {
   id: string
   createdAt: string
   time: string
+  source: string
   type: string
   description: string
-  value: number | null
+  detail: string
 }
 
 export function DashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const { open: barcodeScannerOpen, barcode: barcodeValue, setBarcode: setBarcodeValue, openScanner, closeScanner } =
-    useBarcodeScanner()
   const [productModalOpen, setProductModalOpen] = useState(false)
   const [registries, setRegistries] = useState<ProductRegistries>(emptyRegistries)
   const [cashSession, setCashSession] = useState<CashSession | null>(null)
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([])
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [salesTodayTotal, setSalesTodayTotal] = useState(0)
   const [monthSalesTotal, setMonthSalesTotal] = useState(0)
-  const [barcodeResult, setBarcodeResult] = useState<BarcodeLookupResult | null>(null)
   const [productBarcodePrefill, setProductBarcodePrefill] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -95,44 +104,111 @@ export function DashboardPage() {
       id: `cash-${movement.id}`,
       createdAt: movement.created_at,
       time: formatTime(movement.created_at),
-      type: movement.type === 'income' ? (movement.origin === 'sale' ? 'Venda' : 'Entrada avulsa') : 'Gasto',
+      source: 'Caixa',
+      type: movement.type === 'income' ? (movement.origin === 'sale' ? 'Venda' : 'Entrada') : 'Despesa',
       description: movementDescription(movement),
-      value: movement.type === 'expense' ? -movement.amount : movement.amount,
+      detail:
+        movement.type === 'expense'
+          ? `Saída de ${formatCurrency(movement.amount)}`
+          : `Entrada de ${formatCurrency(movement.amount)}`,
     }))
 
     const stockRows = stockMovements.map((movement) => ({
       id: `stock-${movement.id}`,
       createdAt: movement.created_at,
       time: formatTime(movement.created_at),
-      type: movement.type === 'entrada' ? 'Entrada de estoque' : 'Saída de estoque',
-      description: stockMovementDescription(movement),
-      value: null,
+      source: 'Estoque',
+      type: movement.type === 'entrada' ? 'Entrada' : 'Saída',
+      description: getStockMovementTitle(movement),
+      detail: stockMovementDescription(movement),
     }))
 
-    return [...cashRows, ...stockRows]
+    const productRows = products.flatMap((product) => {
+      const description = product.product_model?.name ?? product.name
+      const detail = product.barcode ? `Código ${product.barcode}` : `Ref. ${product.reference ?? product.product_model?.reference ?? '-'}`
+      const createdRow = {
+        id: `product-create-${product.id}`,
+        createdAt: product.created_at,
+        time: formatTime(product.created_at),
+        source: 'Produtos',
+        type: 'Cadastro',
+        description,
+        detail,
+      }
+
+      if (product.updated_at !== product.created_at) {
+        return [
+          createdRow,
+          {
+            id: `product-update-${product.id}`,
+            createdAt: product.updated_at,
+            time: formatTime(product.updated_at),
+            source: 'Produtos',
+            type: 'Atualização',
+            description,
+            detail,
+          },
+        ]
+      }
+
+      return [createdRow]
+    })
+
+    const customerRows = customers.flatMap((customer) => {
+      const detail = [customer.email, customer.phone].filter(Boolean).join(' • ') || customer.cpf || 'Cadastro básico'
+      const createdRow = {
+        id: `customer-create-${customer.id}`,
+        createdAt: customer.created_at,
+        time: formatTime(customer.created_at),
+        source: 'Clientes',
+        type: 'Cadastro',
+        description: customer.name,
+        detail,
+      }
+
+      if (customer.updated_at !== customer.created_at) {
+        return [
+          createdRow,
+          {
+            id: `customer-update-${customer.id}`,
+            createdAt: customer.updated_at,
+            time: formatTime(customer.updated_at),
+            source: 'Clientes',
+            type: 'Atualização',
+            description: customer.name,
+            detail,
+          },
+        ]
+      }
+
+      return [createdRow]
+    })
+
+    const registryRows = [
+      ...registries.brands.flatMap((item) => buildRegistryRows('Marca', item.name, item.created_at, item.updated_at, item.active ? 'Ativa' : 'Inativa')),
+      ...registries.clothingTypes.flatMap((item) =>
+        buildRegistryRows('Tipo', item.name, item.created_at, item.updated_at, item.active ? 'Ativo' : 'Inativo'),
+      ),
+      ...registries.sizes.flatMap((item) => buildRegistryRows('Tamanho', item.name, item.created_at, item.updated_at, item.active ? 'Ativo' : 'Inativo')),
+      ...registries.colors.flatMap((item) => buildRegistryRows('Cor', item.name, item.created_at, item.updated_at, item.active ? 'Ativa' : 'Inativa')),
+    ]
+
+    return [...cashRows, ...stockRows, ...productRows, ...customerRows, ...registryRows]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, 5)
-  }, [cashMovements, stockMovements])
-
-  const handleBarcodeScan = useCallback(async (code: string) => {
-    setError('')
-
-    try {
-      setBarcodeResult(await findBarcodeLookup(code))
-    } catch (err) {
-      setError(friendlyCatalogError(err))
-    }
-  }, [])
+      .slice(0, 8)
+  }, [cashMovements, customers, products, registries.brands, registries.clothingTypes, registries.colors, registries.sizes, stockMovements])
 
   const loadData = useCallback(async () => {
     setError('')
     try {
       const today = todayISODate()
-      const [registryRows, sessionRows, cashRows, stockRows, salesTotal, monthSales] = await Promise.all([
+      const [registryRows, sessionRows, cashRows, stockRows, productRows, customerRows, salesTotal, monthSales] = await Promise.all([
         loadProductRegistries(),
         getTodayCashSession(),
         listTodayCashMovements(),
         listStockMovements(),
+        listProducts(),
+        listCustomers(),
         getTodaySalesTotal(today),
         getMonthSalesTotal(today),
       ])
@@ -140,6 +216,8 @@ export function DashboardPage() {
       setCashSession(sessionRows)
       setCashMovements(cashRows)
       setStockMovements(stockRows)
+      setProducts(productRows)
+      setCustomers(customerRows)
       setSalesTodayTotal(salesTotal)
       setMonthSalesTotal(monthSales)
     } catch (err) {
@@ -153,11 +231,13 @@ export function DashboardPage() {
     async function loadInitial() {
       try {
         const today = todayISODate()
-        const [registryRows, sessionRows, cashRows, stockRows, salesTotal, monthSales] = await Promise.all([
+        const [registryRows, sessionRows, cashRows, stockRows, productRows, customerRows, salesTotal, monthSales] = await Promise.all([
           loadProductRegistries(),
           getTodayCashSession(),
           listTodayCashMovements(),
           listStockMovements(),
+          listProducts(),
+          listCustomers(),
           getTodaySalesTotal(today),
           getMonthSalesTotal(today),
         ])
@@ -166,6 +246,8 @@ export function DashboardPage() {
           setCashSession(sessionRows)
           setCashMovements(cashRows)
           setStockMovements(stockRows)
+          setProducts(productRows)
+          setCustomers(customerRows)
           setSalesTodayTotal(salesTotal)
           setMonthSalesTotal(monthSales)
         }
@@ -239,25 +321,10 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="overflow-hidden rounded-[2rem] border border-black/10 bg-[linear-gradient(135deg,#050505_0%,#151515_45%,#0b0b0b_100%)] px-6 py-8 text-white shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:px-8 sm:py-10 lg:px-10 lg:py-12">
-        <div className="max-w-3xl text-left">
-          <h1 className="mt-5 text-4xl font-semibold tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl">
-            Central da loja
-          </h1>
-
-          <p className="mt-4 max-w-2xl text-base leading-7 text-white/60 sm:text-lg">
-            Acompanhe vendas, estoque e movimentações.
-          </p>
-        </div>
-      </div>
-
-      {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
-      ) : null}
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="space-y-5">
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         <ActionCard
+          compact
           title="Adicionar produto"
           description="Cadastre uma nova peça no estoque"
           icon={<PackagePlus className="h-6 w-6" />}
@@ -268,6 +335,7 @@ export function DashboardPage() {
           }}
         />
         <ActionCard
+          compact
           title="Atualizar estoque"
           description="Registre entrada, saída ou ajuste"
           icon={<Boxes className="h-6 w-6" />}
@@ -275,13 +343,15 @@ export function DashboardPage() {
           onClick={() => navigate('/estoque')}
         />
         <ActionCard
-          title="Ler código de barras"
-          description="Consultar produto pelo código"
-          icon={<Barcode className="h-6 w-6" />}
+          compact
+          title="Clientes"
+          description="Consultar cadastros e contatos"
+          icon={<Users className="h-6 w-6" />}
           appearance="classic"
-          onClick={() => openScanner()}
+          onClick={() => navigate('/clientes')}
         />
         <ActionCard
+          compact
           title="Realizar venda"
           description="Abra o caixa e registre uma nova venda"
           icon={<ShoppingCart className="h-6 w-6" />}
@@ -290,27 +360,33 @@ export function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <SummaryCard label="Vendas de hoje" value={formatCurrency(salesTodayTotal)} icon={<Receipt className="h-5 w-5" />} tone="dark" />
-        <SummaryCard label="Saldo do caixa" value={formatCurrency(balanceToday)} icon={<Wallet className="h-5 w-5" />} tone="dark" />
-        <SummaryCard label="Total de vendas do mês" value={formatCurrency(monthSalesTotal)} icon={<ShoppingCart className="h-5 w-5" />} tone="dark" />
+      {error ? (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+      ) : null}
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <SummaryCard label="Vendas de hoje" value={formatCurrency(salesTodayTotal)} icon={<Receipt className="h-5 w-5" />} />
+        <SummaryCard label="Saldo do caixa" value={formatCurrency(balanceToday)} icon={<Wallet className="h-5 w-5" />} />
+        <SummaryCard label="Total de vendas do mês" value={formatCurrency(monthSalesTotal)} icon={<ShoppingCart className="h-5 w-5" />} />
       </div>
 
-      <Card title="Últimas movimentações" description="Resumo operacional do dia.">
+      <Card title="Últimas movimentações">
         {latestMovements.length === 0 ? (
           <EmptyState title="Nenhuma movimentação hoje." />
         ) : (
-          <Table
+              <Table
+            headerClassName="bg-black text-white"
             data={latestMovements}
             columns={[
-              { key: 'time', header: 'Hora', render: (row) => row.time },
-              { key: 'type', header: 'Tipo', render: (row) => row.type },
-              { key: 'description', header: 'Descrição', render: (row) => row.description },
               {
-                key: 'value',
-                header: 'Valor',
-                render: (row) => (typeof row.value === 'number' ? formatCurrency(row.value) : '-'),
+                key: 'time',
+                header: 'Data e Hora',
+                render: (row) => `${formatDateBR(row.createdAt)} às ${row.time}`,
               },
+              { key: 'source', header: 'Fonte', render: (row) => row.source },
+              { key: 'type', header: 'Evento', render: (row) => row.type },
+              { key: 'description', header: 'Descrição', render: (row) => row.description },
+              { key: 'detail', header: 'Detalhe', render: (row) => row.detail },
             ]}
           />
         )}
@@ -318,7 +394,7 @@ export function DashboardPage() {
 
       <Modal
         open={productModalOpen}
-        title=" produto"
+        title="Novo produto"
         onClose={() => {
           setProductBarcodePrefill('')
           setProductModalOpen(false)
@@ -339,81 +415,6 @@ export function DashboardPage() {
         />
       </Modal>
 
-      <BarcodeScanModal
-        open={barcodeScannerOpen}
-        value={barcodeValue}
-        onValueChange={setBarcodeValue}
-        onConfirm={handleBarcodeScan}
-        onClose={closeScanner}
-      />
-
-      <BarcodeResultModal
-        open={barcodeResult !== null}
-        result={barcodeResult}
-        onClose={() => setBarcodeResult(null)}
-        actions={
-          barcodeResult?.kind === 'found'
-            ? [
-                {
-                  label: 'Ver produto',
-                  onClick: () => {
-                    if (!barcodeResult) {
-                      return
-                    }
-
-                    setBarcodeResult(null)
-                    navigate(`/produtos?q=${encodeURIComponent(barcodeResult.code)}`)
-                  },
-                },
-                {
-                  label: 'Atualizar estoque',
-                  onClick: () => {
-                    if (!barcodeResult) {
-                      return
-                    }
-
-                    setBarcodeResult(null)
-                    navigate(`/estoque?barcode=${encodeURIComponent(barcodeResult.code)}&auto=1`)
-                  },
-                },
-                {
-                  label: 'Nova venda com este produto',
-                  onClick: () => {
-                    if (!barcodeResult) {
-                      return
-                    }
-
-                    setBarcodeResult(null)
-                    navigate(`/caixa?acao=nova-venda&barcode=${encodeURIComponent(barcodeResult.code)}`)
-                  },
-                },
-                {
-                  label: 'Fechar',
-                  variant: 'secondary',
-                  onClick: () => setBarcodeResult(null),
-                },
-              ]
-            : [
-                {
-                  label: 'Cadastrar produto com este código',
-                  onClick: () => {
-                    if (!barcodeResult) {
-                      return
-                    }
-
-                    setBarcodeResult(null)
-                    setProductBarcodePrefill(barcodeResult.code)
-                    setProductModalOpen(true)
-                  },
-                },
-                {
-                  label: 'Fechar',
-                  variant: 'secondary',
-                  onClick: () => setBarcodeResult(null),
-                },
-              ]
-        }
-      />
     </div>
   )
 }
@@ -446,6 +447,10 @@ function stockMovementDescription(movement: StockMovement) {
   return `${detail} · ${productName}${modelReference}${reference}`
 }
 
+function getStockMovementTitle(movement: StockMovement) {
+  return movement.product?.product_model?.name ?? movement.product?.name ?? 'Movimentação'
+}
+
 function stockReasonLabel(reason: StockMovement['reason']) {
   const labels: Record<StockMovement['reason'], string> = {
     cadastro_inicial: 'Cadastro inicial',
@@ -464,4 +469,41 @@ function stockReasonLabel(reason: StockMovement['reason']) {
   }
 
   return labels[reason]
+}
+
+function buildRegistryRows(
+  kindLabel: string,
+  name: string,
+  createdAt: string,
+  updatedAt: string,
+  statusLabel: string,
+) {
+  const description = name
+  const detail = `${kindLabel} ${statusLabel.toLowerCase()}`
+  const createdRow = {
+    id: `registry-create-${kindLabel}-${name}-${createdAt}`,
+    createdAt,
+    time: formatTime(createdAt),
+    source: 'Cadastros',
+    type: 'Cadastro',
+    description,
+    detail,
+  }
+
+  if (updatedAt !== createdAt) {
+    return [
+      createdRow,
+      {
+        id: `registry-update-${kindLabel}-${name}-${updatedAt}`,
+        createdAt: updatedAt,
+        time: formatTime(updatedAt),
+        source: 'Cadastros',
+        type: 'Atualização',
+        description,
+        detail,
+      },
+    ]
+  }
+
+  return [createdRow]
 }

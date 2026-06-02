@@ -1,4 +1,3 @@
-import { ChevronDown } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { BarcodeScanButton } from '../../components/barcode/BarcodeScanButton'
 import { Button } from '../../components/ui/Button'
@@ -6,30 +5,14 @@ import { FormSection } from '../../components/ui/FormSection'
 import { Input } from '../../components/ui/Input'
 import { QuickCreateModal } from '../../components/ui/QuickCreateModal'
 import { SearchableSelect, type SelectOption } from '../../components/ui/SearchableSelect'
-import { normalizeBarcode } from '../../lib/barcode'
+import { cn, formatCurrencyInput, onlyNumbers, parseCurrencyToNumber } from '../../lib/utils'
 import { findProductModelByReference } from '../../lib/catalog'
 import type { RegistryInput } from '../../lib/catalog'
 import type { Brand, ClothingType, Color, Product, RegistryKind, Size } from '../../types/database'
+import type { ProductFormValues, ProductSubmitMode } from './ProductForm'
 
-export type ProductSubmitMode = 'close' | 'another'
-
-export interface ProductFormValues {
-  name: string
-  barcode: string
-  brand_id: string
-  clothing_type_id: string
-  family: string
-  size_id: string
-  color_id: string
-  reference: string
-  cost_price: string
-  sale_price: string
-  suggested_price: string
-  stock_quantity: string
-  min_stock: string
-  description: string
-  active: boolean
-}
+export type ProductEditorFormValues = ProductFormValues
+export type ProductEditorSubmitMode = ProductSubmitMode
 
 interface ProductRegistries {
   brands: Brand[]
@@ -38,17 +21,17 @@ interface ProductRegistries {
   colors: Color[]
 }
 
-interface ProductFormProps {
+interface ProductEditorFormProps {
   product?: Product | null
   registries: ProductRegistries
   submitting?: boolean
   initialBarcode?: string
   onCancel: () => void
-  onSubmit: (values: ProductFormValues, mode: ProductSubmitMode) => Promise<boolean>
+  onSubmit: (values: ProductEditorFormValues, mode: ProductEditorSubmitMode) => Promise<boolean>
   onQuickCreate: (kind: RegistryKind, values: RegistryInput) => Promise<{ id: string }>
 }
 
-const initialValues: ProductFormValues = {
+const initialValues: ProductEditorFormValues = {
   name: '',
   barcode: '',
   brand_id: '',
@@ -57,7 +40,7 @@ const initialValues: ProductFormValues = {
   size_id: '',
   color_id: '',
   reference: '',
-  cost_price: '0',
+  cost_price: formatCurrencyInput('0'),
   sale_price: '',
   suggested_price: '',
   stock_quantity: '0',
@@ -66,7 +49,7 @@ const initialValues: ProductFormValues = {
   active: true,
 }
 
-export function ProductForm({
+export function ProductEditorForm({
   product,
   registries,
   submitting = false,
@@ -74,7 +57,7 @@ export function ProductForm({
   onCancel,
   onSubmit,
   onQuickCreate,
-}: ProductFormProps) {
+}: ProductEditorFormProps) {
   const nameRef = useRef<HTMLInputElement>(null)
   const autoFilledReferenceRef = useRef('')
   const autoFilledValuesRef = useRef({
@@ -84,7 +67,7 @@ export function ProductForm({
     clothing_type_id: '',
   })
   const [referenceMessage, setReferenceMessage] = useState('')
-  const [values, setValues] = useState<ProductFormValues>(() =>
+  const [values, setValues] = useState<ProductEditorFormValues>(() =>
     product
       ? {
           name: product.product_model?.name ?? product.name,
@@ -95,8 +78,8 @@ export function ProductForm({
           size_id: product.size_id ?? '',
           color_id: product.color_id ?? '',
           reference: product.product_model?.reference ?? product.reference ?? '',
-          cost_price: String(product.cost_price ?? 0),
-          sale_price: String(product.sale_price ?? ''),
+          cost_price: formatCurrencyInput(String(Math.round((product.cost_price ?? 0) * 100))),
+          sale_price: formatCurrencyInput(String(Math.round((product.sale_price ?? 0) * 100))),
           suggested_price:
             product.suggested_price === null || product.suggested_price === undefined
               ? ''
@@ -108,11 +91,10 @@ export function ProductForm({
         }
       : {
           ...initialValues,
-          barcode: normalizeBarcode(initialBarcode),
+          barcode: initialBarcode,
         },
   )
-  const [errors, setErrors] = useState<Partial<Record<keyof ProductFormValues, string>>>({})
-  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [errors, setErrors] = useState<Partial<Record<keyof ProductEditorFormValues, string>>>({})
   const [quickCreate, setQuickCreate] = useState<{ kind: RegistryKind; title: string } | null>(null)
   const [quickError, setQuickError] = useState('')
   const [quickSubmitting, setQuickSubmitting] = useState(false)
@@ -194,7 +176,7 @@ export function ProductForm({
     await submit('close')
   }
 
-  async function submit(mode: ProductSubmitMode) {
+  async function submit(mode: ProductEditorSubmitMode) {
     const nextErrors = validate(values)
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) {
@@ -246,7 +228,7 @@ export function ProductForm({
     }
   }
 
-  function updateValue<Key extends keyof ProductFormValues>(key: Key, value: ProductFormValues[Key]) {
+  function updateValue<Key extends keyof ProductEditorFormValues>(key: Key, value: ProductEditorFormValues[Key]) {
     setValues((current) => ({ ...current, [key]: value }))
   }
 
@@ -264,10 +246,7 @@ export function ProductForm({
       <form className="flex max-h-[calc(92vh-73px)] flex-col text-gray-950" onSubmit={handleSubmit}>
         <div className="grid flex-1 gap-5 overflow-y-auto p-1 pb-5 xl:grid-cols-[1fr_1fr]">
           <div className="space-y-5">
-            <FormSection
-              title="Identificação"
-              description="Informações que aparecem na etiqueta e na busca."
-            >
+            <FormSection title="Identificação" description="Informações que aparecem na etiqueta e na busca.">
               <div className="grid gap-4 md:grid-cols-2">
                 <Input
                   ref={nameRef}
@@ -279,28 +258,48 @@ export function ProductForm({
                   error={errors.name}
                   required
                 />
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-medium uppercase tracking-[0.14em] text-gray-600">Código de barras</span>
+                <div className="space-y-1.5 md:col-span-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-gray-600">Código de barras</span>
+                  <div className="flex items-end gap-2">
+                    <Input
+                      name="barcode"
+                      inputMode="text"
+                      value={values.barcode}
+                      onChange={(event) => updateValue('barcode', event.target.value)}
+                      className="flex-1"
+                    />
                     <BarcodeScanButton
                       label="Ler código"
                       variant="secondary"
+                      layout="inline"
                       onScan={(code) => updateValue('barcode', code)}
-                      className="h-9"
+                      className="h-10 shrink-0 px-4"
                     />
                   </div>
-                  <Input
-                    name="barcode"
-                    inputMode="text"
-                    value={values.barcode}
-                    onChange={(event) => updateValue('barcode', event.target.value)}
-                  />
                 </div>
                 {referenceMessage ? (
-                  <div className="md:col-span-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                  <div className="md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                     {referenceMessage}
                   </div>
                 ) : null}
+              </div>
+            </FormSection>
+
+            <FormSection
+              title="Detalhes avançados"
+              description="Referência e família do modelo para cruzamento interno."
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <Input
+                  label="Referência"
+                  value={values.reference}
+                  onChange={(event) => updateValue('reference', event.target.value)}
+                />
+                <Input
+                  label="Família / grupo"
+                  value={values.family}
+                  onChange={(event) => updateValue('family', event.target.value)}
+                />
               </div>
             </FormSection>
 
@@ -350,56 +349,38 @@ export function ProductForm({
           </div>
 
           <div className="space-y-5">
-            <FormSection
-              title="Preços e estoque"
-              description="Valores usados nas vendas e alertas de reposição."
-            >
+            <FormSection title="Preços e estoque" description="Valores usados nas vendas e alertas de reposição.">
               <div className="grid gap-4 md:grid-cols-2">
                 <Input
                   label="Preço de custo"
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="R$ 0,00"
                   value={values.cost_price}
-                  onChange={(event) => updateValue('cost_price', event.target.value)}
+                  onChange={(event) => updateValue('cost_price', formatCurrencyInput(event.target.value))}
                   error={errors.cost_price}
+                  className="text-right font-medium tracking-[0.03em]"
                 />
                 <Input
                   label="Preço de venda"
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="R$ 0,00"
                   value={values.sale_price}
-                  onChange={(event) => updateValue('sale_price', event.target.value)}
+                  onChange={(event) => updateValue('sale_price', formatCurrencyInput(event.target.value))}
                   error={errors.sale_price}
                   required
-                />
-                <Input
-                  label="Preço sugerido"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={values.suggested_price}
-                  onChange={(event) => updateValue('suggested_price', event.target.value)}
-                  error={errors.suggested_price}
+                  className="text-right font-medium tracking-[0.03em]"
                 />
                 <Input
                   label="Quantidade inicial em estoque"
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   value={values.stock_quantity}
-                  onChange={(event) => updateValue('stock_quantity', event.target.value)}
+                  onChange={(event) => updateValue('stock_quantity', onlyNumbers(event.target.value))}
                   error={errors.stock_quantity}
                   required
-                />
-                <Input
-                  label="Estoque mínimo"
-                  type="number"
-                  min="0"
-                  value={values.min_stock}
-                  onChange={(event) => updateValue('min_stock', event.target.value)}
-                  error={errors.min_stock}
-                  required
+                  className="text-right font-medium tracking-[0.03em] md:col-span-2"
                 />
               </div>
             </FormSection>
@@ -408,45 +389,50 @@ export function ProductForm({
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium uppercase tracking-[0.14em] text-gray-600">Descrição</span>
                 <textarea
-                  rows={4}
+                  rows={3}
+                  maxLength={180}
                   value={values.description}
                   onChange={(event) => updateValue('description', event.target.value)}
-                  className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+                  className="min-h-[88px] w-full resize-none rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
                 />
+                <div className="flex items-center justify-between text-[11px] text-gray-500">
+                  <span>Até 180 caracteres.</span>
+                  <span>{values.description.length}/180</span>
+                </div>
               </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={values.active}
-                  onChange={(event) => updateValue('active', event.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 accent-gray-900"
-                />
-                Produto ativo
-              </label>
-              <div className="rounded-xl border border-gray-200 bg-gray-50">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-gray-700"
-                  onClick={() => setAdvancedOpen((current) => !current)}
+
+              <button
+                type="button"
+                aria-pressed={values.active}
+                onClick={() => updateValue('active', !values.active)}
+                className={cn(
+                  'flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-100',
+                  values.active
+                    ? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
+                    : 'border-gray-200 bg-white hover:bg-gray-50',
+                )}
+              >
+                <span className="pr-3">
+                  <span className="block text-sm font-medium text-gray-900">Produto ativo</span>
+                  <span className="mt-1 block text-xs text-gray-500">
+                    {values.active ? 'Disponível para uso nas vendas e no estoque.' : 'Produto oculto das rotinas operacionais.'}
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    'relative inline-flex h-8 w-14 shrink-0 items-center rounded-full border p-1 transition',
+                    values.active ? 'border-emerald-300 bg-emerald-200' : 'border-gray-200 bg-gray-100',
+                  )}
                 >
-                  Detalhes avançados
-                  <ChevronDown className={`h-4 w-4 transition ${advancedOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {advancedOpen ? (
-                  <div className="grid gap-3 border-t border-gray-200 p-3 md:grid-cols-2">
-                    <Input
-                      label="Referência"
-                      value={values.reference}
-                      onChange={(event) => updateValue('reference', event.target.value)}
-                    />
-                    <Input
-                      label="Família / grupo"
-                      value={values.family}
-                      onChange={(event) => updateValue('family', event.target.value)}
-                    />
-                  </div>
-                ) : null}
-              </div>
+                  <span
+                    className={cn(
+                      'h-6 w-6 rounded-full bg-white shadow-sm transition-transform duration-200',
+                      values.active ? 'translate-x-6' : 'translate-x-0',
+                    )}
+                  />
+                </span>
+              </button>
             </FormSection>
           </div>
         </div>
@@ -480,13 +466,13 @@ export function ProductForm({
   )
 }
 
-function validate(values: ProductFormValues) {
-  const errors: Partial<Record<keyof ProductFormValues, string>> = {}
+function validate(values: ProductEditorFormValues) {
+  const errors: Partial<Record<keyof ProductEditorFormValues, string>> = {}
 
   if (!values.name.trim()) {
     errors.name = 'Informe o nome do produto.'
   }
-  if (!values.sale_price || Number(values.sale_price) <= 0) {
+  if (!values.sale_price || parseCurrencyToNumber(values.sale_price) <= 0) {
     errors.sale_price = 'Informe um preço de venda válido.'
   }
   if (values.stock_quantity === '' || Number(values.stock_quantity) < 0) {
@@ -495,7 +481,7 @@ function validate(values: ProductFormValues) {
   if (values.min_stock === '' || Number(values.min_stock) < 0) {
     errors.min_stock = 'Informe um estoque mínimo válido.'
   }
-  if (values.cost_price !== '' && Number(values.cost_price) < 0) {
+  if (values.cost_price !== '' && parseCurrencyToNumber(values.cost_price) < 0) {
     errors.cost_price = 'Informe um preço de custo válido.'
   }
   if (values.suggested_price !== '' && Number(values.suggested_price) < 0) {
@@ -514,7 +500,7 @@ function toOptions(items: Array<{ id: string; name: string; active: boolean }>):
     }))
 }
 
-function fieldForKind(kind: RegistryKind): keyof ProductFormValues {
+function fieldForKind(kind: RegistryKind): keyof ProductEditorFormValues {
   if (kind === 'brands') {
     return 'brand_id'
   }
