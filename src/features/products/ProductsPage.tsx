@@ -338,7 +338,8 @@ export function ProductsPage() {
         open={modalOpen}
         title={editingProduct ? 'Editar produto' : 'Adicionar produto'}
         onClose={closeModal}
-        size="6xl"
+        fullScreen
+        bodyClassName="p-0"
       >
         <ProductEditorForm
           key={editingProduct?.id ?? (initialBarcode || 'new-product')}

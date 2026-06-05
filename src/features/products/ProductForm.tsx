@@ -354,7 +354,7 @@ export function ProductForm({
               title="Preços e estoque"
               description="Valores usados nas vendas e alertas de reposição."
             >
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-4">
                 <Input
                   label="Preço de custo"
                   type="number"
@@ -373,6 +373,7 @@ export function ProductForm({
                   onChange={(event) => updateValue('sale_price', event.target.value)}
                   error={errors.sale_price}
                   required
+                  labelClassName="whitespace-nowrap"
                 />
                 <Input
                   label="Preço sugerido"
@@ -384,13 +385,14 @@ export function ProductForm({
                   error={errors.suggested_price}
                 />
                 <Input
-                  label="Quantidade inicial em estoque"
+                  label="Quantidade em estoque"
                   type="number"
                   min="0"
                   value={values.stock_quantity}
                   onChange={(event) => updateValue('stock_quantity', event.target.value)}
                   error={errors.stock_quantity}
                   required
+                  labelClassName="whitespace-nowrap"
                 />
                 <Input
                   label="Estoque mínimo"

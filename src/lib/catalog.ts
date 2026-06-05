@@ -15,6 +15,11 @@ import type {
   PaymentMethod,
   Product,
   ProductModel,
+  SalePayment,
+  SalePaymentSourceKind,
+  SalePricingKind,
+  Sale,
+  SaleItem,
   RegistryItem,
   RegistryKind,
   Size,
@@ -22,7 +27,7 @@ import type {
   StockMovementReason,
   StockMovementType,
 } from '../types/database'
-import { formatDateBR, getNowLocalTimestamp, todayISODate } from './utils'
+import { formatCurrencyBRL, formatDateBR, getNowLocalTimestamp, todayISODate } from './utils'
 
 type RegistryTableMap = {
   brands: Brand
@@ -50,6 +55,10 @@ function normalizeNullable(value: string | null | undefined) {
 
 function normalizeNumber(value: number | null | undefined, fallback = 0) {
   return value === null || value === undefined ? fallback : Number(value)
+}
+
+function roundCurrency(value: number) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100
 }
 
 function normalizeProductModel(model: ProductModel): ProductModel {
@@ -83,6 +92,58 @@ function normalizeProduct(product: Product): Product {
   }
 }
 
+function normalizeSalePayment(payment: SalePayment): SalePayment {
+  const installmentsCount = normalizeNumber(payment.installments_count, 1)
+  const amount = normalizeNumber(payment.amount)
+  const installmentValue = payment.installment_value === null || payment.installment_value === undefined
+    ? amount / Math.max(1, installmentsCount)
+    : Number(payment.installment_value)
+
+  return {
+    ...payment,
+    source_kind: (payment.source_kind ?? 'cash_total') as SalePaymentSourceKind,
+    amount,
+    installments_count: installmentsCount,
+    installment_value: installmentValue,
+  }
+}
+
+function normalizeSaleItem(item: SaleItem): SaleItem {
+  const pricingKind = (item.pricing_kind ?? 'cash') as SalePricingKind
+  const quantity = normalizeNumber(item.quantity, 1)
+  const unitPrice = normalizeNumber(item.unit_price)
+  const totalPrice = normalizeNumber(item.total_price, quantity * unitPrice)
+  const installmentsCount = normalizeNumber(item.installments_count, 1)
+  const originalUnitPrice = item.original_unit_price === null || item.original_unit_price === undefined
+    ? unitPrice
+    : Number(item.original_unit_price)
+  const installmentValue = item.installment_value === null || item.installment_value === undefined
+    ? totalPrice / Math.max(1, installmentsCount)
+    : Number(item.installment_value)
+
+  return {
+    ...item,
+    quantity,
+    pricing_kind: pricingKind,
+    original_unit_price: originalUnitPrice,
+    unit_price: unitPrice,
+    total_price: totalPrice,
+    installments_count: installmentsCount,
+    installment_value: installmentValue,
+  }
+}
+
+function normalizeSale(sale: Sale): Sale {
+  return {
+    ...sale,
+    total_amount: normalizeNumber(sale.total_amount),
+    installments_count: normalizeNumber(sale.installments_count, 1),
+    customer: sale.customer ?? null,
+    sale_items: sale.sale_items?.map(normalizeSaleItem),
+    sale_payments: sale.sale_payments?.map(normalizeSalePayment),
+  }
+}
+
 function normalizeCashMovement(movement: CashMovement): CashMovement {
   const legacyType = movement.type as CashMovementType | 'entrada' | 'saida'
   const type: CashMovementType = legacyType === 'entrada' ? 'income' : legacyType === 'saida' ? 'expense' : legacyType
@@ -92,20 +153,75 @@ function normalizeCashMovement(movement: CashMovement): CashMovement {
     type,
     origin: movement.origin ?? (movement.sale_id ? 'sale' : type === 'income' ? 'manual_income' : 'manual_expense'),
     amount: Math.abs(normalizeNumber(movement.amount)),
+    sale_payment: movement.sale_payment ? normalizeSalePayment(movement.sale_payment) : null,
     sale: movement.sale
       ? {
-          ...movement.sale,
-          total_amount: normalizeNumber(movement.sale.total_amount),
-          installments_count: normalizeNumber(movement.sale.installments_count, 1),
+          ...normalizeSale(movement.sale),
           sale_items: movement.sale.sale_items?.map((item) => ({
-            ...item,
-            quantity: normalizeNumber(item.quantity),
-            unit_price: normalizeNumber(item.unit_price),
-            total_price: normalizeNumber(item.total_price),
+            ...normalizeSaleItem(item),
             product: item.product ? normalizeProduct(item.product) : null,
           })),
+          sale_payments: movement.sale.sale_payments?.map(normalizeSalePayment),
         }
       : null,
+  }
+}
+
+export function formatPaymentMethodLabel(method?: PaymentMethod | null, installmentsCount = 1) {
+  if (!method) {
+    return '-'
+  }
+
+  if (method === 'dinheiro') {
+    return 'Dinheiro'
+  }
+
+  if (method === 'pix') {
+    return 'Pix'
+  }
+
+  if (method === 'cartao_debito') {
+    return 'Débito'
+  }
+
+  if (method === 'cartao_credito') {
+    return installmentsCount > 1 ? `Crédito parcelado ${installmentsCount}x` : 'Crédito à vista'
+  }
+
+  return 'Outro'
+}
+
+export function formatSalePaymentSummary(sale?: Sale | null) {
+  if (!sale) {
+    return '-'
+  }
+
+  if (sale.sale_payments && sale.sale_payments.length > 0) {
+    return sale.sale_payments
+      .map((payment) => `${formatPaymentMethodLabel(payment.payment_method, payment.installments_count)} · ${formatCurrencyBRL(payment.amount)}`)
+      .join(' + ')
+  }
+
+  return sale.payment_method
+    ? `${formatPaymentMethodLabel(sale.payment_method, sale.installments_count)} · ${formatCurrencyBRL(sale.total_amount)}`
+    : '-'
+}
+
+export function getSaleConditionTotals(sale?: Sale | null) {
+  const cashSubtotal = sale?.sale_items?.reduce((sum, item) => {
+    const total = normalizeNumber(item.total_price)
+    return sum + (item.pricing_kind === 'installment' ? 0 : total)
+  }, 0) ?? 0
+
+  const installmentSubtotal = sale?.sale_items?.reduce((sum, item) => {
+    const total = normalizeNumber(item.total_price)
+    return sum + (item.pricing_kind === 'installment' ? total : 0)
+  }, 0) ?? 0
+
+  return {
+    cashSubtotal: roundCurrency(cashSubtotal),
+    installmentSubtotal: roundCurrency(installmentSubtotal),
+    total: roundCurrency(cashSubtotal + installmentSubtotal),
   }
 }
 
@@ -379,6 +495,47 @@ const productSelect = `
   clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
   size:sizes(id, name, sort_order, active, created_at, updated_at),
   color:colors(id, name, hex, active, created_at, updated_at)
+`
+
+const customerSelect = `
+  id,
+  user_id,
+  name,
+  phone,
+  email,
+  cpf,
+  notes,
+  created_at,
+  updated_at
+`
+
+const salePaymentSelect = `
+  id,
+  sale_id,
+  source_kind,
+  payment_method,
+  amount,
+  installments_count,
+  installment_value,
+  cash_movement_id,
+  created_at
+`
+
+const saleSelect = `
+  *,
+  customer:customers(${customerSelect}),
+  sale_items(
+    *,
+    product:products(
+      *,
+      product_model:product_models(${productModelSelect}),
+      brand:brands(id, name, description, active, created_at, updated_at),
+      clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
+      size:sizes(id, name, sort_order, active, created_at, updated_at),
+      color:colors(id, name, hex, active, created_at, updated_at)
+    )
+  ),
+  sale_payments(${salePaymentSelect})
 `
 
 export async function listProducts(filters: ProductFilters = {}) {
@@ -851,7 +1008,7 @@ export async function listStockMovements() {
           size:sizes(id, name, sort_order, active, created_at, updated_at),
           color:colors(id, name, hex, active, created_at, updated_at)
         ),
-        sale:sales(id, total_amount, payment_method, installments_count, status, sale_date, created_at, updated_at),
+        sale:sales(${saleSelect}),
         cash_movement:cash_movements(id, movement_code, description, amount, movement_date)
       `,
     )
@@ -872,6 +1029,18 @@ export interface SaleLineInput {
   product: Product
   quantity: number
   unitPrice: number
+  pricingKind?: SalePricingKind
+  originalUnitPrice?: number
+  installmentsCount?: number
+  installmentValue?: number
+}
+
+export interface SalePaymentInput {
+  sourceKind: SalePaymentSourceKind
+  paymentMethod: PaymentMethod
+  amount: number
+  installmentsCount?: number
+  installmentValue?: number
 }
 
 export interface CashExpenseInput {
@@ -896,8 +1065,10 @@ export interface CashIncomeInput {
 
 export interface SaleRegistrationInput {
   items: SaleLineInput[]
-  paymentMethod: PaymentMethod
+  payments?: SalePaymentInput[]
+  paymentMethod?: PaymentMethod
   installmentsCount?: number
+  customerId?: string | null
   movementDate: string
   notes?: string | null
   user?: User | null
@@ -960,20 +1131,8 @@ export interface CashHistorySearchResult {
 
 const cashMovementSelect = `
   *,
-  sale:sales(
-    *, installments_count,
-    sale_items(
-      *,
-      product:products(
-        *,
-        product_model:product_models(${productModelSelect}),
-        brand:brands(id, name, description, active, created_at, updated_at),
-        clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
-        size:sizes(id, name, sort_order, active, created_at, updated_at),
-        color:colors(id, name, hex, active, created_at, updated_at)
-      )
-    )
-  )
+  sale:sales(${saleSelect}),
+  sale_payment:sale_payments!cash_movements_sale_payment_id_fkey(${salePaymentSelect})
 `
 
 function normalizeCashSession(session: CashSession): CashSession {
@@ -1047,6 +1206,36 @@ export async function listCustomers() {
   }
 
   return (data ?? []) as Customer[]
+}
+
+export async function searchCustomers(query: string) {
+  const term = query.trim()
+
+  if (!term) {
+    return listCustomers()
+  }
+
+  const digits = term.replace(/\D/g, '')
+  const normalized = normalizeText(term)
+  const customers = await listCustomers()
+
+  return customers.filter((customer) => {
+    const searchable = [
+      customer.name,
+      customer.phone,
+      customer.cpf,
+    ]
+      .filter(Boolean)
+      .map((value) => value ?? '')
+
+    return searchable.some((value) => {
+      const text = normalizeText(value)
+      return (
+        text.includes(normalized) ||
+        (digits.length > 0 && value.replace(/\D/g, '').includes(digits))
+      )
+    })
+  })
 }
 
 export async function createCustomer(input: CustomerInput) {
@@ -1245,6 +1434,22 @@ export async function listTodayCashMovements(date = todayISODate()) {
     .from('cash_movements')
     .select(cashMovementSelect)
     .eq('movement_date', date)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return ((data ?? []) as CashMovement[]).map(normalizeCashMovement)
+}
+
+export async function listCashMovementsForSession(sessionId: string, openedAt: string) {
+  const client = getSupabase()
+  const { data, error } = await client
+    .from('cash_movements')
+    .select(cashMovementSelect)
+    .eq('cash_session_id', sessionId)
+    .gte('created_at', openedAt)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -1595,16 +1800,94 @@ export async function registerSaleWithCashAndStock(input: SaleRegistrationInput)
   const sessionId = requireUuid(input.cashSessionId)
 
   const client = getSupabase()
-  const rpcItems = input.items.map((item) => ({
-    product_id: item.product.id,
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
-  }))
+  const rpcItems = input.items.map((item) => {
+    const pricingKind = item.pricingKind ?? 'cash'
+    const quantity = Math.max(1, item.quantity)
+    const unitPrice = roundCurrency(item.unitPrice)
+    const lineTotal = roundCurrency(quantity * unitPrice)
+    const installmentsCount = pricingKind === 'installment' ? Math.max(2, item.installmentsCount ?? 2) : 1
+
+    return {
+      product_id: item.product.id,
+      quantity,
+      unit_price: unitPrice,
+      pricing_kind: pricingKind,
+      original_unit_price: roundCurrency(item.originalUnitPrice ?? unitPrice),
+      installments_count: installmentsCount,
+      installment_value: roundCurrency(item.installmentValue ?? lineTotal / Math.max(1, installmentsCount)),
+    }
+  })
+
+  const saleTotal = roundCurrency(rpcItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0))
+
+  const fallbackPayments =
+    input.paymentMethod && !input.payments?.length
+      ? [
+          {
+            sourceKind: 'cash_total' as const,
+            paymentMethod: input.paymentMethod,
+            amount: saleTotal,
+            installmentsCount: input.installmentsCount ?? 1,
+            installmentValue: roundCurrency(saleTotal / Math.max(1, input.installmentsCount ?? 1)),
+          },
+        ]
+      : []
+
+  const normalizedPayments = [...(input.payments ?? []), ...fallbackPayments].map((payment) => {
+    const amount = roundCurrency(payment.amount)
+    const installmentsCount = Math.max(1, payment.installmentsCount ?? 1)
+    const installmentValue = roundCurrency(payment.installmentValue ?? amount / Math.max(1, installmentsCount))
+
+    return {
+      source_kind: payment.sourceKind ?? 'cash_total',
+      payment_method: payment.paymentMethod,
+      amount,
+      installments_count: installmentsCount,
+      installment_value: installmentValue,
+    }
+  })
+
+  if (normalizedPayments.length === 0) {
+    throw new Error('Informe ao menos uma forma de recebimento.')
+  }
+
+  const paymentsTotal = roundCurrency(normalizedPayments.reduce((sum, payment) => sum + payment.amount, 0))
+
+  if (Math.abs(paymentsTotal - saleTotal) > 0.01) {
+    throw new Error('A soma dos recebimentos deve ser igual ao total da venda.')
+  }
+
+  if (normalizedPayments.some((payment) => payment.amount <= 0)) {
+    throw new Error('Informe valores válidos para os recebimentos.')
+  }
+
+  if (
+    normalizedPayments.some(
+      (payment) => payment.source_kind === 'installment_group' && (payment.payment_method !== 'cartao_credito' || payment.installments_count < 2),
+    )
+  ) {
+    throw new Error('Os itens parcelados precisam ser recebidos no crédito parcelado.')
+  }
+
+  const summaryPaymentMethod =
+    normalizedPayments.length === 1
+      ? normalizedPayments[0].payment_method
+      : normalizedPayments.every(
+          (payment) =>
+            payment.payment_method === normalizedPayments[0].payment_method &&
+            payment.installments_count === normalizedPayments[0].installments_count,
+        )
+        ? normalizedPayments[0].payment_method
+        : 'outro'
+
+  const summaryInstallments = Math.max(...normalizedPayments.map((payment) => payment.installments_count))
 
   const { data, error } = await client.rpc('register_sale_with_cash_and_stock', {
+    p_customer_id: input.customerId ?? null,
     p_items: rpcItems,
-    p_payment_method: input.paymentMethod,
-    p_installments_count: input.installmentsCount ?? 1,
+    p_payments: normalizedPayments,
+    p_payment_method: summaryPaymentMethod,
+    p_installments_count: summaryInstallments,
     p_movement_date: input.movementDate,
     p_notes: normalizeNullable(input.notes),
     p_user_id: input.user?.id ?? null,

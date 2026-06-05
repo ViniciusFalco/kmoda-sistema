@@ -195,7 +195,7 @@ export function DashboardPage() {
 
     return [...cashRows, ...stockRows, ...productRows, ...customerRows, ...registryRows]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, 8)
+      .slice(0, 5)
   }, [cashMovements, customers, products, registries.brands, registries.clothingTypes, registries.colors, registries.sizes, stockMovements])
 
   const loadData = useCallback(async () => {
@@ -370,11 +370,14 @@ export function DashboardPage() {
         <SummaryCard label="Total de vendas do mês" value={formatCurrency(monthSalesTotal)} icon={<ShoppingCart className="h-5 w-5" />} />
       </div>
 
-      <Card title="Últimas movimentações">
+      <Card>
+        <div className="mb-3 border-b-2 border-gray-100 pb-3 text-center">
+          <h2 className="text-sm font-semibold text-gray-950 sm:text-base">Últimas movimentações</h2>
+        </div>
         {latestMovements.length === 0 ? (
           <EmptyState title="Nenhuma movimentação hoje." />
         ) : (
-              <Table
+          <Table
             headerClassName="bg-black text-white"
             data={latestMovements}
             columns={[

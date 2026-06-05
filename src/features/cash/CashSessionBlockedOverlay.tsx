@@ -18,7 +18,7 @@ export function CashSessionBlockedOverlay({ onOpenCash }: CashSessionBlockedOver
         </h3>
 
         <p className="mt-2 text-sm leading-6 text-gray-600">
-          Abra o caixa para registrar vendas ou gastos.
+          Abra o caixa para registrar vendas ou despesas.
         </p>
 
         <div className="mt-5">

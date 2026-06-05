@@ -5,6 +5,8 @@ import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
 import {
   friendlyCatalogError,
+  formatPaymentMethodLabel,
+  formatSalePaymentSummary,
   searchCashHistory,
   type CashHistoryFilters,
   type CashHistorySearchResult,
@@ -96,7 +98,7 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
   const totalPages = result ? Math.max(1, Math.ceil(result.count / result.pageSize)) : 1
 
   return (
-    <Modal open={open} title="Buscar histórico" onClose={onClose} size="6xl">
+    <Modal open={open} title="Histórico por pesquisa" onClose={onClose} size="6xl">
       <div className="space-y-5">
         <form className="grid gap-4 lg:grid-cols-4" onSubmit={handleSubmit}>
           <label className="block space-y-1.5">
@@ -108,7 +110,7 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
             >
               <option value="all">Todos</option>
               <option value="income">Venda/Entrada</option>
-              <option value="expense">Gasto/Saída</option>
+              <option value="expense">Despesa/Saída</option>
               <option value="session_open">Abertura de caixa</option>
               <option value="session_close">Fechamento de caixa</option>
             </select>
@@ -155,7 +157,7 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
               <div className="overflow-hidden rounded-lg border-2 border-gray-200">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm text-gray-700">
-                    <thead className="bg-gray-50 text-[11px] uppercase tracking-[0.14em] text-gray-500">
+                    <thead className="bg-black text-[11px] uppercase tracking-[0.14em] text-gray-100">
                       <tr>
                         <th className="px-4 py-3 font-semibold">ID</th>
                         <th className="px-4 py-3 font-semibold">Tipo</th>
@@ -175,10 +177,10 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
                             key={entry.id}
                             className={`cursor-pointer transition ${
                               isSession
-                                ? 'bg-gray-50 hover:bg-gray-100'
-                                : isIncome
-                                  ? 'bg-emerald-50 hover:bg-emerald-100'
-                                  : 'bg-rose-50 hover:bg-rose-100'
+                              ? 'bg-gray-100 hover:bg-gray-200'
+                              : isIncome
+                                ? 'bg-emerald-50 hover:bg-emerald-100'
+                                : 'bg-rose-50 hover:bg-rose-100'
                             }`}
                             onClick={() => onSelectEntry(entry)}
                           >
@@ -206,7 +208,13 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
                               {formatCurrencyBRL(entry.amount)}
                             </td>
                             <td className="px-4 py-3 text-gray-600">{formatDateBR(entry.movement_date)}</td>
-                            <td className="px-4 py-3 text-gray-600">{isSession ? '-' : paymentLabel(entry.payment_method, entry.sale?.installments_count)}</td>
+                            <td className="px-4 py-3 text-gray-600">
+                              {isSession
+                                ? '-'
+                                : entry.origin === 'sale'
+                                  ? formatSalePaymentSummary(entry.sale)
+                                  : formatPaymentMethodLabel(entry.payment_method)}
+                            </td>
                           </tr>
                         )
                       })}
@@ -252,7 +260,7 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
 
 function movementLabel(entry: Extract<CashHistoryEntry, { kind: 'movement' }>) {
   if (entry.type === 'expense') {
-    return 'Gasto'
+    return 'Despesa'
   }
 
   if (entry.origin === 'sale' && entry.sale?.installments_count && entry.sale.installments_count > 1) {
@@ -278,26 +286,4 @@ function movementDescription(entry: Extract<CashHistoryEntry, { kind: 'movement'
 
 function shortCode(id: string) {
   return `#${id.slice(0, 8).toUpperCase()}`
-}
-
-function paymentLabel(method?: string | null, installmentsCount?: number | null) {
-  const labels: Record<string, string> = {
-    dinheiro: 'Dinheiro',
-    pix: 'Pix',
-    cartao_debito: 'Cartão de débito',
-    cartao_credito: 'Cartão de crédito',
-    outro: 'Outro',
-  }
-
-  if (!method) {
-    return '-'
-  }
-
-  const base = labels[method] ?? method
-
-  if (method === 'cartao_credito' && installmentsCount && installmentsCount > 1) {
-    return `${base} (${installmentsCount}x)`
-  }
-
-  return base
 }

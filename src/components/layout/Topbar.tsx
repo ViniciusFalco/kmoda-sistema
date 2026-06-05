@@ -24,6 +24,7 @@ export function Topbar() {
   const navigate = useNavigate()
   const [barcodeResult, setBarcodeResult] = useState<BarcodeLookupResult | null>(null)
   const [barcodeResultOpen, setBarcodeResultOpen] = useState(false)
+  const [quickSearchValue, setQuickSearchValue] = useState('')
 
   const handleBarcodeScan = useCallback(async (code: string) => {
     try {
@@ -56,6 +57,23 @@ export function Topbar() {
     [],
   )
 
+  const handleQuickSearchSelect = useCallback(
+    async (item: { id: string; type: 'product' | 'customer'; href: string; barcode?: string | null }) => {
+      if (item.type === 'product') {
+        if (item.barcode) {
+          await handleBarcodeScan(item.barcode)
+          return
+        }
+
+        await handleSelectRelatedProduct({ id: item.id })
+        return
+      }
+
+      navigate(item.href)
+    },
+    [handleBarcodeScan, handleSelectRelatedProduct, navigate],
+  )
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-gray-200 bg-white">
       <div className="w-full">
@@ -72,7 +90,12 @@ export function Topbar() {
 
           <div className="hidden min-w-0 justify-self-center lg:flex lg:w-full lg:max-w-3xl">
             <div className="flex w-full items-center gap-3">
-              <QuickSearch placeholder="Buscar produto, cliente ou código" />
+              <QuickSearch
+                value={quickSearchValue}
+                onChange={setQuickSearchValue}
+                onSelectResult={handleQuickSearchSelect}
+                placeholder="Buscar produto, cliente ou código"
+              />
               <BarcodeScanButton label="Código" variant="default" onScan={handleBarcodeScan} className="shrink-0" />
             </div>
           </div>
@@ -114,7 +137,12 @@ export function Topbar() {
 
         <div className="border-t border-gray-100 px-4 py-3 lg:hidden">
           <div className="flex items-center gap-3">
-            <QuickSearch placeholder="Buscar produto, cliente ou código" />
+            <QuickSearch
+              value={quickSearchValue}
+              onChange={setQuickSearchValue}
+              onSelectResult={handleQuickSearchSelect}
+              placeholder="Buscar produto, cliente ou código"
+            />
             <BarcodeScanButton label="Código" variant="default" onScan={handleBarcodeScan} className="shrink-0" />
           </div>
         </div>

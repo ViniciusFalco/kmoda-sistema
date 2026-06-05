@@ -2,6 +2,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Table } from '../../components/ui/Table'
 import { formatCurrencyBRL, formatDateBR } from '../../lib/utils'
+import { formatSalePaymentSummary, getSaleConditionTotals } from '../../lib/catalog'
 import type { CashHistoryEntry, CashMovement } from '../../types/database'
 import type { ReactNode } from 'react'
 
@@ -18,6 +19,9 @@ export function CashMovementDetailsModal({ entry, onClose }: CashMovementDetails
   const isSession = entry.kind === 'session'
   const movement = isSession ? null : entry
   const saleItems = movement?.sale?.sale_items ?? []
+  const sale = movement?.sale ?? null
+  const saleTotals = getSaleConditionTotals(sale)
+  const paymentSummary = formatSalePaymentSummary(sale)
   const isIncome = movement?.type === 'income'
 
   return (
@@ -44,7 +48,10 @@ export function CashMovementDetailsModal({ entry, onClose }: CashMovementDetails
           <Detail label="Descrição" value={isSession ? entry.description : movementDescription(movement)} />
           <Detail label="Valor" value={formatCurrencyBRL(entry.amount)} />
           <Detail label="Data" value={formatDateBR(entry.movement_date)} />
-          <Detail label="Pagamento" value={isSession ? '-' : paymentLabel(movement?.payment_method, movement?.sale?.installments_count)} />
+          <Detail label="Cliente" value={isSession ? '-' : sale?.customer?.name ?? '-'} />
+          <Detail label="À vista" value={isSession ? '-' : formatCurrencyBRL(saleTotals.cashSubtotal)} />
+          <Detail label="Parcelado" value={isSession ? '-' : formatCurrencyBRL(saleTotals.installmentSubtotal)} />
+          <Detail label="Recebimentos" value={isSession ? '-' : paymentSummary} />
           <Detail label="Criado em" value={formatDateBR(entry.created_at)} />
           <Detail
             label="Atualizado em"
@@ -61,6 +68,7 @@ export function CashMovementDetailsModal({ entry, onClose }: CashMovementDetails
           <div>
             <h3 className="mb-3 text-sm font-semibold text-gray-950">Produtos da venda</h3>
             <Table
+              headerClassName="bg-black text-gray-100"
               data={saleItems}
               columns={[
                 {
@@ -83,6 +91,17 @@ export function CashMovementDetailsModal({ entry, onClose }: CashMovementDetails
                           .join(' • ') || '-'}
                       </p>
                     </div>
+                  ),
+                },
+                {
+                  key: 'condition',
+                  header: 'Condição',
+                  render: (item) => (
+                    <Badge variant={item.pricing_kind === 'installment' ? 'warning' : 'neutral'}>
+                      {item.pricing_kind === 'installment'
+                        ? `${item.installments_count}x`
+                        : 'À vista'}
+                    </Badge>
                   ),
                 },
                 { key: 'quantity', header: 'Qtd.', render: (item) => item.quantity },
@@ -113,7 +132,7 @@ function shortCode(id: string) {
 function originLabel(origin?: string | null) {
   const labels: Record<string, string> = {
     sale: 'Venda',
-    manual_expense: 'Gasto manual',
+    manual_expense: 'Despesa manual',
     manual_income: 'Entrada avulsa',
     stock: 'Estoque',
     session_open: 'Abertura de caixa',
@@ -129,7 +148,7 @@ function movementLabel(movement: CashMovement | null) {
   }
 
   if (movement.type === 'expense') {
-    return 'Gasto'
+    return 'Despesa'
   }
 
   if (movement.origin === 'sale' && movement.sale?.installments_count && movement.sale.installments_count > 1) {
@@ -157,26 +176,4 @@ function movementDescription(movement: CashMovement | null) {
     : ''
 
   return `${productNames?.length ? productNames.join(', ') : movement.description}${installments}`
-}
-
-function paymentLabel(method?: string | null, installmentsCount?: number | null) {
-  const labels: Record<string, string> = {
-    dinheiro: 'Dinheiro',
-    pix: 'Pix',
-    cartao_debito: 'Cartão de débito',
-    cartao_credito: 'Cartão de crédito',
-    outro: 'Outro',
-  }
-
-  if (!method) {
-    return '-'
-  }
-
-  const base = labels[method] ?? method
-
-  if (method === 'cartao_credito' && installmentsCount && installmentsCount > 1) {
-    return `${base} (${installmentsCount}x)`
-  }
-
-  return base
 }

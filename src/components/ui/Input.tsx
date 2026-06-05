@@ -24,7 +24,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           id={inputId}
           ref={ref}
           className={cn(
-            'h-9 w-full rounded-md border-2 px-3 text-sm outline-none transition placeholder:text-gray-400 focus:ring-2',
+            'h-9 w-full rounded-md border-2 px-3 text-sm outline-none transition placeholder:text-gray-400 focus:ring-2 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-500 disabled:opacity-100',
             isDark
               ? 'border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:ring-gray-100'
               : 'border-gray-300 bg-white text-gray-900 focus:border-gray-500 focus:ring-gray-100',
