@@ -56,19 +56,19 @@ export function ActionCard({
         type="button"
         onClick={onClick}
         className={`
-          group flex min-h-44 flex-col items-center justify-center gap-4
-          rounded-lg border p-5 text-center shadow-sm transition
+          group flex min-h-32 flex-col items-center justify-center gap-3
+          rounded-lg border-2 p-4 text-center shadow-[0_10px_28px_rgba(15,23,42,0.06)] transition
           hover:-translate-y-0.5 focus:outline-none focus:ring-2
           ${
             isDark
-              ? 'border-white/10 bg-[#050505] text-white hover:border-white/20 hover:shadow-md focus:ring-white/25'
-              : 'border-gray-200 bg-white text-gray-950 hover:border-gray-300 hover:shadow-md focus:ring-gray-200'
+              ? 'border-gray-300 bg-white text-gray-950 hover:border-gray-400 hover:shadow-[0_14px_36px_rgba(15,23,42,0.1)] focus:ring-gray-200'
+              : 'border-gray-300 bg-white text-gray-950 hover:border-gray-400 hover:shadow-[0_14px_36px_rgba(15,23,42,0.1)] focus:ring-gray-200'
           }
         `}
       >
         <span
-          className={`flex h-12 w-12 items-center justify-center rounded-md transition group-hover:scale-105 ${
-            isDark ? 'bg-white/10 text-white' : 'bg-gray-900 text-white'
+          className={`flex h-10 w-10 items-center justify-center rounded-md border-2 border-gray-200 bg-gray-50 text-gray-800 transition group-hover:scale-105 ${
+            isDark ? 'bg-gray-50 text-gray-800' : 'bg-gray-50 text-gray-800'
           }`}
         >
           {icon}
@@ -76,17 +76,49 @@ export function ActionCard({
 
         <span>
           <span
-            className={`block text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-950'}`}
+            className="block text-sm font-semibold text-gray-950"
           >
             {title}
           </span>
 
           {description ? (
-            <span className={`mt-1 block text-sm leading-6 ${isDark ? 'text-white/55' : 'text-gray-500'}`}>
+            <span className="mt-1 block text-xs leading-5 text-gray-500">
               {description}
             </span>
           ) : null}
         </span>
+      </button>
+    )
+  }
+
+  if (appearance === 'classic' && compact) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`
+          group flex min-h-20 w-full items-center gap-4 rounded-lg border-2 border-gray-300 bg-white px-4 py-3
+          text-left shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition
+          hover:-translate-y-0.5 hover:border-gray-400 hover:bg-gray-50 hover:shadow-[0_14px_36px_rgba(15,23,42,0.08)]
+          focus:outline-none focus:ring-2 focus:ring-gray-200
+        `}
+      >
+        <span
+          className={`
+            flex h-10 w-10 shrink-0 items-center justify-center rounded-md border-2 border-gray-200 bg-gray-50
+            text-gray-800 transition group-hover:scale-105
+            ${accent === 'green' ? 'text-emerald-600' : accent === 'red' ? 'text-rose-600' : ''}
+          `}
+        >
+          {icon}
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold tracking-[-0.02em] text-gray-950">{title}</span>
+          {description ? <span className="mt-0.5 block text-xs leading-5 text-gray-500">{description}</span> : null}
+        </span>
+
+        <ArrowRight className="h-4 w-4 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-gray-600" />
       </button>
     )
   }
@@ -104,19 +136,18 @@ export function ActionCard({
           ${
             isDark
               ? `
-                border-white/10 bg-white/[0.06] text-white
-                shadow-[0_18px_45px_rgba(0,0,0,0.22)]
-                backdrop-blur-xl
-                hover:-translate-y-0.5 hover:bg-white/[0.09]
-                hover:shadow-[0_24px_60px_rgba(0,0,0,0.30)]
-                focus:ring-white/20
+                border-zinc-200 bg-white text-zinc-950
+                shadow-[0_12px_30px_rgba(15,23,42,0.08)]
+                hover:-translate-y-0.5 hover:bg-zinc-50
+                hover:shadow-[0_16px_38px_rgba(15,23,42,0.12)]
+                focus:ring-zinc-200
                 ${styles.hover}
               `
               : `
                 border-zinc-200 bg-white text-zinc-950
-                shadow-[0_14px_35px_rgba(15,23,42,0.08)]
+                shadow-[0_12px_30px_rgba(15,23,42,0.08)]
                 hover:-translate-y-0.5 hover:bg-zinc-50
-                hover:shadow-[0_18px_45px_rgba(15,23,42,0.12)]
+                hover:shadow-[0_16px_38px_rgba(15,23,42,0.12)]
                 focus:ring-zinc-200
                 ${styles.hover}
               `
@@ -145,8 +176,8 @@ export function ActionCard({
             rounded-xl ring-1 transition-all duration-300
             group-hover:scale-105
             ${
-              isDark
-                ? styles.iconDark
+                isDark
+                ? 'bg-gray-50 text-gray-800 ring-gray-200'
                 : styles.iconLight
             }
           `}
@@ -155,21 +186,15 @@ export function ActionCard({
         </span>
 
         <span className="relative min-w-0 flex-1">
-          <span
-            className={`
-              block text-sm font-semibold tracking-[-0.02em]
-              ${isDark ? 'text-white' : 'text-zinc-950'}
-            `}
-          >
-            {title}
-          </span>
+            <span
+              className="block text-sm font-semibold tracking-[-0.02em] text-zinc-950"
+            >
+              {title}
+            </span>
 
           {description ? (
             <span
-              className={`
-                mt-0.5 block truncate text-xs
-                ${isDark ? 'text-white/50' : 'text-zinc-500'}
-              `}
+              className="mt-0.5 block truncate text-xs text-zinc-500"
             >
               {description}
             </span>
@@ -196,52 +221,34 @@ export function ActionCard({
       type="button"
       onClick={onClick}
       className={`
-        group relative flex min-h-44 flex-col items-start justify-between
-        overflow-hidden rounded-3xl border p-6 text-left
+        group relative flex min-h-32 flex-col items-start justify-between
+        overflow-hidden rounded-2xl border-2 border-gray-300 bg-white p-4 text-left
         transition-all duration-300 focus:outline-none focus:ring-2
-        ${
-          isDark
-            ? `
-              border-white/10 bg-white/[0.06] text-white
-              shadow-[0_18px_45px_rgba(0,0,0,0.24)]
-              backdrop-blur-xl hover:-translate-y-1 hover:bg-white/[0.09]
-              hover:shadow-[0_24px_65px_rgba(0,0,0,0.32)]
-              focus:ring-white/20 ${styles.hover}
-            `
-            : `
-              border-zinc-200 bg-white text-zinc-950 shadow-sm
-              hover:-translate-y-1 hover:bg-zinc-50 hover:shadow-xl
-              focus:ring-zinc-200 ${styles.hover}
-            `
-        }
+        text-zinc-950 shadow-[0_10px_28px_rgba(15,23,42,0.06)]
+        hover:-translate-y-1 hover:border-gray-400 hover:bg-zinc-50 hover:shadow-[0_16px_38px_rgba(15,23,42,0.1)]
+        focus:ring-zinc-200 ${styles.hover}
       `}
     >
       <span
         className={`
           flex h-12 w-12 items-center justify-center rounded-2xl ring-1
           shadow-sm transition-all duration-300 group-hover:scale-105
-          ${isDark ? styles.iconDark : styles.iconLight}
+          ${styles.iconLight}
         `}
       >
         {icon}
       </span>
 
       <span>
-        <span
-          className={`
-            block text-lg font-semibold tracking-[-0.03em]
-            ${isDark ? 'text-white' : 'text-zinc-950'}
-          `}
-        >
-          {title}
-        </span>
+          <span
+            className="block text-sm font-semibold tracking-[-0.03em] text-zinc-950"
+          >
+            {title}
+          </span>
 
         {description ? (
           <span
-            className={`
-              mt-2 block max-w-60 text-sm leading-5
-              ${isDark ? 'text-white/55' : 'text-zinc-500'}
-            `}
+            className="mt-2 block max-w-60 text-xs leading-5 text-zinc-500"
           >
             {description}
           </span>

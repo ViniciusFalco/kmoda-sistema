@@ -19,9 +19,14 @@ import {
   type ProductInput,
   type RegistryInput,
 } from '../../lib/catalog'
+import { parseCurrencyToNumber } from '../../lib/utils'
 import type { Brand, ClothingType, Color, Product, RegistryKind, Size } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
-import { ProductForm, type ProductFormValues, type ProductSubmitMode } from './ProductForm'
+import {
+  ProductEditorForm,
+  type ProductEditorFormValues,
+  type ProductEditorSubmitMode,
+} from './ProductEditorForm'
 import { ProductTable } from './ProductTable'
 
 interface ProductRegistries {
@@ -169,7 +174,7 @@ export function ProductsPage() {
     setInitialBarcode('')
   }
 
-  async function handleSubmit(values: ProductFormValues, mode: ProductSubmitMode) {
+  async function handleSubmit(values: ProductEditorFormValues, mode: ProductEditorSubmitMode) {
     const payload: ProductInput = {
       name: values.name,
       barcode: values.barcode,
@@ -179,8 +184,8 @@ export function ProductsPage() {
       size_id: values.size_id,
       color_id: values.color_id,
       reference: values.reference,
-      cost_price: Number(values.cost_price || 0),
-      sale_price: Number(values.sale_price),
+      cost_price: parseCurrencyToNumber(values.cost_price),
+      sale_price: parseCurrencyToNumber(values.sale_price),
       suggested_price: values.suggested_price === '' ? 0 : Number(values.suggested_price),
       stock_quantity: Number(values.stock_quantity),
       min_stock: Number(values.min_stock),
@@ -235,30 +240,14 @@ export function ProductsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-[2rem] bg-[linear-gradient(135deg,#090909_0%,#050505_48%,#121212_100%)] px-6 py-7 text-white shadow-[0_30px_90px_rgba(0,0,0,0.22)] ring-1 ring-white/10 sm:px-8 sm:py-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/35">
-              Cadastro e consulta
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">
-              Produtos
-            </h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-white/60 sm:text-base">
-              Cadastro rápido de peças por etiqueta, código de barras e atributos da roupa.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 lg:justify-end">
-            <BarcodeScanButton label="Ler código" variant="secondary" tone="dark" onScan={handleBarcodeScan} />
-            <Button tone="dark" onClick={openCreateModal}>
-              <Plus className="h-4 w-4" />
-              Adicionar produto
-            </Button>
-          </div>
-        </div>
-      </section>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <BarcodeScanButton label="Ler código" variant="secondary" tone="light" onScan={handleBarcodeScan} />
+        <Button onClick={openCreateModal}>
+          <Plus className="h-4 w-4" />
+          Adicionar produto
+        </Button>
+      </div>
 
       {error ? (
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
@@ -266,19 +255,18 @@ export function ProductsPage() {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-[#050505] shadow-[0_24px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/5">
-        <div className="border-b border-white/10 px-6 py-5 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/35">
+      <section className="overflow-hidden rounded-xl border-2 border-gray-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+        <div className="border-b-2 border-gray-100 px-5 py-4 text-left">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-500">
             Filtros
           </p>
         </div>
 
-        <div className="space-y-4 px-6 py-5 text-white">
+        <div className="space-y-4 px-5 py-4">
           <div className="grid gap-3 xl:grid-cols-[1.15fr_160px_180px_130px_150px_150px_auto]">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-white/35" />
+              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
-                tone="dark"
                 className="pl-9"
                 placeholder="Buscar por nome, código, marca, tipo, cor ou tamanho"
                 value={query}
@@ -289,23 +277,21 @@ export function ProductsPage() {
               />
             </div>
             <FilterSelect
-              tone="dark"
               value={brandId}
               onChange={setBrandId}
               label="Todas as marcas"
               items={registries.brands}
             />
             <FilterSelect
-              tone="dark"
               value={clothingTypeId}
               onChange={setClothingTypeId}
               label="Todos os tipos"
               items={registries.clothingTypes}
             />
-            <FilterSelect tone="dark" value={sizeId} onChange={setSizeId} label="Tamanhos" items={registries.sizes} />
-            <FilterSelect tone="dark" value={colorId} onChange={setColorId} label="Cores" items={registries.colors} />
+            <FilterSelect value={sizeId} onChange={setSizeId} label="Tamanhos" items={registries.sizes} />
+            <FilterSelect value={colorId} onChange={setColorId} label="Cores" items={registries.colors} />
             <select
-              className="h-10 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-white/20 focus:ring-2 focus:ring-white/10"
+              className="h-9 rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
               value={activeFilter}
               onChange={(event) => {
                 setLoading(true)
@@ -316,7 +302,7 @@ export function ProductsPage() {
               <option value="active">Ativos</option>
               <option value="inactive">Inativos</option>
             </select>
-            <label className="flex h-10 items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 text-sm text-white/80">
+            <label className="flex h-9 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700">
               <input
                 type="checkbox"
                 checked={lowStock}
@@ -324,7 +310,7 @@ export function ProductsPage() {
                   setLoading(true)
                   setLowStock(event.target.checked)
                 }}
-                className="h-4 w-4 rounded border-white/20 bg-transparent accent-white"
+                className="h-4 w-4 rounded border-gray-300 accent-gray-900"
               />
               Baixo
             </label>
@@ -332,7 +318,7 @@ export function ProductsPage() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-[2rem] border border-gray-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-xl border-2 border-gray-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
         {loading ? (
           <div className="p-8 text-center text-sm text-gray-500">Carregando produtos...</div>
         ) : products.length === 0 ? (
@@ -352,10 +338,10 @@ export function ProductsPage() {
         open={modalOpen}
         title={editingProduct ? 'Editar produto' : 'Adicionar produto'}
         onClose={closeModal}
-        size="6xl"
-        tone="dark"
+        fullScreen
+        bodyClassName="p-0"
       >
-        <ProductForm
+        <ProductEditorForm
           key={editingProduct?.id ?? (initialBarcode || 'new-product')}
           product={editingProduct}
           registries={registries}
@@ -435,21 +421,15 @@ function FilterSelect({
   onChange,
   label,
   items,
-  tone = 'light',
 }: {
   value: string
   onChange: (value: string) => void
   label: string
   items: Array<{ id: string; name: string }>
-  tone?: 'light' | 'dark'
 }) {
   return (
     <select
-      className={`h-10 rounded-md px-3 text-sm outline-none transition focus:ring-2 ${
-        tone === 'dark'
-          ? 'border border-white/10 bg-white/[0.04] text-white focus:border-white/20 focus:ring-white/10'
-          : 'border border-gray-200 bg-white text-gray-700 focus:border-gray-400 focus:ring-gray-100'
-      }`}
+      className="h-9 rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
       value={value}
       onChange={(event) => onChange(event.target.value)}
     >

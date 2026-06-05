@@ -2,9 +2,9 @@
 
 :root {
   color: #111827;
-  background: #f8fafc;
+  background: #f3f4f6;
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Tahoma, "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -20,6 +20,10 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.7), transparent 24%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  color: #111827;
 }
 
 button,
@@ -27,4 +31,38 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgba(17, 24, 39, 0.12);
+  color: #111827;
+}
+
+.kmoda-scrollbar {
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: #9ca3af #f3f4f6;
+}
+
+.kmoda-scrollbar::-webkit-scrollbar {
+  width: 12px;
+}
+
+.kmoda-scrollbar::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.kmoda-scrollbar::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border: 3px solid #f3f4f6;
+  border-radius: 9999px;
+}
+
+.kmoda-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
 }

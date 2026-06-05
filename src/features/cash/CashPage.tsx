@@ -1,28 +1,35 @@
-import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, History, ShoppingBag, Wallet } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Lock,
+  LockOpen,
+  Wallet,
+} from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
-import { ActionCard } from '../../components/ui/ActionCard'
 import { Badge } from '../../components/ui/Badge'
-import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
-import { SummaryCard } from '../../components/ui/SummaryCard'
+import { Button } from '../../components/ui/Button'
 import {
   friendlyCatalogError,
   getLastClosedCashSession,
   getPreviousOpenCashSession,
   getTodayCashSession,
+  listCashMovementsForSession,
   listTodayCashHistory,
+  formatSalePaymentSummary,
 } from '../../lib/catalog'
 import { formatCurrencyBRL, formatDateBR, todayISODate } from '../../lib/utils'
 import type { CashHistoryEntry, CashHistoryMovement, CashMovement, CashSession } from '../../types/database'
 import { CashExpenseForm } from './CashExpenseForm'
 import { CashHistorySearchModal } from './CashHistorySearchModal'
 import { CashMovementDetailsModal } from './CashMovementDetailsModal'
+import { CashSaleCompletionModal } from './CashSaleCompletionModal'
 import { CashSaleForm } from './CashSaleForm'
 import { CloseCashSessionForm, OpenCashSessionForm } from './CashSessionModals'
 
-type CashModal = 'sale' | 'expense' | 'history' | 'open-session' | 'close-session' | null
+type CashModal = 'sale' | 'expense' | 'history' | 'overview' | 'daily-history' | 'open-session' | 'close-session' | null
 
 export function CashPage() {
   const location = useLocation()
@@ -36,18 +43,41 @@ export function CashPage() {
   const [cashSession, setCashSession] = useState<CashSession | null>(null)
   const [previousOpenSession, setPreviousOpenSession] = useState<CashSession | null>(null)
   const [lastClosedSession, setLastClosedSession] = useState<CashSession | null>(null)
-  const [showPreviousAlert, setShowPreviousAlert] = useState(false)
-  const [testReminderVisible, setTestReminderVisible] = useState(false)
+  const [saleHeaderCenter, setSaleHeaderCenter] = useState<ReactNode | null>(null)
+  const [saleCompletionTestOpen, setSaleCompletionTestOpen] = useState(false)
+  const [sessionMovements, setSessionMovements] = useState<CashMovement[]>([])
+  const [sessionMovementsLoading, setSessionMovementsLoading] = useState(false)
+  const [sessionMovementsRefreshKey, setSessionMovementsRefreshKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const cashMovements = useMemo(
+  const todayMovements = useMemo(
     () => historyEntries.filter((entry): entry is CashHistoryMovement => entry.kind === 'movement'),
     [historyEntries],
   )
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  const sessionForDetails = cashSession?.status === 'open' ? cashSession : previousOpenSession ?? cashSession
+  const sessionForDetailsId = sessionForDetails?.id
+  const sessionForDetailsOpenedAt = sessionForDetails?.opened_at
+  const sessionToClose = sessionForDetails?.status === 'open' ? sessionForDetails : null
+  const isCashOpen = Boolean(sessionToClose)
+  const recentMovements = useMemo(
+    () =>
+      [...sessionMovements]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, 5),
+    [sessionMovements],
+  )
+  const overviewDescription = loading
+    ? 'Carregando dados do caixa.'
+    : isCashOpen
+      ? 'Resumo da sessão atual e lançamentos recentes.'
+      : 'Resumo do último fechamento e lançamentos do dia.'
+
+  const loadData = useCallback(async (showLoading = false) => {
+    if (showLoading) {
+      setLoading(true)
+    }
     setError('')
 
     try {
@@ -61,11 +91,12 @@ export function CashPage() {
       setCashSession(todaySession)
       setPreviousOpenSession(previousSession)
       setLastClosedSession(closedSession)
-      setShowPreviousAlert(Boolean(previousSession))
     } catch (err) {
       setError(friendlyCatalogError(err))
     } finally {
-      setLoading(false)
+      if (showLoading) {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -74,18 +105,21 @@ export function CashPage() {
 
     async function loadInitial() {
       try {
-        const [rows, todaySession, previousSession, closedSession] = await Promise.all([
+        setLoading(true)
+        setError('')
+
+        const [historyRows, todaySession, previousSession, closedSession] = await Promise.all([
           listTodayCashHistory(todayISODate()),
           getTodayCashSession(todayISODate()),
           getPreviousOpenCashSession(todayISODate()),
           getLastClosedCashSession(),
         ])
+
         if (active) {
-          setHistoryEntries(rows)
+          setHistoryEntries(historyRows)
           setCashSession(todaySession)
           setPreviousOpenSession(previousSession)
           setLastClosedSession(closedSession)
-          setShowPreviousAlert(Boolean(previousSession))
         }
       } catch (err) {
         if (active) {
@@ -105,247 +139,293 @@ export function CashPage() {
     }
   }, [])
 
-  const totals = useMemo(() => {
-    const income = cashMovements
+  useEffect(() => {
+    let active = true
+
+    async function loadSessionMovements() {
+      if (!sessionForDetailsId || !sessionForDetailsOpenedAt) {
+        setSessionMovements([])
+        setSessionMovementsLoading(false)
+        return
+      }
+
+      setSessionMovementsLoading(true)
+
+      try {
+        const rows = await listCashMovementsForSession(sessionForDetailsId, sessionForDetailsOpenedAt)
+        if (active) {
+          setSessionMovements(rows)
+        }
+      } catch (err) {
+        if (active) {
+          setError(friendlyCatalogError(err))
+        }
+      } finally {
+        if (active) {
+          setSessionMovementsLoading(false)
+        }
+      }
+    }
+
+    void loadSessionMovements()
+
+    return () => {
+      active = false
+    }
+  }, [sessionForDetailsId, sessionForDetailsOpenedAt, sessionMovementsRefreshKey])
+
+  const dayTotals = useMemo(() => {
+    const income = todayMovements
       .filter((movement) => movement.type === 'income')
       .reduce((sum, movement) => sum + movement.amount, 0)
-    const expense = cashMovements
+    const expense = todayMovements
       .filter((movement) => movement.type === 'expense')
       .reduce((sum, movement) => sum + movement.amount, 0)
 
-    return {
-      income,
-      expense,
-      balance: (cashSession?.opening_amount ?? 0) + income - expense,
-    }
-  }, [cashMovements, cashSession?.opening_amount])
+    return { income, expense }
+  }, [todayMovements])
+
+  const sessionTotals = useMemo(() => {
+    const income = sessionMovements
+      .filter((movement) => movement.type === 'income')
+      .reduce((sum, movement) => sum + movement.amount, 0)
+    const expense = sessionMovements
+      .filter((movement) => movement.type === 'expense')
+      .reduce((sum, movement) => sum + movement.amount, 0)
+
+    return { income, expense }
+  }, [sessionMovements])
 
   const dinheiroNoCaixa = useMemo(() => {
-    if (cashSession?.status !== 'open') {
+    if (!sessionForDetails || sessionForDetails.status !== 'open') {
       return 0
     }
 
-    const cashIncome = cashMovements
-      .filter((movement) => movement.type === 'income' && movement.payment_method === 'dinheiro')
-      .reduce((sum, movement) => sum + movement.amount, 0)
+    return (sessionForDetails.opening_amount ?? 0) + sessionTotals.income - sessionTotals.expense
+  }, [sessionForDetails, sessionTotals.expense, sessionTotals.income])
 
-    const cashExpense = cashMovements
-      .filter((movement) => movement.type === 'expense' && movement.payment_method === 'dinheiro')
-      .reduce((sum, movement) => sum + movement.amount, 0)
-
-    return (cashSession?.opening_amount ?? 0) + cashIncome - cashExpense
-  }, [cashMovements, cashSession?.opening_amount, cashSession?.status])
+  const statusLabel = loading ? 'Carregando caixa...' : isCashOpen ? 'Caixa aberto' : 'Caixa fechado'
+  const statusDescription = loading
+    ? 'Aguarde enquanto os dados do caixa são carregados.'
+    : isCashOpen
+      ? `Aberto em ${formatDateTimeBR(sessionForDetails?.opened_at ?? sessionForDetails?.session_date ?? todayISODate())}.`
+      : lastClosedSession
+        ? `Último fechamento em ${formatDateTimeBR(lastClosedSession.closed_at ?? lastClosedSession.updated_at ?? lastClosedSession.session_date)}.`
+        : 'Nenhum caixa aberto no momento.'
 
   async function handleSaved() {
     setSaleBarcodePrefill('')
     setActiveModal(null)
     await loadData()
+    setSessionMovementsRefreshKey((current) => current + 1)
   }
 
   function closeSaleModal() {
     setSaleBarcodePrefill('')
     setActiveModal(null)
+    setSaleHeaderCenter(null)
   }
-
-  const isCashOpen = cashSession?.status === 'open'
-  const hasPreviousOpenSession = Boolean(previousOpenSession)
-  const showReminder = hasPreviousOpenSession ? showPreviousAlert : testReminderVisible
-  const sessionToClose = isCashOpen ? cashSession : previousOpenSession
-  const mainActionClick = () => {
-    if (isCashOpen) {
-      setActiveModal('close-session')
-      return
-    }
-
-    if (hasPreviousOpenSession) {
-      setActiveModal('close-session')
-      return
-    }
-
-    setActiveModal('open-session')
-  }
-  const handleOpenSale = () => setActiveModal('sale')
-  const handleOpenExpense = () => setActiveModal('expense')
 
   return (
-    <div className="space-y-8">
-      <div className="overflow-hidden rounded-[2rem] border border-black/10 bg-[linear-gradient(135deg,#050505_0%,#121212_48%,#0a0a0a_100%)] px-6 pt-8 pb-5 text-white shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:px-8 sm:pt-10 sm:pb-6 lg:px-10 lg:pt-12 lg:pb-7">
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl text-left">
-              <h1 className="text-4xl font-semibold tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl">
-                Caixa
-              </h1>
+    <div className="flex h-[calc(100dvh-12rem)] w-full min-w-0 flex-col gap-2.5 overflow-hidden [@media(max-height:820px)]:h-auto [@media(max-height:820px)]:gap-2 [@media(max-height:820px)]:overflow-y-auto">
+      <section className="shrink-0 rounded-md border-2 border-gray-300 bg-white p-2.5 shadow-[0_6px_18px_rgba(15,23,42,0.05)] [@media(max-height:820px)]:p-2">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between [@media(max-height:820px)]:gap-2">
+          <div className="flex items-start gap-3 [@media(max-height:820px)]:gap-2">
+            <div
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border-2 [@media(max-height:820px)]:h-8 [@media(max-height:820px)]:w-8 ${
+                isCashOpen ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-gray-300 bg-gray-50 text-gray-500'
+              }`}
+            >
+              {isCashOpen ? <LockOpen className="h-5 w-5 [@media(max-height:820px)]:h-4 [@media(max-height:820px)]:w-4" /> : <Lock className="h-5 w-5 [@media(max-height:820px)]:h-4 [@media(max-height:820px)]:w-4" />}
             </div>
 
-            <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
-              <ActionCard
-                compact
-                tone="dark"
-                title="Nova venda"
-                description="Registrar entrada"
-                icon={<ShoppingBag className="h-5 w-5" />}
-                accent="green"
-                onClick={handleOpenSale}
-              />
-              <ActionCard
-                compact
-                tone="dark"
-                title="Novo gasto"
-                description="Registrar saída"
-                icon={<ArrowDownCircle className="h-5 w-5" />}
-                accent="red"
-                onClick={handleOpenExpense}
-              />
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gray-500">Status do caixa</p>
+              <h1 className="text-xl font-semibold tracking-[-0.04em] text-gray-950 sm:text-2xl [@media(max-height:820px)]:text-lg">{statusLabel}</h1>
+              <p className="mt-1 text-xs leading-5 text-gray-600 sm:text-sm [@media(max-height:820px)]:mt-0.5 [@media(max-height:820px)]:text-[11px] [@media(max-height:820px)]:leading-4">{statusDescription}</p>
             </div>
           </div>
 
-          <div className="border-t border-white/10 pt-4">
-            <div className="flex flex-col items-center gap-2">
-              <button
-                type="button"
-                onClick={mainActionClick}
-                aria-pressed={isCashOpen}
-                className={`group flex w-full max-w-[17rem] items-center justify-between rounded-full border px-2 py-1.5 text-left transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                  isCashOpen
-                    ? 'border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/14 focus:ring-emerald-300/35 focus:ring-offset-emerald-950'
-                    : 'border-white/10 bg-white/5 hover:bg-white/10 focus:ring-white/20 focus:ring-offset-zinc-950'
-                }`}
-              >
-                <span
-                  className={`text-[10px] font-semibold uppercase tracking-[0.24em] transition ${
-                    isCashOpen ? 'text-white/30' : 'text-white/85'
-                  }`}
-                >
-                  Fechado
-                </span>
-
-                <span
-                  className={`mx-2 flex h-7 w-14 shrink-0 items-center rounded-full border p-1 transition-colors ${
-                    isCashOpen
-                      ? 'border-emerald-300/25 bg-emerald-400/15'
-                      : 'border-white/10 bg-white/10'
-                  }`}
-                >
-                  <span
-                    className={`h-5 w-5 rounded-full shadow-sm transition-transform duration-300 ${
-                      isCashOpen ? 'translate-x-6 bg-emerald-400' : 'translate-x-0 bg-white'
-                    }`}
-                  />
-                </span>
-
-                <span
-                  className={`text-[10px] font-semibold uppercase tracking-[0.24em] transition ${
-                    isCashOpen ? 'text-white/85' : 'text-white/30'
-                  }`}
-                >
-                  Aberto
-                </span>
-              </button>
-
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <SummaryCard tone="dark" label="Dinheiro no Caixa" value={formatCurrencyBRL(dinheiroNoCaixa)} icon={<Wallet className="h-5 w-5" />} />
-        <SummaryCard tone="dark" accent="green" label="Entradas do dia" value={formatCurrencyBRL(totals.income)} icon={<ArrowUpCircle className="h-5 w-5" />} />
-        <SummaryCard tone="dark" accent="red" label="Gastos do dia" value={formatCurrencyBRL(totals.expense)} icon={<ArrowDownCircle className="h-5 w-5" />} />
-      </div>
-
-      {showReminder && previousOpenSession ? (
-        <div className="rounded-3xl border border-amber-500/20 bg-[#0a0a0a] px-5 py-4 text-sm text-white shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
-              <div>
-                <p className="font-semibold text-white">Caixa anterior aberto</p>
-                <p className="mt-1 text-white/60">
-                  Existe um caixa aberto de {formatDateBR(previousOpenSession.session_date)} que ainda não foi fechado.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                className="h-11 px-5"
-                onClick={() => {
-                  setActiveModal('close-session')
-                }}
-              >
-                Fechar caixa anterior
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setShowPreviousAlert(false)}
-                className="h-11 px-5"
-              >
-                Lembrar depois
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : showReminder ? (
-        <div className="rounded-3xl border border-white/10 bg-[#050505] px-5 py-4 text-sm text-white shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-300" />
-              <div>
-                <p className="font-semibold text-white">Teste interno</p>
-                <p className="mt-1 text-white/55">Lembrete de caixa aberto para validação visual.</p>
-              </div>
-            </div>
-            <Button tone="dark" variant="secondary" size="sm" onClick={() => setTestReminderVisible(false)}>
-              Fechar teste
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-
-      <section className="overflow-hidden rounded-[2rem] border border-gray-200 bg-white shadow-sm">
-        <div className="relative border-b border-white/10 bg-[#050505] px-5 py-5 text-white">
           <button
             type="button"
-            onClick={() => setActiveModal('history')}
-            aria-label="Abrir histórico"
-            className="absolute right-5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-white text-black transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-white/20"
+            disabled={loading}
+            onClick={() => setActiveModal(isCashOpen ? 'close-session' : 'open-session')}
+            className={`inline-flex min-w-[150px] items-center justify-center rounded-md border-2 px-4 py-2 text-sm font-semibold shadow-[0_4px_0_rgba(15,23,42,0.04)] transition focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 [@media(max-height:820px)]:min-w-[132px] [@media(max-height:820px)]:px-3 [@media(max-height:820px)]:py-1.5 [@media(max-height:820px)]:text-xs ${
+              isCashOpen
+                ? 'border-gray-900 bg-white text-gray-950 hover:bg-gray-50'
+                : 'border-gray-900 bg-gray-900 text-white hover:bg-black'
+            }`}
           >
-            <History className="h-4 w-4" />
+            {isCashOpen ? 'Fechar caixa' : 'Abrir caixa'}
           </button>
+        </div>
+      </section>
 
-          <h2 className="text-center text-base font-semibold tracking-[-0.02em] sm:text-lg">
-            Históricos do dia
-          </h2>
-          <p className="mt-1 text-center text-sm text-white/55">
+      <section className="shrink-0 rounded-md border-2 border-gray-300 bg-white p-2.5 shadow-[0_6px_18px_rgba(15,23,42,0.05)] [@media(max-height:820px)]:p-2">
+        <div className="grid grid-cols-2 auto-rows-[6.75rem] gap-2 sm:auto-rows-[7rem] [@media(max-height:820px)]:auto-rows-[5.75rem] [@media(max-height:820px)]:gap-1.5">
+          <CashMenuButton title="Registrar venda" active={activeModal === 'sale'} disabled={loading} onClick={() => setActiveModal('sale')} />
+          <CashMenuButton
+            title="Registrar despesa"
+            active={activeModal === 'expense'}
+            disabled={loading}
+            onClick={() => setActiveModal('expense')}
+          />
+          <CashMenuButton
+            title="Histórico do dia"
+            active={activeModal === 'daily-history'}
+            disabled={loading}
+            onClick={() => setActiveModal('daily-history')}
+          />
+          <CashMenuButton
+            title="Histórico por pesquisa"
+            active={activeModal === 'history'}
+            disabled={loading}
+            onClick={() => setActiveModal('history')}
+          />
+          <div className="sm:col-span-2">
+            <CashMenuButton
+              title="Visão geral"
+              active={activeModal === 'overview'}
+              disabled={loading}
+              onClick={() => setActiveModal('overview')}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="grid shrink-0 grid-cols-3 gap-1 [@media(max-height:820px)]:gap-0.5">
+        <CashMetricCard label="Dinheiro no caixa" value={formatCurrencyBRL(dinheiroNoCaixa)} icon={<Wallet className="h-4 w-4" />} />
+        <CashMetricCard label="Entradas do dia" value={formatCurrencyBRL(dayTotals.income)} icon={<ArrowUpCircle className="h-4 w-4" />} accent="green" />
+        <CashMetricCard label="Despesas do dia" value={formatCurrencyBRL(dayTotals.expense)} icon={<ArrowDownCircle className="h-4 w-4" />} accent="red" />
+      </section>
+
+      <section className="shrink-0 flex justify-end">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setSaleCompletionTestOpen(true)}
+          className="border-gray-300 bg-white text-gray-700 shadow-sm hover:border-gray-900 hover:text-gray-900"
+        >
+          Testar animação de venda
+        </Button>
+      </section>
+
+      {error ? (
+        <div className="shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
+      ) : null}
+
+      <Modal open={activeModal === 'overview'} title="Visão geral" onClose={() => setActiveModal(null)} size="5xl">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">{overviewDescription}</p>
+
+          {loading ? (
+            <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+              Carregando caixa...
+            </div>
+          ) : (
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
+              <div className="rounded-md border-2 border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Estado atual</p>
+
+                {isCashOpen && sessionForDetails ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <OverviewField label="Abertura" value={formatDateTimeBR(sessionForDetails.opened_at)} />
+                      <OverviewField label="Valor inicial" value={formatCurrencyBRL(sessionForDetails.opening_amount ?? 0)} />
+                    </div>
+                    <div className="rounded-md border border-gray-200 bg-white px-3 py-3 text-sm text-gray-700">
+                      {sessionForDetails.notes ? sessionForDetails.notes : 'Sem observação cadastrada para esta sessão.'}
+                    </div>
+                  </div>
+                ) : lastClosedSession ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <OverviewField
+                        label="Último fechamento"
+                        value={formatDateTimeBR(lastClosedSession.closed_at ?? lastClosedSession.updated_at ?? lastClosedSession.session_date)}
+                      />
+                      <OverviewField label="Valor fechado" value={formatCurrencyBRL(lastClosedSession.closing_amount ?? 0)} />
+                      <OverviewField label="Diferença" value={formatCurrencyBRL(lastClosedSession.difference_amount ?? 0)} />
+                      <OverviewField label="Valor esperado" value={formatCurrencyBRL(lastClosedSession.expected_amount ?? 0)} />
+                    </div>
+                    <div className="rounded-md border border-gray-200 bg-white px-3 py-3 text-sm text-gray-700">
+                      {lastClosedSession.notes ? lastClosedSession.notes : 'Nenhuma observação no último fechamento.'}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <EmptyState title="Caixa fechado" description="Abra o caixa para iniciar os lançamentos do dia." />
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border-2 border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Movimentações recentes</p>
+
+                {sessionMovementsLoading ? (
+                  <p className="mt-3 text-sm text-gray-500">Carregando movimentações...</p>
+                ) : recentMovements.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {recentMovements.map((movement) => (
+                      <CashDetailItem
+                        key={movement.id}
+                        description={movementDescription(movement)}
+                        amount={movement.amount}
+                        amountTone={movement.type === 'income' ? 'income' : 'expense'}
+                        timestamp={formatMovementTimestamp(movement.created_at, sessionForDetails?.opened_at)}
+                        prefix={movement.type === 'income' ? '+' : '-'}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <EmptyState
+                      title="Nenhuma movimentação registrada."
+                      description="As entradas e despesas da sessão aparecem aqui após os lançamentos."
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <CashSaleCompletionModal
+        open={saleCompletionTestOpen}
+        total={98}
+        customerName="Cliente teste"
+        onClose={() => setSaleCompletionTestOpen(false)}
+      />
+
+      <Modal open={activeModal === 'daily-history'} title="Histórico do dia" onClose={() => setActiveModal(null)} size="6xl">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
             Lançamentos de {formatDateBR(todayISODate())}. Clique em uma linha para ver detalhes.
           </p>
-        </div>
 
-        <div className="px-5 pb-5 pt-4">
           {loading ? (
-            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+            <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
               Carregando caixa...
             </div>
           ) : historyEntries.length === 0 ? (
-            <EmptyState title="Nenhum lançamento hoje." description="Registre uma venda ou um gasto para começar." />
+            <EmptyState title="Nenhum lançamento hoje." description="Registre uma venda ou uma despesa para começar." />
           ) : (
-            <div className="overflow-hidden rounded-lg border border-gray-200">
+            <div className="overflow-hidden rounded-md border-2 border-gray-200">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] border-collapse bg-[#050505] text-left text-sm text-white">
-                  <thead className="bg-black text-xs uppercase text-white">
+                <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm text-gray-700">
+                  <thead className="bg-black text-[11px] uppercase tracking-[0.14em] text-gray-100">
                     <tr>
-                      <th className="px-4 py-3 font-bold tracking-[0.08em]">ID</th>
-                      <th className="px-4 py-3 font-bold tracking-[0.08em]">Tipo</th>
-                      <th className="px-4 py-3 font-bold tracking-[0.08em]">Descrição</th>
-                      <th className="px-4 py-3 font-bold tracking-[0.08em]">Valor</th>
-                      <th className="px-4 py-3 font-bold tracking-[0.08em]">Data</th>
-                      <th className="px-4 py-3 font-bold tracking-[0.08em]">Pagamento</th>
+                      <th className="px-4 py-3 font-semibold">ID</th>
+                      <th className="px-4 py-3 font-semibold">Tipo</th>
+                      <th className="px-4 py-3 font-semibold">Descrição</th>
+                      <th className="px-4 py-3 font-semibold">Valor</th>
+                      <th className="px-4 py-3 font-semibold">Data</th>
+                      <th className="px-4 py-3 font-semibold">Pagamento</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/10">
+                  <tbody className="divide-y divide-gray-100">
                     {historyEntries.map((entry) => {
                       const isSession = entry.kind === 'session'
                       const isIncome = !isSession && entry.type === 'income'
@@ -355,38 +435,36 @@ export function CashPage() {
                           key={entry.id}
                           className={`cursor-pointer transition ${
                             isSession
-                              ? 'bg-zinc-800/85 text-white hover:bg-zinc-700/85'
+                              ? 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                               : isIncome
-                                ? 'bg-emerald-500/10 text-white hover:bg-emerald-500/15'
-                                : 'bg-rose-500/10 text-white hover:bg-rose-500/15'
+                                ? 'bg-emerald-50 text-gray-900 hover:bg-emerald-100'
+                                : 'bg-rose-50 text-gray-900 hover:bg-rose-100'
                           }`}
                           onClick={() => setSelectedHistoryEntry(entry)}
                         >
-                          <td className={`px-4 py-3 text-xs font-medium ${isSession ? 'text-white/65' : 'text-white/55'}`}>
-                            {entry.movement_code ?? shortCode(entry.id)}
-                          </td>
+                          <td className="px-4 py-3 text-xs font-medium text-gray-500">{entry.movement_code ?? shortCode(entry.id)}</td>
                           <td className="px-4 py-3">
                             {isSession ? (
-                              <Badge tone="dark" variant="neutral">{entry.eventType === 'open' ? 'Abertura' : 'Fechamento'}</Badge>
+                              <Badge variant="neutral">{entry.eventType === 'open' ? 'Abertura' : 'Fechamento'}</Badge>
                             ) : (
-                              <Badge tone="dark" variant={entry.type === 'income' ? 'success' : 'warning'}>
-                                {movementLabel(entry)}
-                              </Badge>
+                              <Badge variant={entry.type === 'income' ? 'success' : 'warning'}>{movementLabel(entry)}</Badge>
                             )}
                           </td>
-                          <td className={`px-4 py-3 font-medium ${isSession ? 'text-white' : 'text-white'}`}>
+                          <td className="px-4 py-3 font-medium text-gray-900">
                             {isSession
                               ? entry.eventType === 'open'
                                 ? 'Abertura de caixa'
                                 : 'Fechamento de caixa'
                               : movementDescription(entry)}
                           </td>
-                          <td className={`px-4 py-3 ${isSession ? 'text-white/75' : isIncome ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          <td className={`px-4 py-3 ${isSession ? 'text-gray-700' : isIncome ? 'text-emerald-700' : 'text-rose-700'}`}>
                             {isSession ? '' : entry.type === 'income' ? '+' : '-'}
                             {formatCurrencyBRL(entry.amount)}
                           </td>
-                          <td className="px-4 py-3 text-white/75">{formatDateBR(entry.movement_date)}</td>
-                          <td className="px-4 py-3 text-white/75">{isSession ? '-' : paymentLabel(entry.payment_method)}</td>
+                          <td className="px-4 py-3 text-gray-600">{formatDateBR(entry.movement_date)}</td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {isSession ? '-' : entry.origin === 'sale' ? formatSalePaymentSummary(entry.sale) : paymentLabel(entry.payment_method)}
+                          </td>
                         </tr>
                       )
                     })}
@@ -396,67 +474,64 @@ export function CashPage() {
             </div>
           )}
         </div>
-      </section>
+      </Modal>
 
-      <div className="flex justify-center">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[10px] text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          onClick={() => setTestReminderVisible(true)}
-        >
-          Teste
-        </Button>
-      </div>
-
-      <Modal open={activeModal === 'sale'} title="Nova venda" onClose={closeSaleModal} size="6xl" tone="dark">
+      <Modal
+        open={activeModal === 'sale'}
+        title="Nova venda"
+        onClose={closeSaleModal}
+        size="6xl"
+        fullScreen
+        bodyClassName="p-0"
+        headerCenter={saleHeaderCenter}
+      >
         <CashSaleForm
           onCancel={closeSaleModal}
           onSaved={() => void handleSaved()}
           onOpenCash={() => setActiveModal('open-session')}
-          cashSessionId={isCashOpen ? cashSession.id : null}
+          cashSessionId={isCashOpen ? sessionForDetails?.id ?? null : null}
           sessionClosed={!isCashOpen}
           initialBarcode={saleBarcodePrefill}
+          onHeaderCenterChange={setSaleHeaderCenter}
         />
       </Modal>
 
-      <Modal open={activeModal === 'expense'} title="Novo gasto" onClose={() => setActiveModal(null)} size="lg" tone="dark">
+      <Modal open={activeModal === 'expense'} title="Nova despesa" onClose={() => setActiveModal(null)} size="lg">
         <CashExpenseForm
           onCancel={() => setActiveModal(null)}
           onSaved={() => void handleSaved()}
           onOpenCash={() => setActiveModal('open-session')}
-          cashSessionId={isCashOpen ? cashSession.id : null}
+          cashSessionId={isCashOpen ? sessionForDetails?.id ?? null : null}
           sessionClosed={!isCashOpen}
         />
       </Modal>
 
-      <Modal open={activeModal === 'open-session'} title="Abrir caixa" onClose={() => setActiveModal(null)} size="lg" tone="dark">
+      <Modal open={activeModal === 'open-session'} title="Abrir caixa" onClose={() => setActiveModal(null)} size="lg">
         <OpenCashSessionForm
           onCancel={() => setActiveModal(null)}
           lastClosedSession={lastClosedSession}
           onSaved={(session) => {
             setCashSession(session)
-            setShowPreviousAlert(false)
-            setTestReminderVisible(false)
+            setPreviousOpenSession(null)
             setActiveModal(null)
+            void loadData()
           }}
         />
       </Modal>
 
-      <Modal open={activeModal === 'close-session' && sessionToClose !== null} title="Fechar caixa" onClose={() => setActiveModal(null)} size="2xl" tone="dark">
+      <Modal open={activeModal === 'close-session' && sessionToClose !== null} title="Fechar caixa" onClose={() => setActiveModal(null)} size="2xl">
         {sessionToClose ? (
           <CloseCashSessionForm
             session={sessionToClose}
-            income={totals.income}
-            expense={totals.expense}
+            income={sessionTotals.income}
+            expense={sessionTotals.expense}
             onCancel={() => setActiveModal(null)}
             onSaved={(session) => {
               setCashSession(session)
               setLastClosedSession(session)
               setActiveModal(null)
-              setShowPreviousAlert(false)
-              setTestReminderVisible(false)
               setPreviousOpenSession(null)
+              void loadData()
             }}
           />
         ) : null}
@@ -473,9 +548,118 @@ export function CashPage() {
   )
 }
 
+function CashMenuButton({
+  title,
+  active = false,
+  disabled = false,
+  onClick,
+}: {
+  title: string
+  active?: boolean
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      aria-pressed={active}
+      onClick={onClick}
+      className={`group flex h-full w-full flex-col items-center justify-center gap-2 rounded-md border-2 px-3 text-center shadow-[0_4px_0_rgba(15,23,42,0.04)] transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 [@media(max-height:820px)]:gap-1.5 [@media(max-height:820px)]:px-2.5 ${
+        active
+          ? 'border-gray-950 bg-gray-950 text-white shadow-[0_6px_0_rgba(15,23,42,0.12)]'
+          : 'border-gray-300 bg-white text-gray-800 hover:border-black hover:bg-gray-50 hover:text-black'
+      }`}
+    >
+      <span
+        className={`min-w-0 font-semibold leading-tight transition-all duration-200 ease-out group-hover:scale-[1.08] group-hover:text-[20px] [@media(max-height:820px)]:group-hover:text-[18px] ${
+          active ? 'text-[18px] text-white [@media(max-height:820px)]:text-[16px]' : 'text-[19px] [@media(max-height:820px)]:text-[16px]'
+        }`}
+      >
+        {title}
+      </span>
+    </button>
+  )
+}
+
+function CashMetricCard({
+  label,
+  value,
+  icon,
+  accent = 'default',
+}: {
+  label: string
+  value: string
+  icon: ReactNode
+  accent?: 'default' | 'green' | 'red'
+}) {
+  const accentStyles =
+    accent === 'green'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : accent === 'red'
+        ? 'border-rose-200 bg-rose-50 text-rose-700'
+        : 'border-gray-200 bg-gray-50 text-gray-700'
+
+  return (
+    <div className="flex h-32 w-full flex-col items-center justify-between rounded-md border-2 border-gray-200 bg-white px-3 py-3 text-center shadow-[0_4px_0_rgba(15,23,42,0.03)] [@media(max-height:820px)]:h-28 [@media(max-height:820px)]:py-2.5">
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border [@media(max-height:820px)]:h-9 [@media(max-height:820px)]:w-9 ${accentStyles}`}>{icon}</div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">{label}</p>
+      </div>
+      <p className="truncate text-[22px] font-semibold tracking-[-0.04em] text-gray-950 [@media(max-height:820px)]:text-[20px]">{value}</p>
+    </div>
+  )
+}
+
+function OverviewField({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-md border border-gray-200 bg-white px-3 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-gray-950">{value}</p>
+    </div>
+  )
+}
+
+function CashDetailItem({
+  description,
+  amount,
+  amountTone,
+  timestamp,
+  prefix,
+}: {
+  description: string
+  amount: number
+  amountTone: 'income' | 'expense'
+  timestamp: string
+  prefix: '+' | '-'
+}) {
+  const toneClass = amountTone === 'income' ? 'text-emerald-700' : 'text-rose-700'
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-gray-900">{description}</p>
+          <p className="mt-1 text-[11px] text-gray-500">{timestamp}</p>
+        </div>
+        <p className={`shrink-0 text-sm font-semibold ${toneClass}`}>
+          {prefix}
+          {formatCurrencyBRL(amount)}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function movementLabel(movement: CashMovement) {
   if (movement.type === 'expense') {
-    return 'Gasto'
+    return 'Despesa'
   }
 
   return movement.origin === 'sale' ? 'Venda' : 'Entrada avulsa'
@@ -507,4 +691,35 @@ function paymentLabel(method?: string | null) {
   }
 
   return method ? labels[method] ?? method : '-'
+}
+
+function formatDateTimeBR(value: string) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function formatMovementTimestamp(value: string, sessionOpenedAt?: string) {
+  const movementDate = new Date(value)
+  const openDate = sessionOpenedAt ? new Date(sessionOpenedAt) : null
+  const timeLabel = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(movementDate)
+
+  if (!openDate || movementDate.toDateString() === openDate.toDateString()) {
+    return timeLabel
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(movementDate)
 }

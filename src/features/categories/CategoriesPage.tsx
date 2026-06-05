@@ -136,16 +136,16 @@ export function CategoriesPage() {
 
   return (
     <Card title="Cadastros" description="Marcas, tipos, tamanhos e cores usados no cadastro rápido de produtos.">
-      <div className="mb-5 flex flex-wrap gap-2 border-b border-gray-100 pb-4">
+      <div className="mb-4 flex flex-wrap gap-2 border-b border-gray-100 pb-3">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
             onClick={() => setActiveTab(tab.key)}
-            className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+            className={`rounded-md border px-3 py-2 text-sm font-medium transition ${
               activeTab === tab.key
-                ? 'bg-gray-900 text-white'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-950'
+                ? 'border-gray-300 bg-white text-gray-950 shadow-sm'
+                : 'border-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-950'
             }`}
           >
             {tab.label}

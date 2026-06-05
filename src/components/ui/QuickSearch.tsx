@@ -9,12 +9,14 @@ interface QuickSearchProps {
   value?: string
   placeholder?: string
   onChange?: (value: string) => void
+  onSelectResult?: (item: SearchResult) => void | Promise<void>
 }
 
 export function QuickSearch({
   value = '',
   placeholder = 'Buscar no sistema',
   onChange,
+  onSelectResult,
 }: QuickSearchProps) {
   const navigate = useNavigate()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -25,6 +27,7 @@ export function QuickSearch({
   const [results, setResults] = useState<SearchResult[]>([])
 
   const displayValue = onChange ? value : internalValue
+  const query = displayValue.trim()
 
   useEffect(() => {
     if (!onChange) {
@@ -44,7 +47,7 @@ export function QuickSearch({
   }, [])
 
   useEffect(() => {
-    const term = displayValue.trim()
+    const term = query
 
     if (term.length < 2) {
       setResults([])
@@ -74,6 +77,7 @@ export function QuickSearch({
           ...products.slice(0, 6).map((product) => ({
             type: 'product' as const,
             id: product.id,
+            barcode: product.barcode ?? null,
             title: product.product_model?.name ?? product.name,
             subtitle: [
               product.product_model?.reference,
@@ -106,13 +110,23 @@ export function QuickSearch({
     }, 220)
 
     return () => window.clearTimeout(timeout)
-  }, [displayValue])
+  }, [query])
 
-  const hasQuery = displayValue.trim().length >= 2
+  const hasQuery = query.length >= 2
   const showDropdown = open && (loading || hasQuery)
 
+  const handleSelectResult = async (item: SearchResult) => {
+    if (onSelectResult) {
+      await Promise.resolve(onSelectResult(item))
+    } else {
+      navigate(item.href)
+    }
+
+    setOpen(false)
+  }
+
   return (
-    <div ref={rootRef} className="relative w-full max-w-md">
+    <div ref={rootRef} className="relative w-full max-w-2xl">
       <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
       <Input
         className="pl-9"
@@ -132,13 +146,12 @@ export function QuickSearch({
 
           if (event.key === 'Enter' && results.length > 0) {
             event.preventDefault()
-            navigate(results[0].href)
-            setOpen(false)
+            void handleSelectResult(results[0])
           }
         }}
       />
       {showDropdown ? (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl">
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border-2 border-gray-200 bg-white shadow-xl">
           {loading ? (
             <div className="px-4 py-3 text-sm text-gray-500">Buscando...</div>
           ) : error ? (
@@ -150,18 +163,12 @@ export function QuickSearch({
               <SearchGroup
                 title="Produtos"
                 items={results.filter((item) => item.type === 'product')}
-                onSelect={(item) => {
-                  navigate(item.href)
-                  setOpen(false)
-                }}
+                onSelect={(item) => void handleSelectResult(item)}
               />
               <SearchGroup
                 title="Clientes"
                 items={results.filter((item) => item.type === 'customer')}
-                onSelect={(item) => {
-                  navigate(item.href)
-                  setOpen(false)
-                }}
+                onSelect={(item) => void handleSelectResult(item)}
               />
             </div>
           )}
@@ -174,6 +181,7 @@ export function QuickSearch({
 type SearchResult = {
   type: 'product' | 'customer'
   id: string
+  barcode?: string | null
   title: string
   subtitle?: string
   detail?: string
@@ -195,13 +203,13 @@ function SearchGroup({
 
   return (
     <div className="border-t border-gray-100 first:border-t-0">
-      <p className="bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400">{title}</p>
+      <p className="bg-gray-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">{title}</p>
       <div className="py-1">
         {items.map((item) => (
           <button
             key={`${item.type}-${item.id}`}
             type="button"
-            className="flex w-full items-start justify-between gap-4 px-4 py-3 text-left transition hover:bg-gray-50"
+            className="flex w-full items-start justify-between gap-4 px-4 py-2.5 text-left transition hover:bg-gray-50"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onSelect(item)}
           >

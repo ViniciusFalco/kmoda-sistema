@@ -184,12 +184,11 @@ export function StockMovementForm({
 
       <section className="space-y-3">
         <div className="flex items-center justify-center gap-3">
-          <span className="text-center text-sm font-medium text-white/75">Produto</span>
+          <span className="text-center text-sm font-medium text-gray-600">Produto</span>
           {onBarcodeScan ? (
             <BarcodeScanButton
               label="Ler código"
-              variant="default"
-              tone="dark"
+              variant="secondary"
               onScan={onBarcodeScan}
               className="h-10 shrink-0"
             />
@@ -198,7 +197,6 @@ export function StockMovementForm({
 
         <div className="relative">
           <Input
-            tone="dark"
             className="h-12"
             placeholder="Buscar por nome, código ou referência"
             value={searchTerm}
@@ -218,23 +216,23 @@ export function StockMovementForm({
           />
 
           {searchFocused && !selectedProduct ? (
-            <div className="absolute z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-3xl border border-white/10 bg-[#0a0a0a] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
+            <div className="absolute z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
               {filteredProducts.length === 0 ? (
-                <div className="px-4 py-4 text-sm text-white/45">Nenhum produto encontrado.</div>
+                <div className="px-4 py-4 text-sm text-gray-500">Nenhum produto encontrado.</div>
               ) : (
                 filteredProducts.map((product) => (
                   <button
                     key={product.id}
                     type="button"
                     className={cn(
-                      'flex w-full flex-col gap-1 rounded-2xl px-4 py-3 text-left transition',
-                      'hover:bg-white/10 focus:bg-white/10',
+                      'flex w-full flex-col gap-1 rounded-lg px-4 py-3 text-left transition',
+                      'hover:bg-gray-50 focus:bg-gray-50',
                     )}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => selectProduct(product)}
                   >
-                    <span className="text-sm font-semibold text-white">{getProductTitle(product)}</span>
-                    <span className="text-xs text-white/50">{getProductMeta(product) || 'Sem referência'}</span>
+                    <span className="text-sm font-semibold text-gray-950">{getProductTitle(product)}</span>
+                    <span className="text-xs text-gray-500">{getProductMeta(product) || 'Sem referência'}</span>
                   </button>
                 ))
               )}
@@ -244,9 +242,9 @@ export function StockMovementForm({
       </section>
 
       {selectedProduct ? (
-        <section className="rounded-[1.75rem] border border-zinc-200 bg-white p-4 text-zinc-950 shadow-[0_18px_45px_rgba(0,0,0,0.08)]">
+        <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-gray-950 shadow-sm">
           <div className="flex flex-col items-center gap-4 text-center">
-            <h3 className="text-2xl font-semibold tracking-[-0.03em] text-zinc-950">{getProductTitle(selectedProduct)}</h3>
+            <h3 className="text-2xl font-semibold tracking-[-0.03em] text-gray-950">{getProductTitle(selectedProduct)}</h3>
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -257,21 +255,21 @@ export function StockMovementForm({
           </div>
         </section>
       ) : (
-        <section className="rounded-[1.75rem] border border-dashed border-white/10 bg-white/5 px-4 py-5 text-sm text-white/55">
+        <section className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
           Selecione um produto para continuar.
         </section>
       )}
 
       <section className="space-y-3">
-        <span className="block text-center text-sm font-medium text-white/75">Movimentação</span>
-        <div className="grid grid-cols-2 rounded-[1.5rem] border border-white/10 bg-white/5 p-1">
+        <span className="block text-center text-sm font-medium text-gray-600">Movimentação</span>
+        <div className="grid grid-cols-2 rounded-xl border border-gray-200 bg-gray-50 p-1">
           <button
             type="button"
             className={cn(
-              'rounded-[1.2rem] px-4 py-3 text-sm font-semibold transition',
+              'rounded-lg px-4 py-3 text-sm font-semibold transition',
               movementType === 'entrada'
-                ? 'bg-white text-zinc-950 shadow-[0_10px_24px_rgba(255,255,255,0.08)]'
-                : 'text-white/65 hover:text-white',
+                ? 'bg-black text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)]'
+                : 'text-gray-600 hover:bg-white hover:text-gray-950',
             )}
             onClick={() => setMovementType('entrada')}
           >
@@ -280,10 +278,10 @@ export function StockMovementForm({
           <button
             type="button"
             className={cn(
-              'rounded-[1.2rem] px-4 py-3 text-sm font-semibold transition',
+              'rounded-lg px-4 py-3 text-sm font-semibold transition',
               movementType === 'saida'
-                ? 'bg-white text-zinc-950 shadow-[0_10px_24px_rgba(255,255,255,0.08)]'
-                : 'text-white/65 hover:text-white',
+                ? 'bg-black text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)]'
+                : 'text-gray-600 hover:bg-white hover:text-gray-950',
             )}
             onClick={() => setMovementType('saida')}
           >
@@ -294,14 +292,14 @@ export function StockMovementForm({
 
       <section className="space-y-3">
         <label className="block space-y-1.5">
-          <span className="block text-center text-sm font-medium text-white/75">Motivo</span>
+          <span className="block text-center text-sm font-medium text-gray-600">Motivo</span>
           <select
             value={reason}
             onChange={(event) => setReason(event.target.value as StockMovementReason)}
-            className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none transition focus:border-white/20 focus:ring-2 focus:ring-white/10"
+            className="h-12 w-full rounded-md border-2 border-gray-300 bg-white px-4 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
           >
             {currentReasonOptions.map((option) => (
-              <option key={option.value} value={option.value} className="text-zinc-950">
+              <option key={option.value} value={option.value} className="text-gray-950">
                 {option.label}
               </option>
             ))}
@@ -310,13 +308,12 @@ export function StockMovementForm({
       </section>
 
       <section className="space-y-3">
-        <span className="block text-center text-sm font-medium text-white/75">Quantidade</span>
+        <span className="block text-center text-sm font-medium text-gray-600">Quantidade</span>
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3">
           <Button
             type="button"
             variant="secondary"
-            tone="dark"
-            className="h-12 w-12 rounded-2xl px-0"
+            className="h-12 w-12 rounded-md px-0"
             onClick={() => setQuantity((current) => Math.max(1, current - 1))}
             disabled={quantity <= 1}
             aria-label="Diminuir quantidade"
@@ -325,7 +322,6 @@ export function StockMovementForm({
           </Button>
 
           <Input
-            tone="dark"
             type="number"
             min="1"
             step="1"
@@ -345,8 +341,7 @@ export function StockMovementForm({
           <Button
             type="button"
             variant="secondary"
-            tone="dark"
-            className="h-12 w-12 rounded-2xl px-0"
+            className="h-12 w-12 rounded-md px-0"
             onClick={() => {
               setQuantity((current) => {
                 if (movementType === 'saida' && selectedProduct) {
@@ -365,18 +360,18 @@ export function StockMovementForm({
           </Button>
         </div>
 
-        {quantityError ? <p className="text-sm text-rose-300">{quantityError}</p> : null}
+        {quantityError ? <p className="text-sm text-rose-600">{quantityError}</p> : null}
       </section>
 
       <section className="space-y-3">
         <label className="block space-y-1.5">
-          <span className="block text-center text-sm font-medium text-white/75">Observação</span>
+          <span className="block text-center text-sm font-medium text-gray-600">Observação</span>
           <textarea
             value={observation}
             onChange={(event) => setObservation(event.target.value)}
             rows={3}
             placeholder="Opcional"
-            className="min-h-[88px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-white/20 focus:ring-2 focus:ring-white/10"
+            className="min-h-[88px] w-full rounded-md border-2 border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
           />
         </label>
       </section>
@@ -385,7 +380,6 @@ export function StockMovementForm({
         <Button
           type="button"
           variant="secondary"
-          tone="dark"
           onClick={() => {
             resetForm()
             onCancel?.()
@@ -393,7 +387,7 @@ export function StockMovementForm({
         >
           Cancelar
         </Button>
-        <Button type="submit" tone="dark" variant="primary" disabled={!canSubmit}>
+        <Button type="submit" variant="primary" disabled={!canSubmit}>
           {isSubmitting ? (
             'Salvando...'
           ) : movementType === 'entrada' ? (

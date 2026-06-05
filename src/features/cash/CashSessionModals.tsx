@@ -40,19 +40,19 @@ export function OpenCashSessionForm({ onCancel, onSaved, lastClosedSession }: Op
   }
 
   return (
-    <form className="space-y-5 text-white" onSubmit={handleSubmit}>
-      {error ? <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div> : null}
+    <form className="space-y-5 text-gray-950" onSubmit={handleSubmit}>
+      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
       {lastClosedSession && lastClosedAmount !== null ? (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/45">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-500">
                 Valor do último fechamento
               </p>
-              <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
+              <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-gray-950">
                 {formatCurrencyBRL(lastClosedAmount)}
               </p>
-              <p className="mt-1 text-xs text-white/45">
+              <p className="mt-1 text-xs text-gray-500">
                 {formatDateBR(lastClosedSession.closed_at ?? lastClosedSession.session_date)}
               </p>
             </div>
@@ -60,7 +60,6 @@ export function OpenCashSessionForm({ onCancel, onSaved, lastClosedSession }: Op
             <Button
               type="button"
               variant="secondary"
-              tone="dark"
               onClick={() => setOpeningAmount(formatCurrencyInput(formatCurrencyBRL(lastClosedAmount)))}
             >
               Usar este valor
@@ -68,34 +67,33 @@ export function OpenCashSessionForm({ onCancel, onSaved, lastClosedSession }: Op
           </div>
         </div>
       ) : null}
-      <div className="mx-auto w-full max-w-md rounded-2xl border border-white/10 bg-[#0b0b0b] p-4 shadow-[0_20px_50px_rgba(0,0,0,0.25)]">
+      <div className="mx-auto w-full max-w-md rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
         <Input
           label="Valor inicial em caixa"
-          labelClassName="block text-center text-xs font-semibold uppercase tracking-[0.24em] text-white/55"
+          labelClassName="block text-center text-xs font-semibold uppercase tracking-[0.24em] text-gray-500"
           value={openingAmount}
           inputMode="numeric"
           placeholder="R$ 0,00"
-          tone="dark"
           className="mt-3 h-14 text-center text-2xl font-semibold tracking-[0.04em]"
           onChange={(event) => setOpeningAmount(formatCurrencyInput(event.target.value))}
         />
       </div>
       <label className="block space-y-1.5">
-        <span className="text-sm font-medium text-white/75">Observação</span>
+        <span className="text-sm font-medium text-gray-700">Observação</span>
         <textarea
           maxLength={80}
           rows={2}
-          className="min-h-20 w-full resize-none rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/20 focus:ring-2 focus:ring-white/10"
+          className="min-h-20 w-full resize-none rounded-md border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
         />
-        <p className="text-[11px] text-white/35">Máximo de 80 caracteres.</p>
+        <p className="text-[11px] text-gray-500">Máximo de 80 caracteres.</p>
       </label>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="secondary" tone="dark" onClick={onCancel}>
+        <Button type="button" variant="secondary" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit" tone="dark" disabled={submitting}>
+        <Button type="submit" disabled={submitting}>
           {submitting ? 'Abrindo...' : 'Confirmar abertura'}
         </Button>
       </div>
@@ -145,19 +143,19 @@ export function CloseCashSessionForm({ session, income, expense, onCancel, onSav
   }
 
   return (
-    <form className="space-y-5 text-white" onSubmit={handleSubmit}>
-      {error ? <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div> : null}
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-        <div className="border-b border-white/10 pb-4 text-center">
-          <p className="text-sm font-medium uppercase tracking-[0.24em] text-white/45">
+    <form className="space-y-5 text-gray-950" onSubmit={handleSubmit}>
+      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      <div className="overflow-hidden rounded-2xl border-2 border-gray-200 bg-white">
+        <div className="border-b-2 border-gray-100 pb-4 text-center">
+          <p className="text-sm font-medium uppercase tracking-[0.24em] text-gray-500">
             {formatCloseSummaryDate(session.session_date)}
           </p>
-          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
+          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.3em] text-gray-700">
             {formatCloseSummaryWeekday(session.session_date)}
           </p>
         </div>
 
-        <div className="divide-y divide-white/10">
+        <div className="divide-y divide-gray-100">
           <SummaryRow label="Valor inicial" value={formatCurrencyBRL(session.opening_amount)} />
           <SummaryRow label="Entradas" value={formatCurrencyBRL(income)} tone="positive" />
           <SummaryRow label="Saídas" value={formatCurrencyBRL(expense)} tone="negative" />
@@ -165,34 +163,33 @@ export function CloseCashSessionForm({ session, income, expense, onCancel, onSav
           <SummaryRow label="Dinheiro no caixa" value={formatCurrencyBRL(expectedAmount)} helper="saldo esperado" />
         </div>
       </div>
-      <div className="mx-auto w-full max-w-md rounded-2xl border border-white/10 bg-[#0b0b0b] p-4 shadow-[0_20px_50px_rgba(0,0,0,0.25)]">
+      <div className="mx-auto w-full max-w-md rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
         <Input
           label="Valor contado no caixa"
-          labelClassName="block text-center text-xs font-semibold uppercase tracking-[0.24em] text-white/55"
+          labelClassName="block text-center text-xs font-semibold uppercase tracking-[0.24em] text-gray-500"
           value={closingAmount}
           inputMode="numeric"
           placeholder="R$ 0,00"
-          tone="dark"
           className="mt-3 h-14 text-center text-2xl font-semibold tracking-[0.04em]"
           onChange={(event) => setClosingAmount(formatCurrencyInput(event.target.value))}
         />
       </div>
       <label className="block space-y-1.5">
-        <span className="text-sm font-medium text-white/75">Observação</span>
+        <span className="text-sm font-medium text-gray-700">Observação</span>
         <textarea
           maxLength={80}
           rows={2}
-          className="min-h-20 w-full resize-none rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/20 focus:ring-2 focus:ring-white/10"
+          className="min-h-20 w-full resize-none rounded-md border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
         />
-        <p className="text-[11px] text-white/35">Máximo de 80 caracteres.</p>
+        <p className="text-[11px] text-gray-500">Máximo de 80 caracteres.</p>
       </label>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="secondary" tone="dark" onClick={onCancel}>
+        <Button type="button" variant="secondary" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit" tone="dark" disabled={submitting}>
+        <Button type="submit" disabled={submitting}>
           {submitting ? 'Fechando...' : 'Confirmar fechamento'}
         </Button>
       </div>
@@ -211,19 +208,19 @@ function SummaryRow({
   tone?: 'positive' | 'negative' | 'neutral'
   helper?: string
 }) {
-  const toneClass = tone === 'positive' ? 'text-emerald-300' : tone === 'negative' ? 'text-rose-300' : 'text-white'
+  const toneClass = tone === 'positive' ? 'text-emerald-700' : tone === 'negative' ? 'text-rose-700' : 'text-gray-950'
   const backgroundClass =
     tone === 'positive'
-      ? 'bg-emerald-500/14'
+      ? 'bg-emerald-50'
       : tone === 'negative'
-        ? 'bg-rose-500/14'
-        : 'bg-white/6'
+        ? 'bg-rose-50'
+        : 'bg-gray-50'
 
   return (
     <div className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 ${backgroundClass}`}>
       <div className="min-w-0">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-white">{label}</p>
-        {helper ? <p className="mt-1 text-[11px] text-white/55">{helper}</p> : null}
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-600">{label}</p>
+        {helper ? <p className="mt-1 text-[11px] text-gray-500">{helper}</p> : null}
       </div>
       <div className="min-w-[8rem] text-right">
         <p className={`text-sm font-semibold ${toneClass}`}>{value}</p>

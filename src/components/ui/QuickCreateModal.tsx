@@ -52,11 +52,7 @@ export function QuickCreateModal({
       <form className="space-y-4" onSubmit={handleSubmit}>
         {error ? (
           <div
-            className={`rounded-md border p-3 text-sm ${
-              tone === 'dark'
-                ? 'border-red-500/20 bg-red-500/10 text-red-200'
-                : 'border-red-200 bg-red-50 text-red-700'
-            }`}
+            className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
           >
             {error}
           </div>

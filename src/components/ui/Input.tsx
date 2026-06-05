@@ -16,7 +16,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <label className="block space-y-1.5" htmlFor={inputId}>
         {label ? (
-          <span className={labelClassName ?? (isDark ? 'text-sm font-medium text-white/75' : 'text-sm font-medium text-gray-700')}>
+          <span className={labelClassName ?? 'text-xs font-medium uppercase tracking-[0.14em] text-gray-600'}>
             {label}
           </span>
         ) : null}
@@ -24,16 +24,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           id={inputId}
           ref={ref}
           className={cn(
-            'h-10 w-full rounded-md border px-3 text-sm outline-none transition placeholder:text-gray-400 focus:ring-2',
+            'h-9 w-full rounded-md border-2 px-3 text-sm outline-none transition placeholder:text-gray-400 focus:ring-2 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-500 disabled:opacity-100',
             isDark
-              ? 'border-white/10 bg-white/5 text-white placeholder:text-white/35 focus:border-white/20 focus:ring-white/10'
-              : 'border-gray-200 bg-white text-gray-900 focus:border-gray-400 focus:ring-gray-100',
-            error && (isDark ? 'border-rose-400/40 focus:border-rose-300 focus:ring-rose-500/10' : 'border-red-300 focus:border-red-400 focus:ring-red-50'),
+              ? 'border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:ring-gray-100'
+              : 'border-gray-300 bg-white text-gray-900 focus:border-gray-500 focus:ring-gray-100',
+            error && 'border-red-400 focus:border-red-500 focus:ring-red-50',
             className,
           )}
           {...props}
         />
-        {error ? <span className={isDark ? 'text-xs text-rose-300' : 'text-xs text-red-600'}>{error}</span> : null}
+        {error ? <span className="text-xs text-red-600">{error}</span> : null}
       </label>
     )
   },

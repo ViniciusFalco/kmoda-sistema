@@ -81,14 +81,14 @@ export function CustomerForm({ customer, onCancel, onSaved, onDeleted }: Custome
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <Input label="Nome" value={name} onChange={(event) => setName(event.target.value)} required />
-          <Input
-            label="Telefone"
-            value={phone}
+        <Input
+          label="Telefone"
+          value={phone}
           inputMode="tel"
-            placeholder="(11) 9 1234-5678"
+          placeholder="(11) 9 1234-5678"
           maxLength={16}
-            onChange={(event) => setPhone(formatPhoneBR(onlyNumbers(event.target.value)))}
-          />
+          onChange={(event) => setPhone(formatPhoneBR(onlyNumbers(event.target.value)))}
+        />
         <Input label="E-mail" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
         <Input
           label="CPF opcional"
@@ -100,7 +100,7 @@ export function CustomerForm({ customer, onCancel, onSaved, onDeleted }: Custome
         />
       </div>
       <label className="block space-y-1.5">
-        <span className="text-sm font-medium text-gray-700">Observações</span>
+        <span className="text-xs font-medium uppercase tracking-[0.14em] text-gray-600">Observações</span>
         <textarea
           rows={3}
           value={notes}

@@ -1,5 +1,7 @@
 export type EntityStatus = 'active' | 'inactive'
 export type PaymentMethod = 'dinheiro' | 'pix' | 'cartao_credito' | 'cartao_debito' | 'outro'
+export type SalePricingKind = 'cash' | 'installment'
+export type SalePaymentSourceKind = 'cash_total' | 'installment_group'
 export type StockMovementType = 'entrada' | 'saida'
 export type StockMovementReason =
   | 'cadastro_inicial'
@@ -19,6 +21,22 @@ export type CashMovementType = 'income' | 'expense'
 export type CashMovementOrigin = 'sale' | 'manual_expense' | 'manual_income' | 'stock'
 export type CashSessionStatus = 'open' | 'closed'
 export type SaleStatus = 'aberta' | 'finalizada' | 'cancelada'
+export type MonitoringSpaceStatus = 'normal' | 'attention' | 'warning' | 'critical'
+export type MonitoringPauseRisk = 'baixo' | 'médio' | 'alto' | 'crítico'
+export type AppActivityType =
+  | 'login'
+  | 'product_create'
+  | 'product_update'
+  | 'sale'
+  | 'sale_update'
+  | 'expense'
+  | 'expense_update'
+  | 'cash_movement'
+  | 'cash_movement_update'
+  | 'stock_movement'
+  | 'stock_movement_update'
+  | 'customer_create'
+  | 'customer_update'
 
 export interface UserProfile {
   id: string
@@ -145,6 +163,7 @@ export interface Sale {
   updated_at: string
   customer?: Customer | null
   sale_items?: SaleItem[]
+  sale_payments?: SalePayment[]
 }
 
 export interface SaleItem {
@@ -152,10 +171,26 @@ export interface SaleItem {
   sale_id: string
   product_id: string
   quantity: number
+  pricing_kind: SalePricingKind
+  original_unit_price: number
   unit_price: number
   total_price: number
+  installments_count: number
+  installment_value: number
   created_at: string
   product?: Product | null
+}
+
+export interface SalePayment {
+  id: string
+  sale_id: string
+  source_kind: SalePaymentSourceKind
+  payment_method: PaymentMethod
+  amount: number
+  installments_count: number
+  installment_value: number
+  cash_movement_id?: string | null
+  created_at: string
 }
 
 export interface StockMovement {
@@ -179,6 +214,7 @@ export interface CashMovement {
   user_id?: string | null
   created_by?: string | null
   sale_id?: string | null
+  sale_payment_id?: string | null
   cash_session_id?: string | null
   movement_code?: string | null
   type: CashMovementType
@@ -191,6 +227,7 @@ export interface CashMovement {
   created_at: string
   updated_at?: string | null
   sale?: Sale | null
+  sale_payment?: SalePayment | null
 }
 
 export interface CashSession {
@@ -235,3 +272,28 @@ export interface CashSessionHistoryEvent {
 }
 
 export type CashHistoryEntry = CashHistoryMovement | CashSessionHistoryEvent
+
+export interface AppActivity {
+  id: string
+  activity_type: AppActivityType | string
+  source_table?: string | null
+  record_id?: string | null
+  actor_user_id?: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
+export interface KmodaStorageUsage {
+  used_bytes: number
+  used_mb: number
+  limit_mb: number
+  percent_used: number
+  status: MonitoringSpaceStatus
+}
+
+export interface AppPauseRisk {
+  last_activity_at: string | null
+  estimated_pause_at: string | null
+  estimated_days_until_pause: number | null
+  pause_risk: MonitoringPauseRisk
+}
