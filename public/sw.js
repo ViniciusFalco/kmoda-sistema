@@ -1,5 +1,5 @@
-const CACHE_NAME = 'kmoda-pwa-v1'
-const CORE_ASSETS = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png', '/logo.png', '/logo-4k.png']
+const CACHE_NAME = 'kmoda-pwa-v4'
+const CORE_ASSETS = ['/', '/manifest.json', '/kmoda_fav.png', '/icon-192.png', '/icon-512.png', '/logo.png', '/logo-4k.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

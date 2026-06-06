@@ -10,6 +10,7 @@ import { SettingsPage } from '../features/settings/SettingsPage'
 import { StockPage } from '../features/stock/StockPage'
 import { AuthProvider } from '../hooks/useAuth'
 import { PrivateRoute } from './PrivateRoute'
+import { NotFoundPage } from './NotFoundPage'
 
 export function AppRoutes() {
   return (
@@ -31,7 +32,7 @@ export function AppRoutes() {
               <Route path="/configuracoes" element={<SettingsPage />} />
             </Route>
           </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
