@@ -144,6 +144,47 @@ function normalizeSale(sale: Sale): Sale {
   }
 }
 
+function normalizeSaleWithRelations(sale: Sale): Sale {
+  const normalizedSale = normalizeSale(sale)
+
+  return {
+    ...normalizedSale,
+    sale_items: normalizedSale.sale_items?.map((item) => ({
+      ...item,
+      product: item.product ? normalizeProduct(item.product) : null,
+    })),
+  }
+}
+
+function buildCashHistoryMovementFromSale(sale: Sale): CashHistoryMovement {
+  const normalizedSale = normalizeSaleWithRelations(sale)
+  const itemNames = normalizedSale.sale_items
+    ?.map((item) => item.product?.product_model?.name ?? item.product?.name)
+    .filter(Boolean)
+
+  return {
+    kind: 'movement',
+    id: normalizedSale.id,
+    user_id: normalizedSale.user_id ?? null,
+    created_by: null,
+    sale_id: normalizedSale.id,
+    sale_payment_id: null,
+    cash_session_id: null,
+    movement_code: null,
+    type: 'income',
+    origin: 'sale',
+    description: itemNames?.length ? itemNames.join(', ') : 'Venda',
+    amount: normalizeNumber(normalizedSale.total_amount),
+    movement_date: normalizedSale.sale_date,
+    payment_method: normalizedSale.payment_method ?? null,
+    notes: null,
+    created_at: normalizedSale.created_at,
+    updated_at: normalizedSale.updated_at,
+    sale: normalizedSale,
+    sale_payment: null,
+  }
+}
+
 function normalizeCashMovement(movement: CashMovement): CashMovement {
   const legacyType = movement.type as CashMovementType | 'entrada' | 'saida'
   const type: CashMovementType = legacyType === 'entrada' ? 'income' : legacyType === 'saida' ? 'expense' : legacyType
@@ -154,16 +195,7 @@ function normalizeCashMovement(movement: CashMovement): CashMovement {
     origin: movement.origin ?? (movement.sale_id ? 'sale' : type === 'income' ? 'manual_income' : 'manual_expense'),
     amount: Math.abs(normalizeNumber(movement.amount)),
     sale_payment: movement.sale_payment ? normalizeSalePayment(movement.sale_payment) : null,
-    sale: movement.sale
-      ? {
-          ...normalizeSale(movement.sale),
-          sale_items: movement.sale.sale_items?.map((item) => ({
-            ...normalizeSaleItem(item),
-            product: item.product ? normalizeProduct(item.product) : null,
-          })),
-          sale_payments: movement.sale.sale_payments?.map(normalizeSalePayment),
-        }
-      : null,
+    sale: movement.sale ? normalizeSaleWithRelations(movement.sale) : null,
   }
 }
 
@@ -1129,6 +1161,13 @@ export interface CashHistorySearchResult {
   pageSize: number
 }
 
+export interface CustomerSalesSearchResult {
+  data: Sale[]
+  count: number
+  page: number
+  pageSize: number
+}
+
 const cashMovementSelect = `
   *,
   sale:sales(${saleSelect}),
@@ -1206,6 +1245,64 @@ export async function listCustomers() {
   }
 
   return (data ?? []) as Customer[]
+}
+
+export async function getCashMovementBySaleId(saleId: string) {
+  const client = getSupabase()
+  const movementResponse = await client
+    .from('cash_movements')
+    .select(cashMovementSelect)
+    .eq('sale_id', saleId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (movementResponse.error) {
+    throw new Error(movementResponse.error.message)
+  }
+
+  if (movementResponse.data) {
+    return normalizeCashHistoryMovement(movementResponse.data as CashMovement)
+  }
+
+  const saleResponse = await client
+    .from('sales')
+    .select(saleSelect)
+    .eq('id', saleId)
+    .maybeSingle()
+
+  if (saleResponse.error) {
+    throw new Error(saleResponse.error.message)
+  }
+
+  return saleResponse.data ? buildCashHistoryMovementFromSale(saleResponse.data as Sale) : null
+}
+
+export async function listSalesByCustomer(customerId: string, page = 1, pageSize = 5): Promise<CustomerSalesSearchResult> {
+  const client = getSupabase()
+  const safePage = Math.max(1, Math.floor(page))
+  const safePageSize = Math.max(1, Math.floor(pageSize))
+  const from = (safePage - 1) * safePageSize
+  const to = from + safePageSize - 1
+
+  const { data, error, count } = await client
+    .from('sales')
+    .select(saleSelect, { count: 'exact' })
+    .eq('customer_id', customerId)
+    .order('sale_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .range(from, to)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return {
+    data: ((data ?? []) as Sale[]).map(normalizeSaleWithRelations),
+    count: count ?? 0,
+    page: safePage,
+    pageSize: safePageSize,
+  }
 }
 
 export async function searchCustomers(query: string) {

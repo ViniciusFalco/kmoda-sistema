@@ -9,6 +9,8 @@ const statusMap: Record<string, { label: string; variant: 'neutral' | 'success' 
   em_separacao: { label: 'Em separação', variant: 'warning' },
   pronta: { label: 'Pronta', variant: 'success' },
   entregue: { label: 'Entregue', variant: 'success' },
+  aberta: { label: 'Aberta', variant: 'warning' },
+  finalizada: { label: 'Finalizada', variant: 'success' },
   cancelada: { label: 'Cancelada', variant: 'neutral' },
   entrada: { label: 'Entrada', variant: 'success' },
   saida: { label: 'Saída', variant: 'warning' },

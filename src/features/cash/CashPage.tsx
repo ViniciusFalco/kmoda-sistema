@@ -6,13 +6,14 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Badge } from '../../components/ui/Badge'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
 import {
   friendlyCatalogError,
+  getCashMovementBySaleId,
   getLastClosedCashSession,
   getPreviousOpenCashSession,
   getTodayCashSession,
@@ -34,9 +35,11 @@ type CashModal = 'sale' | 'expense' | 'history' | 'overview' | 'daily-history' |
 
 export function CashPage() {
   const location = useLocation()
+  const navigate = useNavigate()
   const searchParams = new URLSearchParams(location.search)
   const initialModal = searchParams.get('acao') === 'nova-venda' ? 'sale' : null
   const initialSaleBarcode = searchParams.get('barcode') ?? ''
+  const saleIdFromQuery = searchParams.get('sale_id') ?? ''
   const [activeModal, setActiveModal] = useState<CashModal>(initialModal)
   const [saleBarcodePrefill, setSaleBarcodePrefill] = useState(initialSaleBarcode)
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<CashHistoryEntry | null>(null)
@@ -160,6 +163,44 @@ const dailyHistoryLastRecord = Math.min(
   }, [])
 
   useEffect(() => {
+    if (!saleIdFromQuery) {
+      return
+    }
+
+    let active = true
+
+    setActiveModal(null)
+    setSelectedHistoryEntry(null)
+
+    async function loadSaleMovement() {
+      try {
+        const entry = await getCashMovementBySaleId(saleIdFromQuery)
+
+        if (!active) {
+          return
+        }
+
+        if (entry) {
+          setSelectedHistoryEntry(entry)
+          setError('')
+        } else {
+          setError('Não foi possível localizar essa venda no caixa.')
+        }
+      } catch (err) {
+        if (active) {
+          setError(friendlyCatalogError(err))
+        }
+      }
+    }
+
+    void loadSaleMovement()
+
+    return () => {
+      active = false
+    }
+  }, [saleIdFromQuery])
+
+  useEffect(() => {
     let active = true
 
     async function loadSessionMovements() {
@@ -250,6 +291,14 @@ const dailyHistoryLastRecord = Math.min(
     setSaleBarcodePrefill('')
     setActiveModal(null)
     setSaleHeaderCenter(null)
+  }
+
+  function closeSelectedHistoryEntry() {
+    setSelectedHistoryEntry(null)
+
+    if (saleIdFromQuery) {
+      navigate('/caixa', { replace: true })
+    }
   }
 
   return (
@@ -583,7 +632,7 @@ const dailyHistoryLastRecord = Math.min(
         onSelectEntry={setSelectedHistoryEntry}
       />
 
-      <CashMovementDetailsModal entry={selectedHistoryEntry} onClose={() => setSelectedHistoryEntry(null)} />
+      <CashMovementDetailsModal entry={selectedHistoryEntry} onClose={closeSelectedHistoryEntry} />
     </div>
   )
 }
