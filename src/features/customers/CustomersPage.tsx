@@ -9,6 +9,7 @@ import { friendlyCatalogError, listCustomers } from '../../lib/catalog'
 import { formatCPF, formatDateBR, formatPhoneBR } from '../../lib/utils'
 import type { Customer } from '../../types/database'
 import { CustomerForm } from './CustomerForm'
+import { Pagination } from '../../components/ui/Pagination'
 
 type CustomerModal = 'create' | 'details' | 'edit' | null
 
@@ -19,6 +20,9 @@ export function CustomersPage() {
   const [modal, setModal] = useState<CustomerModal>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const query = searchParams.get('q')?.trim().toLowerCase() ?? ''
   const visibleCustomers = useMemo(() => {
@@ -32,6 +36,27 @@ export function CustomersPage() {
         .some((value) => value?.toLowerCase().includes(query)),
     )
   }, [customers, query])
+
+  const totalPages = Math.ceil(visibleCustomers.length / itemsPerPage)
+
+  const paginatedCustomers = useMemo(() => {
+    
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = currentPage * itemsPerPage
+
+    return visibleCustomers.slice(startIndex, endIndex)
+  }, [visibleCustomers, currentPage, itemsPerPage])
+
+  const totalCustomers = visibleCustomers.length
+
+  const firstCustomerIndex = (currentPage - 1) * itemsPerPage + 1
+
+  const lastCustomerIndex = Math.min(
+    currentPage * itemsPerPage,
+    totalCustomers,
+  )
+
+  const customerLabel = totalCustomers === 1 ? 'cliente' : 'clientes'
 
   async function loadCustomers() {
     setLoading(true)
@@ -70,6 +95,9 @@ export function CustomersPage() {
       active = false
     }
   }, [])
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [query])
 
   async function handleSaved(customer: Customer) {
     setSelectedCustomer(customer)
@@ -80,7 +108,7 @@ export function CustomersPage() {
   return (
     <Card
       title="Clientes"
-      description="Cadastro básico para atendimento e histórico da loja."
+      description="Adicione e gerencie os clientes para facilitar o processo de venda e o relacionamento com seus compradores."
       action={
         <Button onClick={() => setModal('create')}>
           <Plus className="h-4 w-4" />
@@ -100,40 +128,54 @@ export function CustomersPage() {
           description={query ? 'Tente outro termo de busca no cabeçalho.' : 'Crie o primeiro cliente para começar.'}
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm">
-              <thead className="bg-gray-50 text-[11px] uppercase tracking-[0.14em] text-gray-500">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Nome</th>
-                  <th className="px-4 py-3 font-semibold">Telefone</th>
-                  <th className="px-4 py-3 font-semibold">E-mail</th>
-                  <th className="px-4 py-3 font-semibold">CPF</th>
-                  <th className="px-4 py-3 font-semibold">Observações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {visibleCustomers.map((customer) => (
-                  <tr
-                    key={customer.id}
-                    className="cursor-pointer text-gray-700 transition hover:bg-gray-50"
-                    onClick={() => {
-                      setSelectedCustomer(customer)
-                      setModal('details')
-                    }}
-                  >
-                    <td className="px-4 py-3 font-medium text-gray-950">{customer.name}</td>
-                    <td className="px-4 py-3">{formatPhoneBR(customer.phone)}</td>
-                    <td className="px-4 py-3">{customer.email ?? '-'}</td>
-                    <td className="px-4 py-3">{formatCPF(customer.cpf)}</td>
-                    <td className="px-4 py-3">{customer.notes ?? '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+  <>
+    <div className="overflow-hidden rounded-xl border border-gray-200">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm">
+          <thead className="bg-black text-[11px] uppercase tracking-[0.14em] text-white">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Nome</th>
+              <th className="px-4 py-3 font-semibold">Telefone</th>
+              <th className="px-4 py-3 font-semibold">E-mail</th>
+              <th className="px-4 py-3 font-semibold">CPF</th>
+              <th className="px-4 py-3 font-semibold">Observações</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-gray-100">
+            {paginatedCustomers.map((customer) => (
+              <tr
+                key={customer.id}
+                className="cursor-pointer text-gray-700 transition hover:bg-gray-50"
+                onClick={() => {
+                  setSelectedCustomer(customer)
+                  setModal('details')
+                }}
+              >
+                <td className="px-4 py-3 font-medium text-gray-950">{customer.name}</td>
+                <td className="px-4 py-3">{formatPhoneBR(customer.phone)}</td>
+                <td className="px-4 py-3">{customer.email ?? '-'}</td>
+                <td className="px-4 py-3">{formatCPF(customer.cpf)}</td>
+                <td className="px-4 py-3">{customer.notes ?? '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+                  <span className="flex items-center justify-center gap-2 px-4 py-3 text-xs text-gray-500">
+                    Exibindo {firstCustomerIndex}–{lastCustomerIndex} de {totalCustomers} {customerLabel}
+                    <span className="text-gray-400">•</span>
+                    {itemsPerPage} por página
+                  </span>
+      </div>
+    </div>
+
+    <Pagination
+      currentPage={currentPage}
+      totalPages={totalPages}
+      onPageChange={setCurrentPage}
+    />
+  </>
+)}
 
       <Modal open={modal === 'create'} title="Novo cliente" onClose={() => setModal(null)}>
         <CustomerForm onCancel={() => setModal(null)} onSaved={handleSaved} />

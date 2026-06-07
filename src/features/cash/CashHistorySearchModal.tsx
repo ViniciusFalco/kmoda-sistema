@@ -13,6 +13,7 @@ import {
 } from '../../lib/catalog'
 import { formatCurrencyBRL, formatDateBR, parseCurrencyToNumber } from '../../lib/utils'
 import type { CashHistoryEntry, PaymentMethod } from '../../types/database'
+import { Pagination } from '../../components/ui/Pagination'
 
 interface CashHistorySearchModalProps {
   open: boolean
@@ -97,6 +98,15 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
   const currentPage = result?.page ?? 1
   const totalPages = result ? Math.max(1, Math.ceil(result.count / result.pageSize)) : 1
 
+  const firstRecord =
+  result && result.count > 0 ? (currentPage - 1) * result.pageSize + 1 : 0
+
+const lastRecord = result
+  ? Math.min(currentPage * result.pageSize, result.count)
+  : 0
+
+const recordLabel = result?.count === 1 ? 'registro' : 'registros'
+
   return (
     <Modal open={open} title="Histórico por pesquisa" onClose={onClose} size="6xl">
       <div className="space-y-5">
@@ -169,10 +179,10 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {result.data.map((entry) => {
-                        const isSession = entry.kind === 'session'
-                        const isIncome = !isSession && entry.type === 'income'
+  const isSession = entry.kind === 'session'
+  const isIncome = !isSession && entry.type === 'income'
 
-                        return (
+  return (
                           <tr
                             key={entry.id}
                             className={`cursor-pointer transition ${
@@ -220,33 +230,24 @@ export function CashHistorySearchModal({ open, onClose, onSelectEntry }: CashHis
                       })}
                     </tbody>
                   </table>
+                  <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+  <span className="text-xs text-gray-500">
+    Exibindo {firstRecord}–{lastRecord} de {result.count} {recordLabel}
+    <span className="text-gray-400"> • </span>
+    {result.pageSize} por página
+  </span>
+
+  <Pagination
+    currentPage={currentPage}
+    totalPages={totalPages}
+    onPageChange={(page) => void runSearch(page)}
+  />
+</div>
                 </div>
               </div>
             )}
 
-            <div className="flex items-center justify-between text-sm text-gray-500">
-              <p>
-                Página {currentPage} de {totalPages} · {result.count} resultado(s)
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void runSearch(currentPage - 1)}
-                  disabled={loading || currentPage <= 1}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void runSearch(currentPage + 1)}
-                  disabled={loading || currentPage >= totalPages}
-                >
-                  Próxima
-                </Button>
-              </div>
-            </div>
+            
           </div>
         ) : (
           <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">

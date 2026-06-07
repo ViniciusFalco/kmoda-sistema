@@ -1,4 +1,4 @@
-import { Check, Plus, Search } from 'lucide-react'
+import { Check, ChevronDown, Plus, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '../../lib/utils'
 import { Button } from './Button'
@@ -18,6 +18,7 @@ interface SearchableSelectProps {
   onChange: (value: string) => void
   quickCreateLabel?: string
   onQuickCreate?: () => void
+  clearLabel?: string
   error?: string
   disabled?: boolean
   tone?: 'light' | 'dark'
@@ -31,6 +32,7 @@ export function SearchableSelect({
   onChange,
   quickCreateLabel,
   onQuickCreate,
+  clearLabel = 'Limpar filtro',
   error,
   disabled,
   tone = 'light',
@@ -40,7 +42,7 @@ export function SearchableSelect({
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [dropdownStyle, setDropdownStyle] = useState({ top: 0, left: 0, width: 0 })
   const rootRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const selected = options.find((option) => option.value === value)
 
   useEffect(() => {
@@ -71,6 +73,42 @@ export function SearchableSelect({
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (rootRef.current?.contains(event.target as Node)) {
+        return
+      }
+
+      setOpen(false)
+      setQuery('')
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    searchInputRef.current?.focus()
+    searchInputRef.current?.select()
+  }, [open])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const selectedIndex = options.findIndex((option) => option.value === value)
+    setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : 0)
+  }, [open, options, value])
+
   const filteredOptions = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     if (!normalized) {
@@ -88,7 +126,6 @@ export function SearchableSelect({
     onChange(option.value)
     setQuery('')
     setOpen(false)
-    inputRef.current?.blur()
   }
 
   return (
@@ -100,10 +137,12 @@ export function SearchableSelect({
       ) : null}
       <div
         className={cn(
-          'flex h-10 items-center gap-2 rounded-md border-2 px-3 text-sm transition focus-within:ring-2',
-          tone === 'dark'
-            ? 'border-gray-300 bg-white text-gray-900 focus-within:border-gray-500 focus-within:ring-gray-100'
-            : 'border-gray-300 bg-white text-gray-900 focus-within:border-gray-500 focus-within:ring-gray-100',
+          'flex h-10 items-center rounded-md border-2 text-sm shadow-sm transition focus-within:ring-2',
+          selected
+            ? 'border-black bg-black text-white shadow-md focus-within:border-black focus-within:ring-gray-200'
+            : tone === 'dark'
+              ? 'border-gray-400 bg-white text-gray-900 hover:border-gray-500 focus-within:border-gray-500 focus-within:ring-gray-100'
+              : 'border-gray-400 bg-white text-gray-900 hover:border-gray-500 focus-within:border-gray-500 focus-within:ring-gray-100',
           error &&
             (tone === 'dark'
               ? 'border-red-400 focus-within:border-red-500 focus-within:ring-red-50'
@@ -111,46 +150,22 @@ export function SearchableSelect({
           disabled && 'opacity-60',
         )}
       >
-        <Search className="h-4 w-4 shrink-0 text-gray-400" />
-        <input
-          ref={inputRef}
-          value={open ? query : selected?.label ?? ''}
+        <button
+          type="button"
           disabled={disabled}
-          placeholder={placeholder}
-          className="min-w-0 flex-1 bg-transparent text-gray-900 outline-none placeholder:text-gray-400"
-          onFocus={() => setOpen(true)}
-          onBlur={() => {
-            setOpen(false)
-            setQuery('')
-          }}
-          onChange={(event) => {
-            setQuery(event.target.value)
-            setOpen(true)
-            setHighlightedIndex(0)
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowDown') {
-              event.preventDefault()
-              setOpen(true)
-              setHighlightedIndex((current) => Math.min(current + 1, filteredOptions.length - 1))
-            }
-            if (event.key === 'ArrowUp') {
-              event.preventDefault()
-              setHighlightedIndex((current) => Math.max(current - 1, 0))
-            }
-            if (event.key === 'Enter' && open) {
-              event.preventDefault()
-              const option = filteredOptions[highlightedIndex]
-              if (option) {
-                selectOption(option)
-              }
-            }
-            if (event.key === 'Escape') {
-              setOpen(false)
-              setQuery('')
-            }
-          }}
-        />
+          className={cn(
+            'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left font-medium outline-none',
+            selected ? 'text-white' : 'text-gray-900',
+          )}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <span className={cn('min-w-0 flex-1 truncate', selected ? 'text-white' : 'text-gray-900')}>
+            {selected?.label ?? placeholder}
+          </span>
+          <ChevronDown className={cn('h-4 w-4 shrink-0', selected ? 'text-white' : 'text-gray-400')} />
+        </button>
       </div>
       {error ? (
         <span className="text-xs text-red-600">{error}</span>
@@ -158,61 +173,114 @@ export function SearchableSelect({
 
       {open ? (
         <div
-          className="fixed z-[90] max-h-72 overflow-y-auto rounded-md border-2 border-gray-200 bg-white p-1 text-sm text-gray-700 shadow-xl"
+          className="fixed z-[90] max-h-80 overflow-hidden rounded-md border-2 border-gray-200 bg-white text-sm text-gray-700 shadow-xl"
           style={{ top: dropdownStyle.top, left: dropdownStyle.left, width: dropdownStyle.width }}
         >
-          {filteredOptions.length === 0 ? (
-            <div className="px-3 py-3 text-gray-500">
-              Nenhum item encontrado.
+          <div className="border-b border-gray-100 p-2">
+            <div className="flex h-9 items-center gap-2 rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-900 focus-within:border-gray-500 focus-within:ring-2 focus-within:ring-gray-100">
+              <Search className="h-4 w-4 shrink-0 text-gray-400" />
+              <input
+                ref={searchInputRef}
+                value={query}
+                placeholder="Pesquisar..."
+                className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-gray-400"
+                onChange={(event) => {
+                  setQuery(event.target.value)
+                  setHighlightedIndex(0)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault()
+                    setHighlightedIndex((current) => Math.min(current + 1, filteredOptions.length - 1))
+                  }
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault()
+                    setHighlightedIndex((current) => Math.max(current - 1, 0))
+                  }
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    const option = filteredOptions[highlightedIndex]
+                    if (option) {
+                      selectOption(option)
+                    }
+                  }
+                  if (event.key === 'Escape') {
+                    setOpen(false)
+                    setQuery('')
+                  }
+                }}
+              />
             </div>
-          ) : (
-            filteredOptions.map((option, index) => (
+          </div>
+          {value ? (
+            <div className="border-b border-gray-100 p-2">
               <button
-                key={option.value}
                 type="button"
-                className={cn(
-                  'flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left transition',
-                  'text-gray-700 hover:bg-gray-50',
-                  index === highlightedIndex && 'bg-gray-50',
-                )}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => selectOption(option)}
-              >
-                <span>
-                  <span className="block font-medium text-gray-950">
-                    {option.label}
-                  </span>
-                  {option.meta ? (
-                    <span className="block text-xs text-gray-500">
-                      {option.meta}
-                    </span>
-                  ) : null}
-                </span>
-                {option.value === value ? (
-                  <Check className="h-4 w-4 text-gray-900" />
-                ) : null}
-              </button>
-            ))
-          )}
-          {onQuickCreate && quickCreateLabel ? (
-            <div className="mt-1 border-t border-gray-100 pt-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start"
-                tone="light"
+                className="flex w-full items-center justify-center gap-2 rounded-md border-2 border-black bg-black px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white shadow-sm transition hover:bg-gray-900"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
-                  setOpen(false)
+                  onChange('')
                   setQuery('')
-                  onQuickCreate()
+                  setOpen(false)
                 }}
               >
-                <Plus className="h-4 w-4" />
-                {quickCreateLabel}
-              </Button>
+                <X className="h-4 w-4" />
+                {clearLabel}
+              </button>
             </div>
           ) : null}
+          <div className="max-h-60 overflow-y-auto p-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-3 text-gray-500">Nenhum item encontrado.</div>
+            ) : (
+              filteredOptions.map((option, index) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={cn(
+                    'flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left transition',
+                    option.value === value
+                      ? 'bg-black text-white hover:bg-black'
+                      : 'text-gray-700 hover:bg-gray-50',
+                    index === highlightedIndex && option.value !== value && 'bg-gray-100',
+                  )}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectOption(option)}
+                >
+                  <span>
+                    <span className={cn('block font-medium', option.value === value ? 'text-white' : 'text-gray-950')}>
+                      {option.label}
+                    </span>
+                    {option.meta ? (
+                      <span className={cn('block text-xs', option.value === value ? 'text-gray-200' : 'text-gray-500')}>
+                        {option.meta}
+                      </span>
+                    ) : null}
+                  </span>
+                  {option.value === value ? <Check className="h-4 w-4 text-white" /> : null}
+                </button>
+              ))
+            )}
+            {onQuickCreate && quickCreateLabel ? (
+              <div className="mt-1 border-t border-gray-100 pt-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start"
+                  tone="light"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setOpen(false)
+                    setQuery('')
+                    onQuickCreate()
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                  {quickCreateLabel}
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>

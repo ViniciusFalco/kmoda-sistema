@@ -1,4 +1,4 @@
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarcodeResultModal, type BarcodeLookupResult } from '../../components/barcode/BarcodeResultModal'
@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
+import { SearchableSelect, type SelectOption } from '../../components/ui/SearchableSelect'
 import {
   createProduct,
   createRegistryItem,
@@ -96,6 +97,15 @@ export function ProductsPage() {
     }),
     [activeFilter, brandId, clothingTypeId, colorId, lowStock, query, sizeId],
   )
+
+  const hasActiveFilters =
+    query.trim() !== '' ||
+    brandId !== '' ||
+    clothingTypeId !== '' ||
+    sizeId !== '' ||
+    colorId !== '' ||
+    activeFilter !== '' ||
+    lowStock
 
   const loadRegistries = useCallback(async () => {
     setRegistries(await loadProductRegistries())
@@ -239,6 +249,17 @@ export function ProductsPage() {
     }
   }
 
+  function clearAllFilters() {
+    setLoading(true)
+    setQuery('')
+    setBrandId('')
+    setClothingTypeId('')
+    setSizeId('')
+    setColorId('')
+    setActiveFilter('')
+    setLowStock(false)
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-end gap-2">
@@ -256,16 +277,27 @@ export function ProductsPage() {
       ) : null}
 
       <section className="overflow-hidden rounded-xl border-2 border-gray-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-        <div className="border-b-2 border-gray-100 px-5 py-4 text-left">
+        <div className="flex items-center justify-between gap-3 border-b-2 border-gray-100 px-5 py-4 text-left">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-500">
             Filtros
           </p>
+          {hasActiveFilters ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={clearAllFilters}
+              className="shadow-sm"
+            >
+              <X className="h-4 w-4" />
+              Limpar filtros
+            </Button>
+          ) : null}
         </div>
 
         <div className="space-y-4 px-5 py-4">
-          <div className="grid gap-3 xl:grid-cols-[1.15fr_160px_180px_130px_150px_150px_auto]">
+          <div className="grid gap-3 xl:grid-cols-[1.15fr_160px_180px_130px_150px_150px]">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-600" />
               <Input
                 className="pl-9"
                 placeholder="Buscar por nome, código, marca, tipo, cor ou tamanho"
@@ -276,22 +308,36 @@ export function ProductsPage() {
                 }}
               />
             </div>
-            <FilterSelect
+            <SearchableSelect
               value={brandId}
               onChange={setBrandId}
-              label="Todas as marcas"
-              items={registries.brands}
+              placeholder="Marcas"
+              options={registries.brands.map(toSelectOption)}
+              clearLabel="Limpar"
             />
-            <FilterSelect
+            <SearchableSelect
               value={clothingTypeId}
               onChange={setClothingTypeId}
-              label="Todos os tipos"
-              items={registries.clothingTypes}
+              placeholder="Tipos"
+              options={registries.clothingTypes.map(toSelectOption)}
+              clearLabel="Limpar"
             />
-            <FilterSelect value={sizeId} onChange={setSizeId} label="Tamanhos" items={registries.sizes} />
-            <FilterSelect value={colorId} onChange={setColorId} label="Cores" items={registries.colors} />
+            <SearchableSelect
+              value={sizeId}
+              onChange={setSizeId}
+              placeholder="Tamanhos"
+              options={registries.sizes.map(toSelectOption)}
+              clearLabel="Limpar"
+            />
+            <SearchableSelect
+              value={colorId}
+              onChange={setColorId}
+              placeholder="Cores"
+              options={registries.colors.map(toSelectOption)}
+              clearLabel="Limpar"
+            />
             <select
-              className="h-9 rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+              className="h-10 rounded-md border-2 border-gray bg-white px-3 text-sm font-medium text-gray-900 shadow-sm outline-none transition hover:border-gray-500 focus:border-black focus:ring-2 focus:ring-gray-100"
               value={activeFilter}
               onChange={(event) => {
                 setLoading(true)
@@ -302,18 +348,6 @@ export function ProductsPage() {
               <option value="active">Ativos</option>
               <option value="inactive">Inativos</option>
             </select>
-            <label className="flex h-9 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={lowStock}
-                onChange={(event) => {
-                  setLoading(true)
-                  setLowStock(event.target.checked)
-                }}
-                className="h-4 w-4 rounded border-gray-300 accent-gray-900"
-              />
-              Baixo
-            </label>
           </div>
         </div>
       </section>
@@ -416,29 +450,9 @@ export function ProductsPage() {
   )
 }
 
-function FilterSelect({
-  value,
-  onChange,
-  label,
-  items,
-}: {
-  value: string
-  onChange: (value: string) => void
-  label: string
-  items: Array<{ id: string; name: string }>
-}) {
-  return (
-    <select
-      className="h-9 rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    >
-      <option value="">{label}</option>
-      {items.map((item) => (
-        <option key={item.id} value={item.id}>
-          {item.name}
-        </option>
-      ))}
-    </select>
-  )
+function toSelectOption(item: { id: string; name: string }): SelectOption {
+  return {
+    value: item.id,
+    label: item.name,
+  }
 }

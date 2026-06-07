@@ -27,13 +27,9 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     window.location.assign('/')
   }
 
-  private handleRetry = () => {
-    window.location.reload()
-  }
-
   override render() {
     if (this.state.hasError) {
-      return <ErrorFallback onHome={this.handleGoHome} onRetry={this.handleRetry} />
+      return <ErrorFallback onHome={this.handleGoHome} />
     }
 
     return this.props.children

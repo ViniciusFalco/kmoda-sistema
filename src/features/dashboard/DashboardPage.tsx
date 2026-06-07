@@ -4,12 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import { ActionCard } from '../../components/ui/ActionCard'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { Modal } from '../../components/ui/Modal'
 import { SummaryCard } from '../../components/ui/SummaryCard'
 import { Table } from '../../components/ui/Table'
 import {
-  createProduct,
-  createRegistryItem,
   friendlyCatalogError,
   getMonthSalesTotal,
   getTodayCashSession,
@@ -19,8 +16,6 @@ import {
   listStockMovements,
   listTodayCashMovements,
   loadProductRegistries,
-  type ProductInput,
-  type RegistryInput,
 } from '../../lib/catalog'
 import { formatCurrency, formatDateBR, todayISODate } from '../../lib/utils'
 import type {
@@ -31,12 +26,9 @@ import type {
   Color,
   Customer,
   Product,
-  RegistryKind,
   Size,
   StockMovement,
 } from '../../types/database'
-import { useAuth } from '../../hooks/useAuth'
-import { ProductForm, type ProductFormValues, type ProductSubmitMode } from '../products/ProductForm'
 
 interface ProductRegistries {
   brands: Brand[]
@@ -63,9 +55,7 @@ interface DashboardMovementRow {
 }
 
 export function DashboardPage() {
-  const { user } = useAuth()
   const navigate = useNavigate()
-  const [productModalOpen, setProductModalOpen] = useState(false)
   const [registries, setRegistries] = useState<ProductRegistries>(emptyRegistries)
   const [cashSession, setCashSession] = useState<CashSession | null>(null)
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([])
@@ -74,8 +64,6 @@ export function DashboardPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [salesTodayTotal, setSalesTodayTotal] = useState(0)
   const [monthSalesTotal, setMonthSalesTotal] = useState(0)
-  const [productBarcodePrefill, setProductBarcodePrefill] = useState('')
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   const incomeToday = useMemo(
@@ -274,52 +262,6 @@ export function DashboardPage() {
     }
   }, [loadData])
 
-  async function handleProductSubmit(values: ProductFormValues, mode: ProductSubmitMode) {
-    const payload: ProductInput = {
-      name: values.name,
-      barcode: values.barcode,
-      brand_id: values.brand_id,
-      clothing_type_id: values.clothing_type_id,
-      family: values.family,
-      size_id: values.size_id,
-      color_id: values.color_id,
-      reference: values.reference,
-      cost_price: Number(values.cost_price || 0),
-      sale_price: Number(values.sale_price),
-      suggested_price: values.suggested_price === '' ? 0 : Number(values.suggested_price),
-      stock_quantity: Number(values.stock_quantity),
-      min_stock: Number(values.min_stock),
-      description: values.description,
-      active: values.active,
-    }
-
-    setSubmitting(true)
-    setError('')
-
-    try {
-      await createProduct(payload, user)
-      await loadData()
-
-      if (mode === 'close') {
-        setProductModalOpen(false)
-        setProductBarcodePrefill('')
-      }
-
-      return true
-    } catch (err) {
-      setError(friendlyCatalogError(err))
-      return false
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleQuickCreate(kind: RegistryKind, values: RegistryInput) {
-    const item = await createRegistryItem(kind, values)
-    await loadData()
-    return item
-  }
-
   return (
     <div className="space-y-5">
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
@@ -329,10 +271,7 @@ export function DashboardPage() {
           description="Cadastre uma nova peça no estoque"
           icon={<PackagePlus className="h-6 w-6" />}
           appearance="classic"
-          onClick={() => {
-            setProductBarcodePrefill('')
-            setProductModalOpen(true)
-          }}
+          onClick={() => navigate('/produtos?create=1')}
         />
         <ActionCard
           compact
@@ -394,29 +333,6 @@ export function DashboardPage() {
           />
         )}
       </Card>
-
-      <Modal
-        open={productModalOpen}
-        title="Novo produto"
-        onClose={() => {
-          setProductBarcodePrefill('')
-          setProductModalOpen(false)
-        }}
-        size="6xl"
-      >
-        <ProductForm
-          key={productBarcodePrefill || 'new-product'}
-          registries={registries}
-          submitting={submitting}
-          initialBarcode={productBarcodePrefill}
-          onCancel={() => {
-            setProductBarcodePrefill('')
-            setProductModalOpen(false)
-          }}
-          onSubmit={handleProductSubmit}
-          onQuickCreate={handleQuickCreate}
-        />
-      </Modal>
 
     </div>
   )

@@ -142,6 +142,7 @@ export function SettingsPage() {
   const { user } = useAuth()
   const { installed, supportsPrompt, canPromptInstall, message, promptInstall, clearMessage } = usePwaInstall()
   const [activeTab, setActiveTab] = useState<SettingsTab>('geral')
+  const [showFallbackPreview, setShowFallbackPreview] = useState(false)
   const [supportPolicyOpen, setSupportPolicyOpen] = useState(false)
   const [displayName, setDisplayNameState] = useState('Administrador')
   const [loadingName, setLoadingName] = useState(true)
@@ -263,6 +264,10 @@ export function SettingsPage() {
   const isPauseCritical = pauseDays !== null && pauseDays !== undefined && pauseDays < 1
   const estimatedPauseAt = pauseRisk?.estimated_pause_at ?? null
 
+  if (showFallbackPreview) {
+    throw new Error('Fallback de teste solicitado em Configurações.')
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap gap-2 border-b-2 border-gray-300 pb-3">
@@ -342,6 +347,25 @@ export function SettingsPage() {
               {isSupabaseConfigured
                 ? 'Variáveis encontradas. O login pode usar Supabase Auth.'
                 : 'Variáveis ausentes. Crie um arquivo .env com VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.'}
+            </div>
+          </Card>
+
+          <Card title="Fallback" description="Atalho de teste para abrir a tela de erro geral do sistema.">
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">
+                Use este botão para conferir como fica o fallback quando ocorre um erro real de renderização.
+              </p>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowFallbackPreview(true)
+                  }}
+                >
+                  Ver tela de fallback
+                </Button>
+              </div>
             </div>
           </Card>
         </div>

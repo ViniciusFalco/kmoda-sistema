@@ -28,6 +28,7 @@ import { CashMovementDetailsModal } from './CashMovementDetailsModal'
 import { CashSaleCompletionModal } from './CashSaleCompletionModal'
 import { CashSaleForm } from './CashSaleForm'
 import { CloseCashSessionForm, OpenCashSessionForm } from './CashSessionModals'
+import { Pagination } from '../../components/ui/Pagination'
 
 type CashModal = 'sale' | 'expense' | 'history' | 'overview' | 'daily-history' | 'open-session' | 'close-session' | null
 
@@ -51,10 +52,29 @@ export function CashPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const [dailyHistoryPage, setDailyHistoryPage] = useState(1)
+  const historyItemsPerPage = 10
+
   const todayMovements = useMemo(
     () => historyEntries.filter((entry): entry is CashHistoryMovement => entry.kind === 'movement'),
     [historyEntries],
   )
+
+  const dailyHistoryTotalPages = Math.ceil(historyEntries.length / historyItemsPerPage)
+
+const paginatedDailyHistoryEntries = useMemo(() => {
+  const startIndex = (dailyHistoryPage - 1) * historyItemsPerPage
+  const endIndex = dailyHistoryPage * historyItemsPerPage
+
+  return historyEntries.slice(startIndex, endIndex)
+}, [historyEntries, dailyHistoryPage, historyItemsPerPage])
+
+const dailyHistoryFirstRecord = (dailyHistoryPage - 1) * historyItemsPerPage + 1
+
+const dailyHistoryLastRecord = Math.min(
+  dailyHistoryPage * historyItemsPerPage,
+  historyEntries.length,
+)
 
   const sessionForDetails = cashSession?.status === 'open' ? cashSession : previousOpenSession ?? cashSession
   const sessionForDetailsId = sessionForDetails?.id
@@ -173,6 +193,12 @@ export function CashPage() {
       active = false
     }
   }, [sessionForDetailsId, sessionForDetailsOpenedAt, sessionMovementsRefreshKey])
+
+  useEffect(() => {
+  if (activeModal === 'daily-history') {
+    setDailyHistoryPage(1)
+  }
+}, [activeModal])
 
   const dayTotals = useMemo(() => {
     const income = todayMovements
@@ -426,7 +452,7 @@ export function CashPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {historyEntries.map((entry) => {
+                    {paginatedDailyHistoryEntries.map((entry) => {
                       const isSession = entry.kind === 'session'
                       const isIncome = !isSession && entry.type === 'income'
 
@@ -470,6 +496,20 @@ export function CashPage() {
                     })}
                   </tbody>
                 </table>
+                <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+  <span className="text-xs text-gray-500">
+    Exibindo {dailyHistoryFirstRecord}–{dailyHistoryLastRecord} de {historyEntries.length}{' '}
+    {historyEntries.length === 1 ? 'registro' : 'registros'}
+    <span className="text-gray-400"> • </span>
+    {historyItemsPerPage} por página
+  </span>
+
+  <Pagination
+    currentPage={dailyHistoryPage}
+    totalPages={dailyHistoryTotalPages}
+    onPageChange={setDailyHistoryPage}
+  />
+</div>
               </div>
             </div>
           )}

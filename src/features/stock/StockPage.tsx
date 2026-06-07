@@ -16,6 +16,7 @@ import { formatCurrencyBRL, formatDateBR } from '../../lib/utils'
 import type { Product, StockMovement, StockMovementReason, StockMovementType } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import { StockMovementForm, type StockMovementFormValues } from './StockMovementForm'
+import { Pagination } from '../../components/ui/Pagination'
 
 type StockTab = 'products' | 'history'
 type HistoryReasonFilter = 'all' | StockMovementReason
@@ -81,13 +82,12 @@ function StockTable<T extends { id: string }>({
       <div className="overflow-x-auto">
         <table className={`w-full border-collapse bg-white text-sm ${minWidthClassName}`}>
           <thead>
-            <tr className="bg-gray-50 text-gray-700">
+            <tr className="bg-black text-white">
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className={`px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.18em] sm:py-5 ${
-                    column.align === 'left' ? 'text-left' : 'text-center'
-                  }`}
+                  className={`px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.18em] sm:py-5 ${column.align === 'left' ? 'text-left' : 'text-center'
+                    }`}
                 >
                   {column.header}
                 </th>
@@ -110,11 +110,11 @@ function StockTable<T extends { id: string }>({
                   onKeyDown={
                     onRowClick
                       ? (event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            onRowClick(row)
-                          }
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          onRowClick(row)
                         }
+                      }
                       : undefined
                   }
                   tabIndex={onRowClick ? 0 : undefined}
@@ -124,9 +124,8 @@ function StockTable<T extends { id: string }>({
                   {columns.map((column) => (
                     <td
                       key={column.key}
-                      className={`px-5 py-5 align-middle text-zinc-700 ${
-                        column.align === 'left' ? 'text-left' : 'text-center'
-                      }`}
+                      className={`px-5 py-5 align-middle text-zinc-700 ${column.align === 'left' ? 'text-left' : 'text-center'
+                        }`}
                     >
                       {column.render(row)}
                     </td>
@@ -173,6 +172,10 @@ export function StockPage() {
   const [historyTypeFilter, setHistoryTypeFilter] = useState<HistoryTypeFilter>('all')
   const [historyReasonFilter, setHistoryReasonFilter] = useState<HistoryReasonFilter>('all')
 
+  const [productPage, setProductPage] = useState(1)
+  const [movementPage, setMovementPage] = useState(1)
+  const stockItemsPerPage = 10
+
   const autoMovementBarcode = searchParams.get('barcode') ?? ''
   const autoOpenMovement = searchParams.get('auto') === '1'
 
@@ -180,27 +183,25 @@ export function StockPage() {
     const term = productQuery.trim().toLowerCase()
 
     if (!term) {
-      return products.slice(0, 8)
+      return products
     }
 
-    return products
-      .filter((product) =>
-        [
-          product.name,
-          product.barcode,
-          product.reference,
-          product.product_model?.name,
-          product.product_model?.reference,
-          product.product_model?.family,
-          product.product_model?.brand?.name ?? product.brand?.name,
-          product.product_model?.category?.name ?? product.clothing_type?.name,
-          product.size?.name,
-          product.color?.name,
-        ]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(term)),
-      )
-      .slice(0, 12)
+    return products.filter((product) =>
+      [
+        product.name,
+        product.barcode,
+        product.reference,
+        product.product_model?.name,
+        product.product_model?.reference,
+        product.product_model?.family,
+        product.product_model?.brand?.name ?? product.brand?.name,
+        product.product_model?.category?.name ?? product.clothing_type?.name,
+        product.size?.name,
+        product.color?.name,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    )
   }, [productQuery, products])
 
   const filteredMovements = useMemo(() => {
@@ -226,6 +227,39 @@ export function StockPage() {
       return true
     })
   }, [historyEndDate, historyReasonFilter, historyStartDate, historyTypeFilter, movements])
+  const productTotalPages = Math.ceil(filteredProducts.length / stockItemsPerPage)
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (productPage - 1) * stockItemsPerPage
+    const endIndex = productPage * stockItemsPerPage
+
+    return filteredProducts.slice(startIndex, endIndex)
+  }, [filteredProducts, productPage, stockItemsPerPage])
+
+  const productFirstRecord =
+    filteredProducts.length > 0 ? (productPage - 1) * stockItemsPerPage + 1 : 0
+
+  const productLastRecord = Math.min(
+    productPage * stockItemsPerPage,
+    filteredProducts.length,
+  )
+
+  const movementTotalPages = Math.ceil(filteredMovements.length / stockItemsPerPage)
+
+  const paginatedMovements = useMemo(() => {
+    const startIndex = (movementPage - 1) * stockItemsPerPage
+    const endIndex = movementPage * stockItemsPerPage
+
+    return filteredMovements.slice(startIndex, endIndex)
+  }, [filteredMovements, movementPage, stockItemsPerPage])
+
+  const movementFirstRecord =
+    filteredMovements.length > 0 ? (movementPage - 1) * stockItemsPerPage + 1 : 0
+
+  const movementLastRecord = Math.min(
+    movementPage * stockItemsPerPage,
+    filteredMovements.length,
+  )
 
   const availableHistoryReasonOptions = useMemo(
     () =>
@@ -360,6 +394,14 @@ export function StockPage() {
     }
   }, [historyReasonFilter, historyTypeFilter])
 
+  useEffect(() => {
+    setProductPage(1)
+  }, [productQuery])
+
+  useEffect(() => {
+    setMovementPage(1)
+  }, [historyStartDate, historyEndDate, historyTypeFilter, historyReasonFilter])
+
   async function handleSubmit(values: StockMovementFormValues) {
     if (!values.product_id) {
       setError('Selecione um produto.')
@@ -488,7 +530,7 @@ export function StockPage() {
 
                 <StockTable
                   emptyMessage={loading ? 'Carregando produtos...' : 'Nenhum produto encontrado.'}
-                  data={filteredProducts}
+                  data={paginatedProducts}
                   onRowClick={openProductDetails}
                   columns={[
                     {
@@ -526,12 +568,23 @@ export function StockPage() {
                     },
                   ]}
                 />
+                {filteredProducts.length > 0 ? (
+                  <div className="flex flex-col gap-3 rounded-xl border-2 border-gray-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-xs text-gray-500">
+                      Exibindo {productFirstRecord}–{productLastRecord} de {filteredProducts.length}{' '}
+                      {filteredProducts.length === 1 ? 'registro' : 'registros'}
+                      <span className="text-gray-400"> • </span>
+                      {stockItemsPerPage} por página
+                    </span>
 
-                {productQuery.trim() ? (
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-                    Mostrando <span className="font-semibold text-gray-950">{filteredProducts.length}</span> produtos filtrados
+                    <Pagination
+                      currentPage={productPage}
+                      totalPages={productTotalPages}
+                      onPageChange={setProductPage}
+                    />
                   </div>
                 ) : null}
+
               </div>
             ) : (
               <div className="space-y-4">
@@ -611,7 +664,7 @@ export function StockPage() {
 
                 <StockTable
                   emptyMessage={loading ? 'Carregando movimentações...' : 'Nenhuma movimentação encontrada.'}
-                  data={filteredMovements}
+                  data={paginatedMovements}
                   minWidthClassName="min-w-[980px]"
                   onRowClick={openMovementDetails}
                   columns={[
@@ -648,9 +701,20 @@ export function StockPage() {
                   ]}
                 />
 
-                {(historyStartDate || historyEndDate || historyTypeFilter !== 'all' || historyReasonFilter !== 'all') ? (
-                  <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-center text-sm text-gray-700 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-                    Mostrando <span className="font-semibold text-gray-950">{filteredMovements.length}</span> linhas filtradas
+                {filteredMovements.length > 0 ? (
+                  <div className="flex flex-col gap-3 rounded-xl border-2 border-gray-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-xs text-gray-500">
+                      Exibindo {movementFirstRecord}–{movementLastRecord} de {filteredMovements.length}{' '}
+                      {filteredMovements.length === 1 ? 'registro' : 'registros'}
+                      <span className="text-gray-400"> • </span>
+                      {stockItemsPerPage} por página
+                    </span>
+
+                    <Pagination
+                      currentPage={movementPage}
+                      totalPages={movementTotalPages}
+                      onPageChange={setMovementPage}
+                    />
                   </div>
                 ) : null}
               </div>
