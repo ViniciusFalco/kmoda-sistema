@@ -2,6 +2,7 @@ import {
   BarChart3,
   Boxes,
   CreditCard,
+  BookOpenText,
   LayoutDashboard,
   Package,
   Settings,
@@ -19,6 +20,7 @@ const menuItems = [
   { label: 'Caixa', path: '/caixa', icon: CreditCard },
   { label: 'Estoque', path: '/estoque', icon: Boxes },
   { label: 'Configurações', path: '/configuracoes', icon: Settings },
+  { label: 'Tutoriais', path: '/tutoriais', icon: BookOpenText },
 ]
 
 interface SidebarProps {

@@ -1,6 +1,7 @@
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  BookOpenText,
   Lock,
   LockOpen,
   Wallet,
@@ -375,15 +376,27 @@ const dailyHistoryLastRecord = Math.min(
       </section>
 
       <section className="shrink-0 flex justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => setSaleCompletionTestOpen(true)}
-          className="border-gray-300 bg-white text-gray-700 shadow-sm hover:border-gray-900 hover:text-gray-900"
-        >
-          Testar animação de venda
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate('/tutoriais/criar-venda')}
+            className="border-gray-300 bg-white text-gray-700 shadow-sm hover:border-gray-900 hover:text-gray-900"
+          >
+            <BookOpenText className="h-4 w-4" />
+            Ver tutorial de venda
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setSaleCompletionTestOpen(true)}
+            className="border-gray-300 bg-white text-gray-700 shadow-sm hover:border-gray-900 hover:text-gray-900"
+          >
+            Testar animação de venda
+          </Button>
+        </div>
       </section>
 
       {error ? (

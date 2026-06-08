@@ -12,6 +12,7 @@ const menuItems = [
   { label: 'Clientes', path: '/clientes' },
   { label: 'Cadastros', path: '/categorias' },
   { label: 'Configurações', path: '/configuracoes' },
+  { label: 'Tutoriais', path: '/tutoriais' },
 ]
 
 interface MenuDrawerProps {

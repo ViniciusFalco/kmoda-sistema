@@ -1,4 +1,4 @@
-import { Plus, Search, X } from 'lucide-react'
+import { BookOpenText, Plus, Search, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarcodeResultModal, type BarcodeLookupResult } from '../../components/barcode/BarcodeResultModal'
@@ -263,6 +263,16 @@ export function ProductsPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="whitespace-nowrap"
+          onClick={() => navigate('/tutoriais/cadastrar-produto')}
+        >
+          <BookOpenText className="h-4 w-4" />
+          Ver tutorial de cadastro
+        </Button>
         <BarcodeScanButton label="Ler código" variant="secondary" tone="light" onScan={handleBarcodeScan} />
         <Button onClick={openCreateModal}>
           <Plus className="h-4 w-4" />

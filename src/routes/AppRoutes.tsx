@@ -7,6 +7,7 @@ import { CustomersPage } from '../features/customers/CustomersPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { ProductsPage } from '../features/products/ProductsPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
+import { TutorialsPage } from '../features/tutorials/TutorialsPage'
 import { StockPage } from '../features/stock/StockPage'
 import { AuthProvider } from '../hooks/useAuth'
 import { PrivateRoute } from './PrivateRoute'
@@ -30,6 +31,8 @@ export function AppRoutes() {
               <Route path="/vendas" element={<Navigate to="/caixa" replace />} />
               <Route path="/caixa" element={<CashPage />} />
               <Route path="/configuracoes" element={<SettingsPage />} />
+              <Route path="/tutoriais" element={<TutorialsPage />} />
+              <Route path="/tutoriais/:tutorialId" element={<TutorialsPage />} />
             </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />

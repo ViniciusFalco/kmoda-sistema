@@ -1,6 +1,6 @@
-import { PackagePlus, Search } from 'lucide-react'
+import { BookOpenText, PackagePlus, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarcodeScanButton } from '../../components/barcode/BarcodeScanButton'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -155,6 +155,7 @@ function getStockMovementTitle(movement: StockMovement) {
 
 export function StockPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [products, setProducts] = useState<Product[]>([])
   const [movements, setMovements] = useState<StockMovement[]>([])
@@ -462,24 +463,36 @@ export function StockPage() {
       `}</style>
 
       <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => openMovementModal()}
-          className="group inline-flex w-full items-center justify-between gap-4 rounded-xl border-2 border-gray-300 bg-white px-4 py-3 text-left text-gray-950 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:bg-gray-50 lg:w-auto"
-        >
-          <span className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-900">
-              <PackagePlus className="h-5 w-5" />
+        <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="w-full whitespace-nowrap lg:w-auto"
+            onClick={() => navigate('/tutoriais/atualizar-estoque')}
+          >
+            <BookOpenText className="h-4 w-4" />
+            Ver tutorial de estoque
+          </Button>
+          <button
+            type="button"
+            onClick={() => openMovementModal()}
+            className="group inline-flex w-full items-center justify-between gap-4 rounded-xl border-2 border-gray-300 bg-white px-4 py-3 text-left text-gray-950 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:bg-gray-50 lg:w-auto"
+          >
+            <span className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-900">
+                <PackagePlus className="h-5 w-5" />
+              </span>
+              <span className="flex flex-col items-start">
+                <span className="text-sm font-semibold leading-none">Atualizar estoque</span>
+                <span className="mt-1 text-xs text-gray-500">Entrada e saída</span>
+              </span>
             </span>
-            <span className="flex flex-col items-start">
-              <span className="text-sm font-semibold leading-none">Atualizar estoque</span>
-              <span className="mt-1 text-xs text-gray-500">Entrada e saída</span>
+            <span className="text-lg text-gray-400 transition-transform duration-300 group-hover:translate-x-0.5">
+              →
             </span>
-          </span>
-          <span className="text-lg text-gray-400 transition-transform duration-300 group-hover:translate-x-0.5">
-            →
-          </span>
-        </button>
+          </button>
+        </div>
       </div>
 
       <section className="overflow-hidden rounded-xl border-2 border-gray-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
@@ -737,6 +750,7 @@ export function StockPage() {
           initialProductId={movementProductId}
           onBarcodeScan={handleMovementBarcodeScan}
           onCancel={closeMovementModal}
+          submitError={error}
           onSubmit={handleSubmit}
         />
       </Modal>

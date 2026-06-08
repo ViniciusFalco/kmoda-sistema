@@ -17,6 +17,7 @@ const navItems = [
   { label: 'Clientes', path: '/clientes' },
   { label: 'Cadastros', path: '/categorias' },
   { label: 'Configurações', path: '/configuracoes' },
+  { label: 'Tutoriais', path: '/tutoriais' },
 ]
 
 export function Topbar() {
