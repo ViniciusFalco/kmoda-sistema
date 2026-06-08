@@ -62,7 +62,7 @@ export function SecurityDataSection({ userId }: SecurityDataSectionProps) {
   const hasLastBackup = isValidDate(lastBackupAt)
   const lastBackupDate = hasLastBackup ? new Date(lastBackupAt as string) : null
   const nextBackupDueAt = lastBackupDate ? new Date(lastBackupDate.getTime() + BACKUP_RECOMMENDED_INTERVAL_MS) : null
-  const isBackupOverdue = !lastBackupDate || now > nextBackupDueAt.getTime()
+  const isBackupOverdue = !lastBackupDate || now > lastBackupDate.getTime() + BACKUP_RECOMMENDED_INTERVAL_MS
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
