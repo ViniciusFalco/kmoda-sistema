@@ -9,11 +9,15 @@ import {
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { recordAppActivity } from '../lib/monitoring'
+import { loadUserProfile } from '../lib/profileSettings'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import type { UserProfile } from '../types/database'
 
 interface AuthContextValue {
   user: User | null
   session: Session | null
+  profile: UserProfile | null
+  isAdmin: boolean
   loading: boolean
   authReady: boolean
   signIn: (email: string, password: string) => Promise<{ error?: string }>
@@ -24,6 +28,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(Boolean(supabase))
   const [authReady, setAuthReady] = useState(!supabase)
 
@@ -32,28 +37,64 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return undefined
     }
 
+    let active = true
+
+    async function syncSessionProfile(nextSession: Session | null) {
+      if (!active) {
+        return
+      }
+
+      if (!nextSession?.user) {
+        setProfile(null)
+        setLoading(false)
+        setAuthReady(true)
+        return
+      }
+
+      try {
+        const nextProfile = await loadUserProfile(nextSession.user.id)
+        if (active) {
+          setProfile(nextProfile)
+        }
+      } catch (error) {
+        console.error('Erro ao carregar perfil do usuário:', error)
+        if (active) {
+          setProfile(null)
+        }
+      } finally {
+        if (active) {
+          setLoading(false)
+          setAuthReady(true)
+        }
+      }
+    }
+
     supabase.auth.getSession().then(({ data, error }) => {
       if (error) {
         console.error('Erro ao recuperar sessão do Supabase:', error.message)
       }
       setSession(data.session)
-      setLoading(false)
-      setAuthReady(true)
+      void syncSessionProfile(data.session)
     })
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession)
-      setLoading(false)
-      setAuthReady(true)
+      setLoading(true)
+      void syncSessionProfile(nextSession)
     })
 
-    return () => data.subscription.unsubscribe()
+    return () => {
+      active = false
+      data.subscription.unsubscribe()
+    }
   }, [])
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user: session?.user ?? null,
       session,
+      profile,
+      isAdmin: profile?.role === 'admin',
       loading,
       authReady,
       async signIn(email, password) {
@@ -82,9 +123,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
           await supabase.auth.signOut()
         }
         setSession(null)
+        setProfile(null)
       },
     }),
-    [authReady, loading, session],
+    [authReady, loading, profile, session],
   )
 
   return createElement(AuthContext.Provider, { value }, children)

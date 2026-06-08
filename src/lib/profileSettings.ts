@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase'
+import type { UserProfile } from '../types/database'
 
 const DISPLAY_NAME_EVENT = 'kmoda-display-name-change'
 
@@ -31,22 +32,8 @@ export function notifyDisplayNameChange() {
 }
 
 export async function loadDisplayName(userId: string) {
-  if (!isSupabaseConfigured) {
-    return null
-  }
-
-  const client = getClient()
-  const { data, error } = await client
-    .from('profiles')
-    .select('name')
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return data?.name?.trim() || null
+  const profile = await loadUserProfile(userId)
+  return profile?.name?.trim() || null
 }
 
 export async function saveDisplayName(userId: string, name: string) {
@@ -76,3 +63,21 @@ export async function saveDisplayName(userId: string, name: string) {
   return data?.name?.trim() || trimmed
 }
 
+export async function loadUserProfile(userId: string): Promise<UserProfile | null> {
+  if (!isSupabaseConfigured) {
+    return null
+  }
+
+  const client = getClient()
+  const { data, error } = await client
+    .from('profiles')
+    .select('id, user_id, name, role, created_at, updated_at')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return (data as UserProfile | null) ?? null
+}

@@ -9,8 +9,8 @@ import { formatDateTimeBR } from '../../lib/utils'
 import { loadAppPauseRisk, loadKmodaStorageUsage, getMonitoringPauseLabel, getMonitoringSpaceLabel } from '../../lib/monitoring'
 import { loadDisplayName, saveDisplayName } from '../../lib/profileSettings'
 import { isSupabaseConfigured } from '../../lib/supabase'
-import { usePwaInstall } from '../../hooks/usePwaInstall'
 import type { AppPauseRisk, KmodaStorageUsage, MonitoringPauseRisk, MonitoringSpaceStatus } from '../../types/database'
+import { SecurityDataSection } from './SecurityDataSection'
 
 type SettingsTab = 'geral' | 'monitoramento'
 
@@ -140,9 +140,7 @@ function MonitoringMetricCard({
 
 export function SettingsPage() {
   const { user } = useAuth()
-  const { installed, supportsPrompt, canPromptInstall, message, promptInstall, clearMessage } = usePwaInstall()
   const [activeTab, setActiveTab] = useState<SettingsTab>('geral')
-  const [showFallbackPreview, setShowFallbackPreview] = useState(false)
   const [supportPolicyOpen, setSupportPolicyOpen] = useState(false)
   const [displayName, setDisplayNameState] = useState('Administrador')
   const [loadingName, setLoadingName] = useState(true)
@@ -264,10 +262,6 @@ export function SettingsPage() {
   const isPauseCritical = pauseDays !== null && pauseDays !== undefined && pauseDays < 1
   const estimatedPauseAt = pauseRisk?.estimated_pause_at ?? null
 
-  if (showFallbackPreview) {
-    throw new Error('Fallback de teste solicitado em Configurações.')
-  }
-
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap gap-2 border-b-2 border-gray-300 pb-3">
@@ -288,7 +282,7 @@ export function SettingsPage() {
       </div>
 
       {activeTab === 'geral' ? (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="space-y-5">
           <Card title="Perfil rápido" description="Nome exibido no topo e no menu, salvo no seu usuário do Supabase.">
             <form className="space-y-4" onSubmit={handleSubmit}>
               <Input
@@ -307,67 +301,7 @@ export function SettingsPage() {
               </div>
             </form>
           </Card>
-
-          <Card title="Aplicativo" description="Atalho de instalação e status do PWA desta loja.">
-            <div className="space-y-3">
-              <div className="rounded-xl border-2 border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-                {installed
-                  ? 'Aplicativo instalado neste dispositivo.'
-                  : supportsPrompt
-                    ? 'Instalação disponível. Você pode adicionar o sistema à tela inicial.'
-                    : 'Instalação indisponível neste navegador. Em celulares, use o menu do navegador.'}
-              </div>
-              {!installed ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full justify-center"
-                  disabled={!canPromptInstall}
-                  onClick={async () => {
-                    await promptInstall()
-                  }}
-                >
-                  {canPromptInstall ? 'Instalar aplicativo' : 'Aguardando instalação'}
-                </Button>
-              ) : null}
-              {!supportsPrompt && message ? (
-                <button
-                  type="button"
-                  className="text-left text-sm text-gray-500"
-                  onClick={clearMessage}
-                >
-                  {message}
-                </button>
-              ) : null}
-            </div>
-          </Card>
-
-          <Card title="Supabase" description="Status da conexão configurada via variáveis de ambiente.">
-            <div className="rounded-md border-2 border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-              {isSupabaseConfigured
-                ? 'Variáveis encontradas. O login pode usar Supabase Auth.'
-                : 'Variáveis ausentes. Crie um arquivo .env com VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.'}
-            </div>
-          </Card>
-
-          <Card title="Fallback" description="Atalho de teste para abrir a tela de erro geral do sistema.">
-            <div className="space-y-3">
-              <p className="text-sm text-gray-600">
-                Use este botão para conferir como fica o fallback quando ocorre um erro real de renderização.
-              </p>
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setShowFallbackPreview(true)
-                  }}
-                >
-                  Ver tela de fallback
-                </Button>
-              </div>
-            </div>
-          </Card>
+          <SecurityDataSection key={user?.id ?? 'anonymous'} userId={user?.id ?? null} />
         </div>
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">
