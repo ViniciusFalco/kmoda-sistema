@@ -12,6 +12,7 @@ import { Badge } from '../../components/ui/Badge'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
+import { SensitiveValue } from '../../components/ui/SensitiveValue'
 import {
   friendlyCatalogError,
   getCashMovementBySaleId,
@@ -30,12 +31,14 @@ import { CashMovementDetailsModal } from './CashMovementDetailsModal'
 import { CashSaleForm } from './CashSaleForm'
 import { CloseCashSessionForm, OpenCashSessionForm } from './CashSessionModals'
 import { Pagination } from '../../components/ui/Pagination'
+import { useSensitiveValuesHidden } from '../../hooks/useAppSettings'
 import { useAuth } from '../../hooks/useAuth'
 
 type CashModal = 'sale' | 'expense' | 'history' | 'overview' | 'daily-history' | 'open-session' | 'close-session' | null
 
 export function CashPage() {
   const { isAdmin, user } = useAuth()
+  const [sensitiveValuesHidden] = useSensitiveValuesHidden()
   const location = useLocation()
   const navigate = useNavigate()
   const searchParams = new URLSearchParams(location.search)
@@ -387,9 +390,26 @@ const dailyHistoryLastRecord = Math.min(
       </section>
 
       <section className="grid shrink-0 grid-cols-3 gap-1 [@media(max-height:820px)]:gap-0.5">
-        <CashMetricCard label="Dinheiro no caixa" value={formatCurrencyBRL(dinheiroNoCaixa)} icon={<Wallet className="h-4 w-4" />} />
-        <CashMetricCard label="Entradas do dia" value={formatCurrencyBRL(dayTotals.income)} icon={<ArrowUpCircle className="h-4 w-4" />} accent="green" />
-        <CashMetricCard label="Despesas do dia" value={formatCurrencyBRL(dayTotals.expense)} icon={<ArrowDownCircle className="h-4 w-4" />} accent="red" />
+        <CashMetricCard
+          label="Dinheiro no caixa"
+          value={formatCurrencyBRL(dinheiroNoCaixa)}
+          icon={<Wallet className="h-4 w-4" />}
+          blurred={sensitiveValuesHidden}
+        />
+        <CashMetricCard
+          label="Entradas do dia"
+          value={formatCurrencyBRL(dayTotals.income)}
+          icon={<ArrowUpCircle className="h-4 w-4" />}
+          accent="green"
+          blurred={sensitiveValuesHidden}
+        />
+        <CashMetricCard
+          label="Despesas do dia"
+          value={formatCurrencyBRL(dayTotals.expense)}
+          icon={<ArrowDownCircle className="h-4 w-4" />}
+          accent="red"
+          blurred={sensitiveValuesHidden}
+        />
       </section>
 
       {canViewAdminCashSearch ? (
@@ -700,11 +720,13 @@ function CashMetricCard({
   value,
   icon,
   accent = 'default',
+  blurred = false,
 }: {
   label: string
   value: string
   icon: ReactNode
   accent?: 'default' | 'green' | 'red'
+  blurred?: boolean
 }) {
   const accentStyles =
     accent === 'green'
@@ -719,7 +741,11 @@ function CashMetricCard({
       <div className="min-w-0">
         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">{label}</p>
       </div>
-      <p className="truncate text-[22px] font-semibold tracking-[-0.04em] text-gray-950 [@media(max-height:820px)]:text-[20px]">{value}</p>
+      <SensitiveValue
+        value={value}
+        hidden={blurred}
+        className="truncate text-[22px] font-semibold tracking-[-0.04em] text-gray-950 [@media(max-height:820px)]:text-[20px]"
+      />
     </div>
   )
 }

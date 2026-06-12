@@ -1,11 +1,13 @@
-import { Boxes, PackagePlus, Receipt, ShoppingCart, Users, Wallet } from 'lucide-react'
+import { Boxes, ChevronDown, ChevronUp, PackagePlus, Receipt, ShoppingCart, Users, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ActionCard } from '../../components/ui/ActionCard'
+import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { SummaryCard } from '../../components/ui/SummaryCard'
 import { Table } from '../../components/ui/Table'
+import { useSensitiveValuesHidden } from '../../hooks/useAppSettings'
 import {
   friendlyCatalogError,
   getMonthSalesTotal,
@@ -56,6 +58,8 @@ interface DashboardMovementRow {
 
 export function DashboardPage() {
   const navigate = useNavigate()
+  const [sensitiveValuesHidden] = useSensitiveValuesHidden()
+  const [latestMovementsOpen, setLatestMovementsOpen] = useState(false)
   const [registries, setRegistries] = useState<ProductRegistries>(emptyRegistries)
   const [cashSession, setCashSession] = useState<CashSession | null>(null)
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([])
@@ -304,34 +308,73 @@ export function DashboardPage() {
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-3">
-        <SummaryCard label="Vendas de hoje" value={formatCurrency(salesTodayTotal)} icon={<Receipt className="h-5 w-5" />} />
-        <SummaryCard label="Saldo do caixa" value={formatCurrency(balanceToday)} icon={<Wallet className="h-5 w-5" />} />
-        <SummaryCard label="Total de vendas do mês" value={formatCurrency(monthSalesTotal)} icon={<ShoppingCart className="h-5 w-5" />} />
+        <SummaryCard
+          label="Vendas de hoje"
+          value={formatCurrency(salesTodayTotal)}
+          icon={<Receipt className="h-5 w-5" />}
+          blurred={sensitiveValuesHidden}
+        />
+        <SummaryCard
+          label="Saldo do caixa"
+          value={formatCurrency(balanceToday)}
+          icon={<Wallet className="h-5 w-5" />}
+          blurred={sensitiveValuesHidden}
+        />
+        <SummaryCard
+          label="Total de vendas do mês"
+          value={formatCurrency(monthSalesTotal)}
+          icon={<ShoppingCart className="h-5 w-5" />}
+          blurred={sensitiveValuesHidden}
+        />
       </div>
 
-      <Card>
-        <div className="mb-3 border-b-2 border-gray-100 pb-3 text-center">
-          <h2 className="text-sm font-semibold text-gray-950 sm:text-base">Últimas movimentações</h2>
+      <Card className="p-0 sm:p-0">
+        <div className="flex flex-col gap-3 border-b-2 border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-gray-950 sm:text-base">Últimas movimentações</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              {latestMovements.length === 0
+                ? 'Nenhum registro recente.'
+                : `${latestMovements.length} ${latestMovements.length === 1 ? 'registro recente' : 'registros recentes'}`}
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setLatestMovementsOpen((current) => !current)}
+            aria-expanded={latestMovementsOpen}
+            className="shrink-0 border-gray-300 bg-white text-gray-800 hover:border-gray-900 hover:text-gray-950"
+          >
+            {latestMovementsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {latestMovementsOpen ? 'Ocultar' : 'Mostrar'}
+          </Button>
         </div>
-        {latestMovements.length === 0 ? (
-          <EmptyState title="Nenhuma movimentação hoje." />
-        ) : (
-          <Table
-            headerClassName="bg-black text-white"
-            data={latestMovements}
-            columns={[
-              {
-                key: 'time',
-                header: 'Data e Hora',
-                render: (row) => `${formatDateBR(row.createdAt)} às ${row.time}`,
-              },
-              { key: 'source', header: 'Fonte', render: (row) => row.source },
-              { key: 'type', header: 'Evento', render: (row) => row.type },
-              { key: 'description', header: 'Descrição', render: (row) => row.description },
-              { key: 'detail', header: 'Detalhe', render: (row) => row.detail },
-            ]}
-          />
-        )}
+
+        {latestMovementsOpen ? (
+          <div className="p-4 sm:p-5">
+            {latestMovements.length === 0 ? (
+              <EmptyState title="Nenhuma movimentação hoje." />
+            ) : (
+              <Table
+                headerClassName="bg-black text-white"
+                data={latestMovements}
+                columns={[
+                  {
+                    key: 'time',
+                    header: 'Data e Hora',
+                    render: (row) => `${formatDateBR(row.createdAt)} às ${row.time}`,
+                  },
+                  { key: 'source', header: 'Fonte', render: (row) => row.source },
+                  { key: 'type', header: 'Evento', render: (row) => row.type },
+                  { key: 'description', header: 'Descrição', render: (row) => row.description },
+                  { key: 'detail', header: 'Detalhe', render: (row) => row.detail },
+                ]}
+              />
+            )}
+          </div>
+        ) : null}
       </Card>
 
     </div>

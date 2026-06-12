@@ -5,6 +5,7 @@ import { PinConfirmationModal } from '../../components/auth/PinConfirmationModal
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
+import { SensitiveValue } from '../../components/ui/SensitiveValue'
 import { Table } from '../../components/ui/Table'
 import { CashSessionBlockedOverlay } from './CashSessionBlockedOverlay'
 import { CashCustomerQuickCreateModal } from './CashCustomerQuickCreateModal'
@@ -18,6 +19,7 @@ import {
   getTodayLocalDate,
   parseCurrencyToNumber,
 } from '../../lib/utils'
+import { useSensitiveValuesHidden } from '../../hooks/useAppSettings'
 import type { Customer, PaymentMethod, Product } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import {
@@ -70,6 +72,7 @@ export function CashSaleForm({
   initialBarcode = '',
 }: CashSaleFormProps) {
   const { user, isAdmin } = useAuth()
+  const [sensitiveValuesHidden] = useSensitiveValuesHidden()
   const [mode, setMode] = useState<EntryMode>(null)
   const [productStep, setProductStep] = useState<ProductStep>(1)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -1128,9 +1131,24 @@ export function CashSaleForm({
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <SummaryCard label="Total a vista" value={formatCurrencyBRL(productTotals.cashSubtotal)} labelClassName="text-gray-950" />
-        <SummaryCard label="Total Parcelado" value={formatCurrencyBRL(productTotals.installmentSubtotal)} labelClassName="text-gray-950" />
-        <SummaryCard label="Total da venda" value={formatCurrencyBRL(productTotals.total)} emphasis />
+        <SummaryCard
+          label="Total a vista"
+          value={formatCurrencyBRL(productTotals.cashSubtotal)}
+          labelClassName="text-gray-950"
+          blurred={sensitiveValuesHidden}
+        />
+        <SummaryCard
+          label="Total Parcelado"
+          value={formatCurrencyBRL(productTotals.installmentSubtotal)}
+          labelClassName="text-gray-950"
+          blurred={sensitiveValuesHidden}
+        />
+        <SummaryCard
+          label="Total da venda"
+          value={formatCurrencyBRL(productTotals.total)}
+          emphasis
+          blurred={sensitiveValuesHidden}
+        />
       </div>
     </div>
   )
@@ -1146,7 +1164,12 @@ export function CashSaleForm({
         <div className="rounded-md border-2 border-gray-200 bg-gray-50 text-center p-2 shadow-sm">
           <div className="rounded-md border-2 border-gray-300 bg-black px-3 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white">Total da venda</p>
-            <p className="mt-1 text-xl font-semibold tracking-[-0.04em] text-white">{formatCurrencyBRL(receiptSummary.total)}</p>
+            <SensitiveValue
+              value={formatCurrencyBRL(receiptSummary.total)}
+              hidden={sensitiveValuesHidden}
+              tone="dark"
+              className="mt-1 text-xl font-semibold tracking-[-0.04em] text-white"
+            />
           </div>
         </div>
 
@@ -1511,16 +1534,23 @@ function SummaryCard({
   value,
   emphasis = false,
   labelClassName,
+  blurred = false,
 }: {
   label: string
   value: string
   emphasis?: boolean
   labelClassName?: string
+  blurred?: boolean
 }) {
   return (
     <div className={`rounded-md border-2 p-4 ${emphasis ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white'}`}>
       <p className={`text-[10px] font-semibold uppercase tracking-[0.22em] ${labelClassName ?? (emphasis ? 'text-white/70' : 'text-gray-500')}`}>{label}</p>
-      <p className={`mt-2 text-2xl font-semibold tracking-[-0.04em] ${emphasis ? 'text-white' : 'text-gray-950'}`}>{value}</p>
+      <SensitiveValue
+        value={value}
+        hidden={blurred}
+        tone={emphasis ? 'dark' : 'light'}
+        className={`mt-2 text-2xl font-semibold tracking-[-0.04em] ${emphasis ? 'text-white' : 'text-gray-950'}`}
+      />
     </div>
   )
 }
