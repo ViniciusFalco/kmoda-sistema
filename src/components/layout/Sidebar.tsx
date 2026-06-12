@@ -10,9 +10,10 @@ import {
   Users,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
+import { useAuth } from '../../hooks/useAuth'
 import { cn } from '../../lib/utils'
 
-const menuItems = [
+const adminMenuItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Produtos', path: '/produtos', icon: Package },
   { label: 'Cadastros', path: '/categorias', icon: Tags },
@@ -23,12 +24,22 @@ const menuItems = [
   { label: 'Tutoriais', path: '/tutoriais', icon: BookOpenText },
 ]
 
+const cashierMenuItems = [
+  { label: 'Caixa', path: '/caixa', icon: CreditCard },
+  { label: 'Produtos', path: '/produtos', icon: Package },
+  { label: 'Clientes', path: '/clientes', icon: Users },
+  { label: 'Tutoriais', path: '/tutoriais', icon: BookOpenText },
+]
+
 interface SidebarProps {
   open: boolean
   onClose: () => void
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
+  const { isAdmin } = useAuth()
+  const menuItems = isAdmin ? adminMenuItems : cashierMenuItems
+
   return (
     <>
       <div
@@ -47,7 +58,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-950">KModa</p>
-            <p className="text-xs text-gray-500">Administração</p>
+            <p className="text-xs text-gray-500">{isAdmin ? 'Administração' : 'Operadora de caixa'}</p>
           </div>
         </div>
 

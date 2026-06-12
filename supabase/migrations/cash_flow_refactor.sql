@@ -194,9 +194,9 @@ update public.cash_movements
 set amount = abs(amount)
 where amount < 0;
 
-update public.cash_movements
+update public.cash_movements cm
 set movement_code = 'CX-' || lpad(nextval('public.cash_movement_code_seq')::text, 6, '0')
-where movement_code is null;
+where cm.movement_code is null;
 
 alter table public.cash_movements alter column movement_code set not null;
 create unique index if not exists cash_movements_movement_code_key on public.cash_movements (movement_code);
@@ -571,7 +571,7 @@ begin
     )
     returning id into v_sale_payment_id;
 
-    insert into public.cash_movements (
+    insert into public.cash_movements as cm (
       user_id,
       created_by,
       sale_id,
@@ -599,7 +599,7 @@ begin
       v_payment_method_value,
       p_notes
     )
-    returning id, public.cash_movements.movement_code
+    returning id, cm.movement_code
     into v_cash_movement_id, v_movement_code;
 
     update public.sale_payments
@@ -628,7 +628,11 @@ begin
   where cm.sale_id = v_sale_id
     and cm.origin = 'sale';
 
-  return query select v_sale_id, v_first_cash_movement_id, v_first_movement_code;
+  return query
+  select
+    v_sale_id as sale_id,
+    v_first_cash_movement_id as cash_movement_id,
+    v_first_movement_code as movement_code;
 end;
 $$;
 

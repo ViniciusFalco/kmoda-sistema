@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, CheckCircle2, Circle, Plus, Search, Trash2, UserPlus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { BarcodeScanButton } from '../../components/barcode/BarcodeScanButton'
+import { PinConfirmationModal } from '../../components/auth/PinConfirmationModal'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -12,10 +13,8 @@ import { CashItemInstallmentModal } from './CashItemInstallmentModal'
 import { createCashIncome, findProductByBarcode, friendlyCatalogError, listProducts, registerSaleWithCashAndStock, searchCustomers } from '../../lib/catalog'
 import { isValidBarcode, normalizeBarcode } from '../../lib/barcode'
 import {
-  formatCPF,
   formatCurrencyBRL,
   formatCurrencyInput,
-  formatPhoneBR,
   getTodayLocalDate,
   parseCurrencyToNumber,
 } from '../../lib/utils'
@@ -70,7 +69,7 @@ export function CashSaleForm({
   sessionClosed,
   initialBarcode = '',
 }: CashSaleFormProps) {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [mode, setMode] = useState<EntryMode>(null)
   const [productStep, setProductStep] = useState<ProductStep>(1)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -89,6 +88,7 @@ export function CashSaleForm({
   const [cashTenderedAmounts, setCashTenderedAmounts] = useState<Record<string, number>>({})
   const [saleCompletionData, setSaleCompletionData] = useState<{ customerName: string; total: number } | null>(null)
   const [saleCompletionOpen, setSaleCompletionOpen] = useState(false)
+  const [pinModalOpen, setPinModalOpen] = useState(false)
   const [manualDescription, setManualDescription] = useState('')
   const [manualAmount, setManualAmount] = useState('')
   const [manualPaymentMethod, setManualPaymentMethod] = useState<PaymentMethod>('dinheiro')
@@ -416,6 +416,10 @@ export function CashSaleForm({
   }
 
   function openCustomerModal() {
+    if (!isAdmin) {
+      return
+    }
+
     setCustomerDraftName(customerQuery.trim())
     setCustomerModalOpen(true)
   }
@@ -711,46 +715,53 @@ export function CashSaleForm({
   }
 
   async function handleSubmit() {
-    if (mode === 'manual_income') {
-      await submitManualIncome()
-      return
-    }
-
-    await submitProductSale()
+    setError('')
+    setPinModalOpen(true)
   }
 
-  async function submitProductSale() {
+  async function handlePinConfirm(pin: string) {
+    const success =
+      mode === 'manual_income'
+        ? await submitManualIncome(pin)
+        : await submitProductSale(pin)
+
+    if (success) {
+      setPinModalOpen(false)
+    }
+  }
+
+  async function submitProductSale(confirmationPin: string) {
     if (!cashSessionOpen) {
       setError(blockedMessage)
-      return
+      return false
     }
 
     if (items.length === 0) {
       setError('Adicione pelo menos um produto.')
-      return
+      return false
     }
 
     const invalidItem = items.find((item) => item.quantity > item.product.stock_quantity)
     if (invalidItem) {
       setError(`Estoque insuficiente para ${invalidItem.product.name}.`)
-      return
+      return false
     }
 
     const total = productTotals.total
     const allocated = roundCurrency(receiptLines.reduce((sum, line) => sum + line.amount, 0))
     if (Math.abs(total - allocated) > 0.01) {
       setError('A soma dos recebimentos precisa fechar exatamente com o total da venda.')
-      return
+      return false
     }
 
     if (receiptLines.some((line) => line.amount <= 0)) {
       setError('Informe valores válidos para todos os recebimentos.')
-      return
+      return false
     }
 
     if (receiptLines.some((line) => !confirmedReceiptIds.includes(line.id))) {
       setError('Confirme todos os pagamentos antes de finalizar a venda.')
-      return
+      return false
     }
 
     if (
@@ -762,12 +773,12 @@ export function CashSaleForm({
       )
     ) {
       setError('Informe o valor entregue pelo cliente para o pagamento em dinheiro.')
-      return
+      return false
     }
 
     if (receiptLines.some((line) => line.sourceKind === 'installment_group' && line.paymentMethod !== 'cartao_credito')) {
       setError('Os itens parcelados precisam ser recebidos no crédito parcelado.')
-      return
+      return false
     }
 
     setSubmitting(true)
@@ -796,6 +807,7 @@ export function CashSaleForm({
         notes,
         user,
         cashSessionId,
+        confirmationPin,
       })
 
       setSaleCompletionData({
@@ -803,29 +815,31 @@ export function CashSaleForm({
         total: productTotals.total,
       })
       setSaleCompletionOpen(true)
+      return true
     } catch (err) {
       setError(friendlyCatalogError(err))
+      return false
     } finally {
       setSubmitting(false)
     }
   }
 
-  async function submitManualIncome() {
+  async function submitManualIncome(confirmationPin: string) {
     if (!cashSessionOpen) {
       setError(blockedMessage)
-      return
+      return false
     }
 
     const amount = parseCurrencyToNumber(manualAmount)
 
     if (!manualDescription.trim()) {
       setError('Informe a descrição da entrada.')
-      return
+      return false
     }
 
     if (amount <= 0) {
       setError('Informe um valor maior que zero.')
-      return
+      return false
     }
 
     setSubmitting(true)
@@ -840,10 +854,13 @@ export function CashSaleForm({
         notes,
         user,
         cashSessionId,
+        confirmationPin,
       })
       onSaved()
+      return true
     } catch (err) {
       setError(friendlyCatalogError(err))
+      return false
     } finally {
       setSubmitting(false)
     }
@@ -915,14 +932,6 @@ export function CashSaleForm({
                       >
                         <span className="min-w-0">
                           <span className="block font-medium text-gray-950">{customer.name}</span>
-                          <span className="block text-xs text-gray-500">
-                            {[
-                              formatPhoneBR(customer.phone),
-                              formatCPF(customer.cpf),
-                            ]
-                              .filter((value) => value && value !== '-')
-                              .join(' • ') || 'Sem telefone ou CPF'}
-                          </span>
                         </span>
                         {isSelected ? <Badge variant="success">Selecionado</Badge> : null}
                       </button>
@@ -932,10 +941,14 @@ export function CashSaleForm({
               ) : (
                 <div className="space-y-3 px-4 py-5">
                   <div className="text-sm text-gray-600">Cliente não encontrado.</div>
-                  <Button type="button" variant="secondary" onClick={openCustomerModal}>
-                    <UserPlus className="h-4 w-4" />
-                    Criar novo cliente
-                  </Button>
+                  {isAdmin ? (
+                    <Button type="button" variant="secondary" onClick={openCustomerModal}>
+                      <UserPlus className="h-4 w-4" />
+                      Criar novo cliente
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-gray-500">Continue a venda sem cadastrar o cliente.</p>
+                  )}
                 </div>
               )}
             </div>
@@ -947,10 +960,6 @@ export function CashSaleForm({
             <div className="space-y-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-500">Cliente selecionado</p>
               <p className="text-lg font-semibold text-gray-950">{selectedCustomer.name}</p>
-              <div className="space-y-1 text-sm text-gray-600">
-                <p>{formatPhoneBR(selectedCustomer.phone)}</p>
-                <p>{formatCPF(selectedCustomer.cpf)}</p>
-              </div>
               <Button variant="secondary" onClick={() => setSelectedCustomer(null)}>
                 Limpar cliente
               </Button>
@@ -1061,6 +1070,7 @@ export function CashSaleForm({
                     type="text"
                     inputMode="decimal"
                     value={formatCurrencyBRL(item.unitPrice)}
+                    readOnly={!isAdmin}
                     onChange={(event) => updateItemUnitPrice(item.id, formatCurrencyInput(event.target.value))}
                   />
                 ),
@@ -1476,6 +1486,22 @@ export function CashSaleForm({
       />
 
       {isBlocked ? <CashSessionBlockedOverlay onOpenCash={onOpenCash} /> : null}
+
+      <PinConfirmationModal
+        open={pinModalOpen}
+        title={mode === 'manual_income' ? 'Confirmar entrada avulsa' : 'Confirmar venda'}
+        description="Digite seu PIN para confirmar e salvar o lançamento no caixa."
+        confirmLabel={mode === 'manual_income' ? 'Confirmar entrada' : 'Confirmar venda'}
+        submitting={submitting}
+        error={error}
+        onClose={() => {
+          if (submitting) {
+            return
+          }
+          setPinModalOpen(false)
+        }}
+        onConfirm={handlePinConfirm}
+      />
     </div>
   )
 }

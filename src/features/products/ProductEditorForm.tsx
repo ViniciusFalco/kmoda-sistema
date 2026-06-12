@@ -26,6 +26,7 @@ interface ProductEditorFormProps {
   registries: ProductRegistries
   submitting?: boolean
   initialBarcode?: string
+  error?: string
   onCancel: () => void
   onSubmit: (values: ProductEditorFormValues, mode: ProductEditorSubmitMode) => Promise<boolean>
   onQuickCreate: (kind: RegistryKind, values: RegistryInput) => Promise<{ id: string }>
@@ -54,6 +55,7 @@ export function ProductEditorForm({
   registries,
   submitting = false,
   initialBarcode = '',
+  error = '',
   onCancel,
   onSubmit,
   onQuickCreate,
@@ -270,11 +272,21 @@ export function ProductEditorForm({
     label: color.name,
     meta: color.hex ?? undefined,
   }))
+  const validationMessages = Object.values(errors).filter(Boolean)
+  const visibleError = error || validationMessages[0] || ''
 
   return (
     <>
       <form className="flex h-full min-h-0 flex-col text-gray-950" onSubmit={handleSubmit}>
         <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+          {visibleError ? (
+            <div
+              role="alert"
+              className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+            >
+              {visibleError}
+            </div>
+          ) : null}
           <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_minmax(0,1fr)]">
             <div className="space-y-4">
               <FormSection title="Identificação do modelo">

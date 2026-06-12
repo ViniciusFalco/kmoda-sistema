@@ -8,6 +8,7 @@ import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
 import { Pagination } from '../../components/ui/Pagination'
 import { StatusBadge } from '../../components/ui/StatusBadge'
+import { useAuth } from '../../hooks/useAuth'
 import { friendlyCatalogError, formatSalePaymentSummary, listCustomers, listSalesByCustomer } from '../../lib/catalog'
 import { formatCPF, formatCurrencyBRL, formatDateBR, formatDateTimeBR, formatPhoneBR } from '../../lib/utils'
 import type { Customer, Sale } from '../../types/database'
@@ -18,6 +19,7 @@ type CustomerModal = 'create' | 'details' | 'edit' | null
 export function CustomersPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [modal, setModal] = useState<CustomerModal>(null)
@@ -43,7 +45,10 @@ export function CustomersPage() {
 
     return customers.filter((customer) =>
       {
-        const fields = [customer.name, customer.phone, customer.email, customer.cpf, customer.notes]
+        const fields = (isAdmin
+          ? [customer.name, customer.phone, customer.email, customer.cpf, customer.notes]
+          : [customer.name]
+        )
           .filter(Boolean)
           .map((value) => value?.toLowerCase() ?? '')
 
@@ -78,6 +83,11 @@ export function CustomersPage() {
   const salesFirstIndex = salesCount > 0 ? (salesPage - 1) * salesPageSize + 1 : 0
   const salesLastIndex = salesCount > 0 ? Math.min(salesPage * salesPageSize, salesCount) : 0
   const salesLabel = salesCount === 1 ? 'venda' : 'vendas'
+  const canViewCustomerDetails = isAdmin
+  const tableColumns = canViewCustomerDetails ? 'min-w-[760px]' : 'min-w-[320px]'
+  const tableSearchPlaceholder = canViewCustomerDetails
+    ? 'Pesquisar na tabela por nome, telefone, e-mail, CPF ou observações'
+    : 'Pesquisar cliente por nome'
 
   function openSaleInCash(saleId: string) {
     navigate(`/caixa?sale_id=${encodeURIComponent(saleId)}`)
@@ -175,10 +185,12 @@ export function CustomersPage() {
       title="Clientes"
       description="Adicione e gerencie os clientes para facilitar o processo de venda e o relacionamento com seus compradores."
       action={
-        <Button onClick={() => setModal('create')}>
-          <Plus className="h-4 w-4" />
-          Novo cliente
-        </Button>
+        isAdmin ? (
+          <Button onClick={() => setModal('create')}>
+            <Plus className="h-4 w-4" />
+            Novo cliente
+          </Button>
+        ) : null
       }
     >
       {error ? <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
@@ -188,7 +200,7 @@ export function CustomersPage() {
           <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-600" />
           <Input
             className="pl-9"
-            placeholder="Pesquisar na tabela por nome, telefone, e-mail, CPF ou observações"
+            placeholder={tableSearchPlaceholder}
             value={tableQuery}
             onChange={(event) => setTableQuery(event.target.value)}
           />
@@ -211,14 +223,18 @@ export function CustomersPage() {
           <>
             <div className="overflow-hidden rounded-xl border border-gray-200">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm">
+                <table className={`w-full ${tableColumns} border-collapse bg-white text-left text-sm`}>
                   <thead className="bg-black text-[11px] uppercase tracking-[0.14em] text-white">
                     <tr>
                       <th className="px-4 py-3 font-semibold">Nome</th>
-                      <th className="px-4 py-3 font-semibold">Telefone</th>
-                      <th className="px-4 py-3 font-semibold">E-mail</th>
-                      <th className="px-4 py-3 font-semibold">CPF</th>
-                      <th className="px-4 py-3 font-semibold">Observações</th>
+                      {canViewCustomerDetails ? (
+                        <>
+                          <th className="px-4 py-3 font-semibold">Telefone</th>
+                          <th className="px-4 py-3 font-semibold">E-mail</th>
+                          <th className="px-4 py-3 font-semibold">CPF</th>
+                          <th className="px-4 py-3 font-semibold">Observações</th>
+                        </>
+                      ) : null}
                     </tr>
                   </thead>
 
@@ -226,18 +242,26 @@ export function CustomersPage() {
                     {paginatedCustomers.map((customer) => (
                       <tr
                         key={customer.id}
-                        className="cursor-pointer text-gray-700 transition hover:bg-gray-50"
-                        onClick={() => {
-                          setSelectedCustomer(customer)
-                          setSalesPage(1)
-                          setModal('details')
-                        }}
+                        className={`text-gray-700 transition ${canViewCustomerDetails ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        onClick={
+                          canViewCustomerDetails
+                            ? () => {
+                                setSelectedCustomer(customer)
+                                setSalesPage(1)
+                                setModal('details')
+                              }
+                            : undefined
+                        }
                       >
                         <td className="px-4 py-3 font-medium text-gray-950">{customer.name}</td>
-                        <td className="px-4 py-3">{formatPhoneBR(customer.phone)}</td>
-                        <td className="px-4 py-3">{customer.email ?? '-'}</td>
-                        <td className="px-4 py-3">{formatCPF(customer.cpf)}</td>
-                        <td className="px-4 py-3">{customer.notes ?? '-'}</td>
+                        {canViewCustomerDetails ? (
+                          <>
+                            <td className="px-4 py-3">{formatPhoneBR(customer.phone)}</td>
+                            <td className="px-4 py-3">{customer.email ?? '-'}</td>
+                            <td className="px-4 py-3">{formatCPF(customer.cpf)}</td>
+                            <td className="px-4 py-3">{customer.notes ?? '-'}</td>
+                          </>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>
@@ -255,134 +279,142 @@ export function CustomersPage() {
         )}
       </div>
 
-      <Modal open={modal === 'create'} title="Novo cliente" onClose={() => setModal(null)}>
-        <CustomerForm onCancel={() => setModal(null)} onSaved={handleSaved} />
-      </Modal>
+      {isAdmin ? (
+        <>
+          <Modal open={modal === 'create'} title="Novo cliente" onClose={() => setModal(null)}>
+            <CustomerForm onCancel={() => setModal(null)} onSaved={handleSaved} />
+          </Modal>
 
-      <Modal open={modal === 'edit'} title="Editar cliente" onClose={() => setModal(null)}>
-        <CustomerForm
-          customer={selectedCustomer}
-          onCancel={() => setModal('details')}
-          onSaved={handleSaved}
-          onDeleted={async () => {
-            setModal(null)
-            setSelectedCustomer(null)
-            await loadCustomers()
-          }}
-        />
-      </Modal>
+          <Modal open={modal === 'edit'} title="Editar cliente" onClose={() => setModal(null)}>
+            <CustomerForm
+              customer={selectedCustomer}
+              onCancel={() => setModal('details')}
+              onSaved={handleSaved}
+              onDeleted={async () => {
+                setModal(null)
+                setSelectedCustomer(null)
+                await loadCustomers()
+              }}
+            />
+          </Modal>
+        </>
+      ) : null}
 
-      <Modal
-        open={modal === 'details' && selectedCustomer !== null}
-        title={selectedCustomer?.name ?? 'Cliente'}
-        onClose={() => setModal(null)}
-        size="6xl"
-      >
-        {selectedCustomer ? (
-          <div className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Detail label="Nome" value={selectedCustomer.name} />
-              <Detail label="Telefone" value={formatPhoneBR(selectedCustomer.phone)} />
-              <Detail label="E-mail" value={selectedCustomer.email ?? '-'} />
-              <Detail label="CPF" value={formatCPF(selectedCustomer.cpf)} />
-              <Detail label="Criado em" value={formatDateBR(selectedCustomer.created_at)} />
-              <Detail label="Atualizado em" value={formatDateBR(selectedCustomer.updated_at)} />
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm font-medium text-gray-700">Observações</p>
-              <p className="mt-1 text-sm text-gray-600">{selectedCustomer.notes || 'Sem observações.'}</p>
-            </div>
-            <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Histórico de vendas</p>
-                  <p className="text-xs text-gray-500">Últimas vendas registradas para este cliente.</p>
-                </div>
-                <span className="text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
-                  {salesCount} {salesLabel}
-                </span>
+      {canViewCustomerDetails ? (
+        <Modal
+          open={modal === 'details' && selectedCustomer !== null}
+          title={selectedCustomer?.name ?? 'Cliente'}
+          onClose={() => setModal(null)}
+          size="6xl"
+        >
+          {selectedCustomer ? (
+            <div className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Detail label="Nome" value={selectedCustomer.name} />
+                <Detail label="Telefone" value={formatPhoneBR(selectedCustomer.phone)} />
+                <Detail label="E-mail" value={selectedCustomer.email ?? '-'} />
+                <Detail label="CPF" value={formatCPF(selectedCustomer.cpf)} />
+                <Detail label="Criado em" value={formatDateBR(selectedCustomer.created_at)} />
+                <Detail label="Atualizado em" value={formatDateBR(selectedCustomer.updated_at)} />
               </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-sm font-medium text-gray-700">Observações</p>
+                <p className="mt-1 text-sm text-gray-600">{selectedCustomer.notes || 'Sem observações.'}</p>
+              </div>
+              <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Histórico de vendas</p>
+                    <p className="text-xs text-gray-500">Últimas vendas registradas para este cliente.</p>
+                  </div>
+                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
+                    {salesCount} {salesLabel}
+                  </span>
+                </div>
 
-              {salesLoading ? (
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
-                  Carregando histórico de vendas...
-                </div>
-              ) : salesError ? (
-                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{salesError}</div>
-              ) : sales.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
-                  Nenhuma venda registrada para este cliente.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="overflow-hidden rounded-xl border border-gray-200">
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm">
-                        <thead className="bg-black text-[11px] uppercase tracking-[0.14em] text-white">
-                          <tr>
-                            <th className="px-4 py-3 font-semibold">Data</th>
-                            <th className="px-4 py-3 font-semibold">Total</th>
-                            <th className="px-4 py-3 font-semibold">Pagamento</th>
-                            <th className="px-4 py-3 font-semibold">Itens</th>
-                            <th className="px-4 py-3 font-semibold">Status</th>
-                            <th className="px-4 py-3 font-semibold">Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {sales.map((sale) => (
-                          <tr key={sale.id} className="text-gray-700">
-                            <td className="px-4 py-3">
-                              <div className="font-medium text-gray-950">{formatDateBR(sale.sale_date)}</div>
-                              <div className="text-xs text-gray-500">{formatDateTimeBR(sale.created_at)}</div>
-                            </td>
-                            <td className="px-4 py-3 font-medium text-gray-950">{formatCurrencyBRL(sale.total_amount)}</td>
-                            <td className="px-4 py-3 text-gray-600">{formatSalePaymentSummary(sale)}</td>
-                            <td className="px-4 py-3 text-gray-600">{formatSaleItemsSummary(sale)}</td>
-                            <td className="px-4 py-3">
-                              <StatusBadge status={sale.status} />
-                            </td>
-                            <td className="px-4 py-3">
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => openSaleInCash(sale.id)}
-                                className="whitespace-nowrap"
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                                Ver no caixa
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                {salesLoading ? (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
+                    Carregando histórico de vendas...
+                  </div>
+                ) : salesError ? (
+                  <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{salesError}</div>
+                ) : sales.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
+                    Nenhuma venda registrada para este cliente.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="overflow-hidden rounded-xl border border-gray-200">
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm">
+                          <thead className="bg-black text-[11px] uppercase tracking-[0.14em] text-white">
+                            <tr>
+                              <th className="px-4 py-3 font-semibold">Data</th>
+                              <th className="px-4 py-3 font-semibold">Total</th>
+                              <th className="px-4 py-3 font-semibold">Pagamento</th>
+                              <th className="px-4 py-3 font-semibold">Itens</th>
+                              <th className="px-4 py-3 font-semibold">Status</th>
+                              <th className="px-4 py-3 font-semibold">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {sales.map((sale) => (
+                              <tr key={sale.id} className="text-gray-700">
+                                <td className="px-4 py-3">
+                                  <div className="font-medium text-gray-950">{formatDateBR(sale.sale_date)}</div>
+                                  <div className="text-xs text-gray-500">{formatDateTimeBR(sale.created_at)}</div>
+                                </td>
+                                <td className="px-4 py-3 font-medium text-gray-950">{formatCurrencyBRL(sale.total_amount)}</td>
+                                <td className="px-4 py-3 text-gray-600">{formatSalePaymentSummary(sale)}</td>
+                                <td className="px-4 py-3 text-gray-600">{formatSaleItemsSummary(sale)}</td>
+                                <td className="px-4 py-3">
+                                  <StatusBadge status={sale.status} />
+                                </td>
+                                <td className="px-4 py-3">
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => openSaleInCash(sale.id)}
+                                    className="whitespace-nowrap"
+                                  >
+                                    <ExternalLink className="h-4 w-4" />
+                                    Ver no caixa
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3 border-t border-gray-200 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="text-xs text-gray-500">
+                        Exibindo {salesFirstIndex}–{salesLastIndex} de {salesCount} {salesLabel}
+                        <span className="text-gray-400"> • </span>
+                        {salesPageSize} por página
+                      </span>
+                      <Pagination
+                        currentPage={salesPage}
+                        totalPages={salesTotalPages}
+                        onPageChange={(page) => setSalesPage(page)}
+                      />
                     </div>
                   </div>
-
-                  <div className="flex flex-col gap-3 border-t border-gray-200 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                    <span className="text-xs text-gray-500">
-                      Exibindo {salesFirstIndex}–{salesLastIndex} de {salesCount} {salesLabel}
-                      <span className="text-gray-400"> • </span>
-                      {salesPageSize} por página
-                    </span>
-                    <Pagination
-                      currentPage={salesPage}
-                      totalPages={salesTotalPages}
-                      onPageChange={(page) => setSalesPage(page)}
-                    />
-                  </div>
+                )}
+              </div>
+              {isAdmin ? (
+                <div className="flex justify-end">
+                  <Button onClick={() => setModal('edit')}>
+                    <Edit className="h-4 w-4" />
+                    Editar cliente
+                  </Button>
                 </div>
-              )}
+              ) : null}
             </div>
-            <div className="flex justify-end">
-              <Button onClick={() => setModal('edit')}>
-                <Edit className="h-4 w-4" />
-                Editar cliente
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </Modal>
+          ) : null}
+        </Modal>
+      ) : null}
     </Card>
   )
 }

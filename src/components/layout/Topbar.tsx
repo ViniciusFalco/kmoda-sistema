@@ -9,19 +9,27 @@ import { cn } from '../../lib/utils'
 import { Button } from '../ui/Button'
 import { QuickSearch } from '../ui/QuickSearch'
 
-const navItems = [
+const adminNavItems = [
   { label: 'Início', path: '/' },
   { label: 'Caixa', path: '/caixa' },
   { label: 'Estoque', path: '/estoque' },
   { label: 'Produtos', path: '/produtos' },
   { label: 'Clientes', path: '/clientes' },
+  { label: 'Usuários', path: '/usuarios' },
   { label: 'Cadastros', path: '/categorias' },
   { label: 'Configurações', path: '/configuracoes' },
   { label: 'Tutoriais', path: '/tutoriais' },
 ]
 
+const cashierNavItems = [
+  { label: 'Caixa', path: '/' },
+  { label: 'Produtos', path: '/produtos' },
+  { label: 'Clientes', path: '/clientes' },
+  { label: 'Tutoriais', path: '/tutoriais' },
+]
+
 export function Topbar() {
-  const { signOut } = useAuth()
+  const { signOut, isAdmin, profile } = useAuth()
   const navigate = useNavigate()
   const [barcodeResult, setBarcodeResult] = useState<BarcodeLookupResult | null>(null)
   const [barcodeResultOpen, setBarcodeResultOpen] = useState(false)
@@ -87,6 +95,14 @@ export function Topbar() {
             >
               Moda Feminina
             </p>
+            <span className="hidden rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-600 lg:inline-flex">
+              {isAdmin ? 'Admin' : 'Caixa'}
+            </span>
+            {profile?.name ? (
+              <span className="hidden max-w-[180px] truncate rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 lg:inline-flex">
+                {profile.name}
+              </span>
+            ) : null}
           </div>
 
           <div className="hidden min-w-0 justify-self-center lg:flex lg:w-full lg:max-w-3xl">
@@ -116,7 +132,7 @@ export function Topbar() {
 
         <div className="border-t border-gray-200 bg-gray-50 px-0">
           <div className="flex min-w-max items-stretch overflow-x-auto">
-            {navItems.map((item) => (
+            {(isAdmin ? adminNavItems : cashierNavItems).map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
@@ -170,19 +186,23 @@ export function Topbar() {
                     navigate(`/produtos?q=${encodeURIComponent(barcodeResult.code)}`)
                   },
                 },
-                {
-                  label: 'Atualizar estoque',
-                  icon: <PackagePlus className="h-4 w-4" />,
-                  variant: 'info',
-                  onClick: () => {
-                    if (!barcodeResult) {
-                      return
-                    }
+                ...(isAdmin
+                  ? [
+                      {
+                        label: 'Atualizar estoque',
+                        icon: <PackagePlus className="h-4 w-4" />,
+                        variant: 'info' as const,
+                        onClick: () => {
+                          if (!barcodeResult) {
+                            return
+                          }
 
-                    closeBarcodeResult()
-                    navigate(`/estoque?barcode=${encodeURIComponent(barcodeResult.code)}&auto=1`)
-                  },
-                },
+                          closeBarcodeResult()
+                          navigate(`/estoque?barcode=${encodeURIComponent(barcodeResult.code)}&auto=1`)
+                        },
+                      },
+                    ]
+                  : []),
                 {
                   label: 'Nova venda',
                   icon: <ShoppingCart className="h-4 w-4" />,
@@ -203,17 +223,21 @@ export function Topbar() {
                 },
               ]
             : [
-                {
-                  label: 'Cadastrar produto com este código',
-                  onClick: () => {
-                    if (!barcodeResult) {
-                      return
-                    }
+                ...(isAdmin
+                  ? [
+                      {
+                        label: 'Cadastrar produto com este código',
+                        onClick: () => {
+                          if (!barcodeResult) {
+                            return
+                          }
 
-                    closeBarcodeResult()
-                    navigate(`/produtos?create=1&barcode=${encodeURIComponent(barcodeResult.code)}`)
-                  },
-                },
+                          closeBarcodeResult()
+                          navigate(`/produtos?create=1&barcode=${encodeURIComponent(barcodeResult.code)}`)
+                        },
+                      },
+                    ]
+                  : []),
                 {
                   label: 'Fechar',
                   variant: 'secondary',

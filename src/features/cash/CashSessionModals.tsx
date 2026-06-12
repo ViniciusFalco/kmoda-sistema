@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
+import { PinConfirmationModal } from '../../components/auth/PinConfirmationModal'
 import { closeCashSession, friendlyCatalogError, openCashSession } from '../../lib/catalog'
 import { formatCurrencyBRL, formatCurrencyInput, formatDateBR, parseCurrencyToNumber } from '../../lib/utils'
 import type { CashSession } from '../../types/database'
@@ -17,29 +18,40 @@ export function OpenCashSessionForm({ onCancel, onSaved, lastClosedSession }: Op
   const [openingAmount, setOpeningAmount] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [pinModalOpen, setPinModalOpen] = useState(false)
+  const [pinError, setPinError] = useState('')
   const [error, setError] = useState('')
   const lastClosedAmount = lastClosedSession?.closing_amount ?? null
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setSubmitting(true)
     setError('')
+    setPinError('')
+    setPinModalOpen(true)
+  }
+
+  async function handlePinConfirm(pin: string) {
+    setSubmitting(true)
+    setPinError('')
 
     try {
       const session = await openCashSession({
         openingAmount: parseCurrencyToNumber(openingAmount),
         notes,
         user,
+        confirmationPin: pin,
       })
+      setPinModalOpen(false)
       onSaved(session)
     } catch (err) {
-      setError(friendlyCatalogError(err))
+      setPinError(friendlyCatalogError(err))
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
+    <>
     <form className="space-y-5 text-gray-950" onSubmit={handleSubmit}>
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
       {lastClosedSession && lastClosedAmount !== null ? (
@@ -97,7 +109,26 @@ export function OpenCashSessionForm({ onCancel, onSaved, lastClosedSession }: Op
           {submitting ? 'Abrindo...' : 'Confirmar abertura'}
         </Button>
       </div>
+
     </form>
+
+    <PinConfirmationModal
+      open={pinModalOpen}
+      title="Confirmar abertura de caixa"
+      description="Digite seu PIN para salvar a abertura do caixa."
+      confirmLabel="Confirmar abertura"
+      submitting={submitting}
+      error={pinError}
+      onClose={() => {
+        if (submitting) {
+          return
+        }
+        setPinModalOpen(false)
+        setPinError('')
+      }}
+      onConfirm={handlePinConfirm}
+    />
+    </>
   )
 }
 
@@ -116,14 +147,22 @@ export function CloseCashSessionForm({ session, income, expense, onCancel, onSav
   const [closingAmount, setClosingAmount] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [pinModalOpen, setPinModalOpen] = useState(false)
+  const [pinError, setPinError] = useState('')
   const [error, setError] = useState('')
   const parsedClosing = parseCurrencyToNumber(closingAmount)
   const closingDifference = parsedClosing - expectedAmount
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setSubmitting(true)
     setError('')
+    setPinError('')
+    setPinModalOpen(true)
+  }
+
+  async function handlePinConfirm(pin: string) {
+    setSubmitting(true)
+    setPinError('')
 
     try {
       const closed = await closeCashSession({
@@ -133,16 +172,19 @@ export function CloseCashSessionForm({ session, income, expense, onCancel, onSav
         differenceAmount: closingDifference,
         notes,
         user,
+        confirmationPin: pin,
       })
+      setPinModalOpen(false)
       onSaved(closed)
     } catch (err) {
-      setError(friendlyCatalogError(err))
+      setPinError(friendlyCatalogError(err))
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
+    <>
     <form className="space-y-5 text-gray-950" onSubmit={handleSubmit}>
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
       <div className="overflow-hidden rounded-2xl border-2 border-gray-200 bg-white">
@@ -193,7 +235,26 @@ export function CloseCashSessionForm({ session, income, expense, onCancel, onSav
           {submitting ? 'Fechando...' : 'Confirmar fechamento'}
         </Button>
       </div>
+
     </form>
+
+    <PinConfirmationModal
+      open={pinModalOpen}
+      title="Confirmar fechamento de caixa"
+      description="Digite seu PIN para salvar o fechamento do caixa."
+      confirmLabel="Confirmar fechamento"
+      submitting={submitting}
+      error={pinError}
+      onClose={() => {
+        if (submitting) {
+          return
+        }
+        setPinModalOpen(false)
+        setPinError('')
+      }}
+      onConfirm={handlePinConfirm}
+    />
+    </>
   )
 }
 

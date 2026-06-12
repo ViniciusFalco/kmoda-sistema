@@ -154,7 +154,7 @@ function getStockMovementTitle(movement: StockMovement) {
 }
 
 export function StockPage() {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [products, setProducts] = useState<Product[]>([])
@@ -297,10 +297,15 @@ export function StockPage() {
   }, [])
 
   const openMovementModal = useCallback((productId = '') => {
+    if (!isAdmin) {
+      setError('Apenas a administradora pode atualizar o estoque manualmente.')
+      return
+    }
+
     setError('')
     setMovementProductId(productId)
     setMovementModalOpen(true)
-  }, [])
+  }, [isAdmin])
 
   const openProductDetails = useCallback((product: Product) => {
     setSelectedMovement(null)
@@ -329,6 +334,11 @@ export function StockPage() {
 
   const handleMovementBarcodeScan = useCallback(
     async (code: string) => {
+      if (!isAdmin) {
+        setError('Apenas a administradora pode atualizar o estoque manualmente.')
+        return
+      }
+
       setError('')
 
       try {
@@ -344,7 +354,7 @@ export function StockPage() {
         setError(friendlyCatalogError(err))
       }
     },
-    [openMovementModal],
+    [isAdmin, openMovementModal],
   )
 
   const handleProductBarcodeScan = useCallback(
@@ -474,24 +484,26 @@ export function StockPage() {
             <BookOpenText className="h-4 w-4" />
             Ver tutorial de estoque
           </Button>
-          <button
-            type="button"
-            onClick={() => openMovementModal()}
-            className="group inline-flex w-full items-center justify-between gap-4 rounded-xl border-2 border-gray-300 bg-white px-4 py-3 text-left text-gray-950 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:bg-gray-50 lg:w-auto"
-          >
-            <span className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-900">
-                <PackagePlus className="h-5 w-5" />
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={() => openMovementModal()}
+              className="group inline-flex w-full items-center justify-between gap-4 rounded-xl border-2 border-gray-300 bg-white px-4 py-3 text-left text-gray-950 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:bg-gray-50 lg:w-auto"
+            >
+              <span className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-900">
+                  <PackagePlus className="h-5 w-5" />
+                </span>
+                <span className="flex flex-col items-start">
+                  <span className="text-sm font-semibold leading-none">Atualizar estoque</span>
+                  <span className="mt-1 text-xs text-gray-500">Entrada e saída</span>
+                </span>
               </span>
-              <span className="flex flex-col items-start">
-                <span className="text-sm font-semibold leading-none">Atualizar estoque</span>
-                <span className="mt-1 text-xs text-gray-500">Entrada e saída</span>
+              <span className="text-lg text-gray-400 transition-transform duration-300 group-hover:translate-x-0.5">
+                →
               </span>
-            </span>
-            <span className="text-lg text-gray-400 transition-transform duration-300 group-hover:translate-x-0.5">
-              →
-            </span>
-          </button>
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -743,16 +755,22 @@ export function StockPage() {
       ) : null}
 
       <Modal open={movementModalOpen} title="Atualizar estoque" onClose={closeMovementModal} size="5xl">
-        <StockMovementForm
-          key={movementProductId || 'empty'}
-          products={products}
-          submitting={submitting}
-          initialProductId={movementProductId}
-          onBarcodeScan={handleMovementBarcodeScan}
-          onCancel={closeMovementModal}
-          submitError={error}
-          onSubmit={handleSubmit}
-        />
+        {isAdmin ? (
+          <StockMovementForm
+            key={movementProductId || 'empty'}
+            products={products}
+            submitting={submitting}
+            initialProductId={movementProductId}
+            onBarcodeScan={handleMovementBarcodeScan}
+            onCancel={closeMovementModal}
+            submitError={error}
+            onSubmit={handleSubmit}
+          />
+        ) : (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+            A atualização manual de estoque está disponível apenas para a administradora.
+          </div>
+        )}
       </Modal>
 
       <Modal

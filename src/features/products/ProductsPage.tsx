@@ -11,7 +11,7 @@ import { SearchableSelect, type SelectOption } from '../../components/ui/Searcha
 import {
   createProduct,
   createRegistryItem,
-  deleteProduct,
+  archiveProduct,
   findBarcodeLookup,
   friendlyCatalogError,
   listProducts,
@@ -47,7 +47,7 @@ const emptyRegistries: ProductRegistries = {
 export function ProductsPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [registries, setRegistries] = useState<ProductRegistries>(emptyRegistries)
   const [query, setQuery] = useState('')
@@ -67,6 +67,7 @@ export function ProductsPage() {
 
   const createBarcodeParam = searchParams.get('barcode') ?? ''
   const shouldOpenCreate = searchParams.get('create') === '1'
+  const statusFilter = isAdmin ? activeFilter : 'active'
 
   useEffect(() => {
     const q = searchParams.get('q') ?? ''
@@ -79,11 +80,15 @@ export function ProductsPage() {
       return
     }
 
+    if (!isAdmin) {
+      return
+    }
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setEditingProduct(null)
     setInitialBarcode(createBarcodeParam)
     setModalOpen(true)
-  }, [createBarcodeParam, shouldOpenCreate])
+  }, [createBarcodeParam, isAdmin, shouldOpenCreate])
 
   const filters = useMemo(
     () => ({
@@ -92,10 +97,10 @@ export function ProductsPage() {
       clothingTypeId: clothingTypeId || undefined,
       sizeId: sizeId || undefined,
       colorId: colorId || undefined,
-      active: activeFilter === '' ? null : activeFilter === 'active',
+      active: isAdmin ? (activeFilter === '' ? null : activeFilter === 'active') : true,
       lowStock,
     }),
-    [activeFilter, brandId, clothingTypeId, colorId, lowStock, query, sizeId],
+    [activeFilter, brandId, clothingTypeId, colorId, isAdmin, lowStock, query, sizeId],
   )
 
   const hasActiveFilters =
@@ -104,8 +109,11 @@ export function ProductsPage() {
     clothingTypeId !== '' ||
     sizeId !== '' ||
     colorId !== '' ||
-    activeFilter !== '' ||
+    (isAdmin && activeFilter !== '') ||
     lowStock
+  const filterGridClassName = isAdmin
+    ? 'grid gap-3 xl:grid-cols-[1.15fr_160px_180px_130px_150px_150px]'
+    : 'grid gap-3 xl:grid-cols-[1.15fr_160px_180px_130px_150px]'
 
   const loadRegistries = useCallback(async () => {
     setRegistries(await loadProductRegistries())
@@ -157,12 +165,22 @@ export function ProductsPage() {
   }, [filters])
 
   function openCreateModal() {
+    if (!isAdmin) {
+      setError('Apenas a administradora pode cadastrar produtos.')
+      return
+    }
+
     setEditingProduct(null)
     setInitialBarcode('')
     setModalOpen(true)
   }
 
   function openEditModal(product: Product) {
+    if (!isAdmin) {
+      setError('Apenas a administradora pode editar produtos.')
+      return
+    }
+
     setEditingProduct(product)
     setInitialBarcode('')
     setModalOpen(true)
@@ -185,6 +203,11 @@ export function ProductsPage() {
   }
 
   async function handleSubmit(values: ProductEditorFormValues, mode: ProductEditorSubmitMode) {
+    if (!isAdmin) {
+      setError('Apenas a administradora pode criar ou editar produtos.')
+      return false
+    }
+
     const payload: ProductInput = {
       name: values.name,
       barcode: values.barcode,
@@ -228,13 +251,22 @@ export function ProductsPage() {
   }
 
   async function handleQuickCreate(kind: RegistryKind, values: RegistryInput) {
+    if (!isAdmin) {
+      throw new Error('Apenas a administradora pode criar cadastros auxiliares.')
+    }
+
     const item = await createRegistryItem(kind, values)
     await loadRegistries()
     return item
   }
 
-  async function handleDelete(product: Product) {
-    const confirmed = window.confirm(`Excluir o produto "${product.name}"?`)
+  async function handleArchive(product: Product) {
+    if (!isAdmin) {
+      setError('Apenas a administradora pode arquivar produtos.')
+      return
+    }
+
+    const confirmed = window.confirm(`Arquivar o produto "${product.name}"?`)
     if (!confirmed) {
       return
     }
@@ -242,7 +274,7 @@ export function ProductsPage() {
     setError('')
 
     try {
-      await deleteProduct(product.id)
+      await archiveProduct(product.id)
       await loadProducts()
     } catch (err) {
       setError(friendlyCatalogError(err))
@@ -256,7 +288,7 @@ export function ProductsPage() {
     setClothingTypeId('')
     setSizeId('')
     setColorId('')
-    setActiveFilter('')
+    setActiveFilter(isAdmin ? '' : 'active')
     setLowStock(false)
   }
 
@@ -274,10 +306,12 @@ export function ProductsPage() {
           Ver tutorial de cadastro
         </Button>
         <BarcodeScanButton label="Ler código" variant="secondary" tone="light" onScan={handleBarcodeScan} />
-        <Button onClick={openCreateModal}>
-          <Plus className="h-4 w-4" />
-          Adicionar produto
-        </Button>
+        {isAdmin ? (
+          <Button onClick={openCreateModal}>
+            <Plus className="h-4 w-4" />
+            Adicionar produto
+          </Button>
+        ) : null}
       </div>
 
       {error ? (
@@ -305,7 +339,7 @@ export function ProductsPage() {
         </div>
 
         <div className="space-y-4 px-5 py-4">
-          <div className="grid gap-3 xl:grid-cols-[1.15fr_160px_180px_130px_150px_150px]">
+          <div className={filterGridClassName}>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-600" />
               <Input
@@ -346,18 +380,24 @@ export function ProductsPage() {
               options={registries.colors.map(toSelectOption)}
               clearLabel="Limpar"
             />
-            <select
-              className="h-10 rounded-md border-2 border-gray bg-white px-3 text-sm font-medium text-gray-900 shadow-sm outline-none transition hover:border-gray-500 focus:border-black focus:ring-2 focus:ring-gray-100"
-              value={activeFilter}
-              onChange={(event) => {
-                setLoading(true)
-                setActiveFilter(event.target.value)
-              }}
-            >
-              <option value="">Todos os status</option>
-              <option value="active">Ativos</option>
-              <option value="inactive">Inativos</option>
-            </select>
+            {isAdmin ? (
+              <select
+                className="h-10 rounded-md border-2 border-gray bg-white px-3 text-sm font-medium text-gray-900 shadow-sm outline-none transition hover:border-gray-500 focus:border-black focus:ring-2 focus:ring-gray-100"
+                value={statusFilter}
+                onChange={(event) => {
+                  setLoading(true)
+                  setActiveFilter(event.target.value)
+                }}
+              >
+                <option value="">Todos os status</option>
+                <option value="active">Ativos</option>
+                <option value="inactive">Inativos</option>
+              </select>
+            ) : (
+              <div className="flex h-10 items-center rounded-md border-2 border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700 shadow-sm">
+                Somente ativos
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -370,11 +410,16 @@ export function ProductsPage() {
             <EmptyState
               title="Nenhum produto encontrado."
               description="Cadastre um produto ou ajuste os filtros da busca."
-              action={<Button onClick={openCreateModal}>Adicionar produto</Button>}
+              action={isAdmin ? <Button onClick={openCreateModal}>Adicionar produto</Button> : undefined}
             />
           </div>
         ) : (
-          <ProductTable products={products} onEdit={openEditModal} onDelete={(product) => void handleDelete(product)} />
+          <ProductTable
+            products={products}
+            onEdit={openEditModal}
+            onArchive={(product) => void handleArchive(product)}
+            readOnly={!isAdmin}
+          />
         )}
       </section>
 
@@ -391,6 +436,7 @@ export function ProductsPage() {
           registries={registries}
           submitting={submitting}
           initialBarcode={initialBarcode}
+          error={error}
           onCancel={closeModal}
           onSubmit={handleSubmit}
           onQuickCreate={handleQuickCreate}
@@ -405,27 +451,53 @@ export function ProductsPage() {
           barcodeResult?.kind === 'found'
             ? [
                 {
-                  label: 'Editar produto',
+                  label: 'Ver produto',
                   onClick: () => {
                     if (!barcodeResult) {
                       return
                     }
 
                     setBarcodeResult(null)
-                    setEditingProduct(barcodeResult.product)
-                    setInitialBarcode('')
-                    setModalOpen(true)
+                    navigate(`/produtos?q=${encodeURIComponent(barcodeResult.code)}`)
                   },
                 },
+                ...(isAdmin
+                  ? [
+                      {
+                        label: 'Editar produto',
+                        onClick: () => {
+                          if (!barcodeResult) {
+                            return
+                          }
+
+                          setBarcodeResult(null)
+                          setEditingProduct(barcodeResult.product)
+                          setInitialBarcode('')
+                          setModalOpen(true)
+                        },
+                      },
+                      {
+                        label: 'Atualizar estoque',
+                        onClick: () => {
+                          if (!barcodeResult) {
+                            return
+                          }
+
+                          setBarcodeResult(null)
+                          navigate(`/estoque?barcode=${encodeURIComponent(barcodeResult.code)}&auto=1`)
+                        },
+                      },
+                    ]
+                  : []),
                 {
-                  label: 'Atualizar estoque',
+                  label: 'Nova venda',
                   onClick: () => {
                     if (!barcodeResult) {
                       return
                     }
 
                     setBarcodeResult(null)
-                    navigate(`/estoque?barcode=${encodeURIComponent(barcodeResult.code)}&auto=1`)
+                    navigate(`/caixa?acao=nova-venda&barcode=${encodeURIComponent(barcodeResult.code)}`)
                   },
                 },
                 {
@@ -435,19 +507,23 @@ export function ProductsPage() {
                 },
               ]
             : [
-                {
-                  label: 'Cadastrar este código',
-                  onClick: () => {
-                    if (!barcodeResult) {
-                      return
-                    }
+                ...(isAdmin
+                  ? [
+                      {
+                        label: 'Cadastrar este código',
+                        onClick: () => {
+                          if (!barcodeResult) {
+                            return
+                          }
 
-                    setBarcodeResult(null)
-                    setEditingProduct(null)
-                    setInitialBarcode(barcodeResult.code)
-                    setModalOpen(true)
-                  },
-                },
+                          setBarcodeResult(null)
+                          setEditingProduct(null)
+                          setInitialBarcode(barcodeResult.code)
+                          setModalOpen(true)
+                        },
+                      },
+                    ]
+                  : []),
                 {
                   label: 'Fechar',
                   variant: 'secondary',

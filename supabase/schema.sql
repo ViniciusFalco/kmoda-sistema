@@ -985,7 +985,7 @@ begin
     )
     returning id into v_sale_payment_id;
 
-    insert into public.cash_movements (
+    insert into public.cash_movements as cm (
       user_id,
       created_by,
       sale_id,
@@ -1013,7 +1013,7 @@ begin
       v_payment_method_value,
       p_notes
     )
-    returning id, public.cash_movements.movement_code
+    returning id, cm.movement_code
     into v_cash_movement_id, v_movement_code;
 
     update public.sale_payments
@@ -1026,7 +1026,7 @@ begin
     end if;
   end loop;
 
-  update public.cash_movements
+  update public.cash_movements cm
   set description = coalesce(
     (
       select string_agg(product_names.name, ', ' order by product_names.name)
@@ -1042,7 +1042,11 @@ begin
   where cm.sale_id = v_sale_id
     and cm.origin = 'sale';
 
-  return query select v_sale_id, v_first_cash_movement_id, v_first_movement_code;
+  return query
+  select
+    v_sale_id as sale_id,
+    v_first_cash_movement_id as cash_movement_id,
+    v_first_movement_code as movement_code;
 end;
 $$;
 
@@ -1139,7 +1143,9 @@ begin
   v_record_id := new.id;
 
   if tg_table_name = 'cash_movements' then
-    v_actor_user_id := coalesce(new.user_id, new.created_by, auth.uid());
+    v_actor_user_id := coalesce(new.created_by_user_id, new.user_id, new.created_by, auth.uid());
+  elsif tg_table_name = 'sales' then
+    v_actor_user_id := coalesce(new.created_by_user_id, new.user_id, auth.uid());
   else
     v_actor_user_id := coalesce(new.user_id, auth.uid());
   end if;

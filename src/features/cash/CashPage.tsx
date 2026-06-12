@@ -27,14 +27,15 @@ import type { CashHistoryEntry, CashHistoryMovement, CashMovement, CashSession }
 import { CashExpenseForm } from './CashExpenseForm'
 import { CashHistorySearchModal } from './CashHistorySearchModal'
 import { CashMovementDetailsModal } from './CashMovementDetailsModal'
-import { CashSaleCompletionModal } from './CashSaleCompletionModal'
 import { CashSaleForm } from './CashSaleForm'
 import { CloseCashSessionForm, OpenCashSessionForm } from './CashSessionModals'
 import { Pagination } from '../../components/ui/Pagination'
+import { useAuth } from '../../hooks/useAuth'
 
 type CashModal = 'sale' | 'expense' | 'history' | 'overview' | 'daily-history' | 'open-session' | 'close-session' | null
 
 export function CashPage() {
+  const { isAdmin, user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const searchParams = new URLSearchParams(location.search)
@@ -49,7 +50,6 @@ export function CashPage() {
   const [previousOpenSession, setPreviousOpenSession] = useState<CashSession | null>(null)
   const [lastClosedSession, setLastClosedSession] = useState<CashSession | null>(null)
   const [saleHeaderCenter, setSaleHeaderCenter] = useState<ReactNode | null>(null)
-  const [saleCompletionTestOpen, setSaleCompletionTestOpen] = useState(false)
   const [sessionMovements, setSessionMovements] = useState<CashMovement[]>([])
   const [sessionMovementsLoading, setSessionMovementsLoading] = useState(false)
   const [sessionMovementsRefreshKey, setSessionMovementsRefreshKey] = useState(0)
@@ -97,6 +97,8 @@ const dailyHistoryLastRecord = Math.min(
     : isCashOpen
       ? 'Resumo da sessão atual e lançamentos recentes.'
       : 'Resumo do último fechamento e lançamentos do dia.'
+  const canViewCashReports = Boolean(user)
+  const canViewAdminCashSearch = isAdmin
 
   const loadData = useCallback(async (showLoading = false) => {
     if (showLoading) {
@@ -164,7 +166,7 @@ const dailyHistoryLastRecord = Math.min(
   }, [])
 
   useEffect(() => {
-    if (!saleIdFromQuery) {
+    if (!canViewAdminCashSearch || !saleIdFromQuery) {
       return
     }
 
@@ -199,7 +201,7 @@ const dailyHistoryLastRecord = Math.min(
     return () => {
       active = false
     }
-  }, [saleIdFromQuery])
+  }, [canViewAdminCashSearch, saleIdFromQuery])
 
   useEffect(() => {
     let active = true
@@ -237,10 +239,12 @@ const dailyHistoryLastRecord = Math.min(
   }, [sessionForDetailsId, sessionForDetailsOpenedAt, sessionMovementsRefreshKey])
 
   useEffect(() => {
-  if (activeModal === 'daily-history') {
+    if (!canViewCashReports || activeModal !== 'daily-history') {
+      return
+    }
+
     setDailyHistoryPage(1)
-  }
-}, [activeModal])
+  }, [activeModal, canViewCashReports])
 
   const dayTotals = useMemo(() => {
     const income = todayMovements
@@ -346,26 +350,39 @@ const dailyHistoryLastRecord = Math.min(
             disabled={loading}
             onClick={() => setActiveModal('expense')}
           />
-          <CashMenuButton
-            title="Histórico do dia"
-            active={activeModal === 'daily-history'}
-            disabled={loading}
-            onClick={() => setActiveModal('daily-history')}
-          />
-          <CashMenuButton
-            title="Histórico por pesquisa"
-            active={activeModal === 'history'}
-            disabled={loading}
-            onClick={() => setActiveModal('history')}
-          />
-          <div className="sm:col-span-2">
+          {canViewCashReports ? (
+            <CashMenuButton
+              title="Histórico do dia"
+              active={activeModal === 'daily-history'}
+              disabled={loading}
+              onClick={() => setActiveModal('daily-history')}
+            />
+          ) : null}
+          {canViewAdminCashSearch ? (
+            <CashMenuButton
+              title="Histórico por pesquisa"
+              active={activeModal === 'history'}
+              disabled={loading}
+              onClick={() => setActiveModal('history')}
+            />
+          ) : null}
+          {canViewAdminCashSearch ? (
+            <div className="sm:col-span-2">
+              <CashMenuButton
+                title="Visão geral"
+                active={activeModal === 'overview'}
+                disabled={loading}
+                onClick={() => setActiveModal('overview')}
+              />
+            </div>
+          ) : canViewCashReports ? (
             <CashMenuButton
               title="Visão geral"
               active={activeModal === 'overview'}
               disabled={loading}
               onClick={() => setActiveModal('overview')}
             />
-          </div>
+          ) : null}
         </div>
       </section>
 
@@ -375,29 +392,22 @@ const dailyHistoryLastRecord = Math.min(
         <CashMetricCard label="Despesas do dia" value={formatCurrencyBRL(dayTotals.expense)} icon={<ArrowDownCircle className="h-4 w-4" />} accent="red" />
       </section>
 
-      <section className="shrink-0 flex justify-end">
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => navigate('/tutoriais/criar-venda')}
-            className="border-gray-300 bg-white text-gray-700 shadow-sm hover:border-gray-900 hover:text-gray-900"
-          >
-            <BookOpenText className="h-4 w-4" />
-            Ver tutorial de venda
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => setSaleCompletionTestOpen(true)}
-            className="border-gray-300 bg-white text-gray-700 shadow-sm hover:border-gray-900 hover:text-gray-900"
-          >
-            Testar animação de venda
-          </Button>
-        </div>
-      </section>
+      {canViewAdminCashSearch ? (
+        <section className="shrink-0 flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate('/tutoriais/criar-venda')}
+              className="border-gray-300 bg-white text-gray-700 shadow-sm hover:border-gray-900 hover:text-gray-900"
+            >
+              <BookOpenText className="h-4 w-4" />
+              Ver tutorial de venda
+            </Button>
+          </div>
+        </section>
+      ) : null}
 
       {error ? (
         <div className="shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
@@ -480,14 +490,8 @@ const dailyHistoryLastRecord = Math.min(
         </div>
       </Modal>
 
-      <CashSaleCompletionModal
-        open={saleCompletionTestOpen}
-        total={98}
-        customerName="Cliente teste"
-        onClose={() => setSaleCompletionTestOpen(false)}
-      />
-
-      <Modal open={activeModal === 'daily-history'} title="Histórico do dia" onClose={() => setActiveModal(null)} size="6xl">
+      {canViewCashReports ? (
+        <Modal open={activeModal === 'daily-history'} title="Histórico do dia" onClose={() => setActiveModal(null)} size="6xl">
         <div className="space-y-4">
           <p className="text-sm text-gray-500">
             Lançamentos de {formatDateBR(todayISODate())}. Clique em uma linha para ver detalhes.
@@ -502,12 +506,13 @@ const dailyHistoryLastRecord = Math.min(
           ) : (
             <div className="overflow-hidden rounded-md border-2 border-gray-200">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm text-gray-700">
+                <table className="w-full min-w-[860px] border-collapse bg-white text-left text-sm text-gray-700">
                   <thead className="bg-black text-[11px] uppercase tracking-[0.14em] text-gray-100">
                     <tr>
                       <th className="px-4 py-3 font-semibold">ID</th>
                       <th className="px-4 py-3 font-semibold">Tipo</th>
                       <th className="px-4 py-3 font-semibold">Descrição</th>
+                      <th className="px-4 py-3 font-semibold">Operador</th>
                       <th className="px-4 py-3 font-semibold">Valor</th>
                       <th className="px-4 py-3 font-semibold">Data</th>
                       <th className="px-4 py-3 font-semibold">Pagamento</th>
@@ -545,6 +550,9 @@ const dailyHistoryLastRecord = Math.min(
                                 : 'Fechamento de caixa'
                               : movementDescription(entry)}
                           </td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {isSession ? '-' : entry.created_by_name ?? entry.sale?.created_by_name ?? '-'}
+                          </td>
                           <td className={`px-4 py-3 ${isSession ? 'text-gray-700' : isIncome ? 'text-emerald-700' : 'text-rose-700'}`}>
                             {isSession ? '' : entry.type === 'income' ? '+' : '-'}
                             {formatCurrencyBRL(entry.amount)}
@@ -576,7 +584,8 @@ const dailyHistoryLastRecord = Math.min(
             </div>
           )}
         </div>
-      </Modal>
+        </Modal>
+      ) : null}
 
       <Modal
         open={activeModal === 'sale'}
@@ -639,13 +648,15 @@ const dailyHistoryLastRecord = Math.min(
         ) : null}
       </Modal>
 
-      <CashHistorySearchModal
-        open={activeModal === 'history'}
-        onClose={() => setActiveModal(null)}
-        onSelectEntry={setSelectedHistoryEntry}
-      />
+      {canViewAdminCashSearch ? (
+        <CashHistorySearchModal
+          open={activeModal === 'history'}
+          onClose={() => setActiveModal(null)}
+          onSelectEntry={setSelectedHistoryEntry}
+        />
+      ) : null}
 
-      <CashMovementDetailsModal entry={selectedHistoryEntry} onClose={closeSelectedHistoryEntry} />
+      {canViewCashReports ? <CashMovementDetailsModal entry={selectedHistoryEntry} onClose={closeSelectedHistoryEntry} /> : null}
     </div>
   )
 }

@@ -14,7 +14,7 @@ interface CustomerFormProps {
 }
 
 export function CustomerForm({ customer, onCancel, onSaved, onDeleted }: CustomerFormProps) {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [name, setName] = useState(customer?.name ?? '')
   const [phone, setPhone] = useState(customer?.phone ? formatPhoneBR(customer.phone) : '')
   const [email, setEmail] = useState(customer?.email ?? '')
@@ -26,6 +26,11 @@ export function CustomerForm({ customer, onCancel, onSaved, onDeleted }: Custome
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+
+    if (!isAdmin) {
+      setError('Apenas a administradora pode alterar clientes.')
+      return
+    }
 
     if (!name.trim()) {
       setError('Informe o nome do cliente.')
@@ -55,6 +60,11 @@ export function CustomerForm({ customer, onCancel, onSaved, onDeleted }: Custome
 
   async function handleDelete() {
     if (!customer) {
+      return
+    }
+
+    if (!isAdmin) {
+      setError('Apenas a administradora pode excluir clientes.')
       return
     }
 
@@ -109,7 +119,7 @@ export function CustomerForm({ customer, onCancel, onSaved, onDeleted }: Custome
         />
       </label>
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-        {customer ? (
+        {customer && isAdmin ? (
           <Button type="button" variant="secondary" onClick={handleDelete} disabled={submitting || deleting}>
             {deleting ? 'Excluindo...' : 'Excluir cliente'}
           </Button>
@@ -117,7 +127,7 @@ export function CustomerForm({ customer, onCancel, onSaved, onDeleted }: Custome
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={submitting}>
+        <Button type="submit" disabled={submitting || !isAdmin}>
           {submitting ? 'Salvando...' : 'Salvar cliente'}
         </Button>
       </div>

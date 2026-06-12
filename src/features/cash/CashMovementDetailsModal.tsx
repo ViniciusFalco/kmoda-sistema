@@ -2,7 +2,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Table } from '../../components/ui/Table'
 import { formatCurrencyBRL, formatDateBR } from '../../lib/utils'
-import { formatSalePaymentSummary, getSaleConditionTotals } from '../../lib/catalog'
+import { formatSalePaymentSummary, formatUserRoleLabel, getSaleConditionTotals } from '../../lib/catalog'
 import type { CashHistoryEntry, CashMovement } from '../../types/database'
 import type { ReactNode } from 'react'
 
@@ -52,6 +52,22 @@ export function CashMovementDetailsModal({ entry, onClose }: CashMovementDetails
           <Detail label="À vista" value={isSession ? '-' : formatCurrencyBRL(saleTotals.cashSubtotal)} />
           <Detail label="Parcelado" value={isSession ? '-' : formatCurrencyBRL(saleTotals.installmentSubtotal)} />
           <Detail label="Recebimentos" value={isSession ? '-' : paymentSummary} />
+          <Detail
+            label="Operador"
+            value={isSession ? '-' : movement?.created_by_name ?? movement?.sale?.created_by_name ?? movement?.sale?.created_by_user_id ?? movement?.user_id ?? '-'}
+          />
+          <Detail
+            label="Perfil"
+            value={isSession ? '-' : formatUserRoleLabel(movement?.created_by_role ?? movement?.sale?.created_by_role)}
+          />
+          <Detail
+            label="PIN confirmado em"
+            value={
+              isSession
+                ? '-'
+                : formatDateBR(movement?.confirmed_with_pin_at ?? movement?.sale?.confirmed_with_pin_at ?? movement?.created_at)
+            }
+          />
           <Detail label="Criado em" value={formatDateBR(entry.created_at)} />
           <Detail
             label="Atualizado em"

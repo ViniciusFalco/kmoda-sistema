@@ -9,18 +9,19 @@ import {
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { recordAppActivity } from '../lib/monitoring'
-import { loadUserProfile } from '../lib/profileSettings'
+import { lookupProfileByPin, loadUserProfile } from '../lib/profileSettings'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import type { UserProfile } from '../types/database'
+import type { UserProfile, UserRole } from '../types/database'
 
 interface AuthContextValue {
   user: User | null
   session: Session | null
   profile: UserProfile | null
   isAdmin: boolean
+  isCashier: boolean
   loading: boolean
   authReady: boolean
-  signIn: (email: string, password: string) => Promise<{ error?: string }>
+  signInWithPin: (pin: string) => Promise<{ error?: string; role?: UserRole }>
   signOut: () => Promise<void>
 }
 
@@ -33,7 +34,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [authReady, setAuthReady] = useState(!supabase)
 
   useEffect(() => {
-    if (!supabase) {
+    const client = supabase
+
+    if (!client) {
       return undefined
     }
 
@@ -56,6 +59,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (active) {
           setProfile(nextProfile)
         }
+        if (!nextProfile || nextProfile.active === false) {
+          await client!.auth.signOut()
+          if (active) {
+            setSession(null)
+            setProfile(null)
+          }
+          return
+        }
       } catch (error) {
         console.error('Erro ao carregar perfil do usuário:', error)
         if (active) {
@@ -69,7 +80,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
     }
 
-    supabase.auth.getSession().then(({ data, error }) => {
+    client.auth.getSession().then(({ data, error }) => {
       if (error) {
         console.error('Erro ao recuperar sessão do Supabase:', error.message)
       }
@@ -77,7 +88,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       void syncSessionProfile(data.session)
     })
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession)
       setLoading(true)
       void syncSessionProfile(nextSession)
@@ -95,9 +106,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session,
       profile,
       isAdmin: profile?.role === 'admin',
+      isCashier: profile ? profile.role !== 'admin' : false,
       loading,
       authReady,
-      async signIn(email, password) {
+      async signInWithPin(pin) {
         if (!supabase || !isSupabaseConfigured) {
           return {
             error:
@@ -105,8 +117,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
           }
         }
 
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-        setSession(data.session)
+        let profileLookup
+
+        try {
+          profileLookup = await lookupProfileByPin(pin)
+        } catch (error) {
+          return { error: error instanceof Error ? error.message : 'PIN inválido.' }
+        }
+
+        if (!profileLookup) {
+          return { error: 'PIN inválido.' }
+        }
+
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: profileLookup.auth_email,
+          password: pin.trim(),
+        })
+
+        setSession(data.session ?? null)
 
         if (!error) {
           void recordAppActivity('login', data.user?.id ?? data.session?.user.id ?? null, {
@@ -116,7 +144,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           })
         }
 
-        return error ? { error: error.message } : {}
+        return error ? { error: error.message } : { role: profileLookup.role }
       },
       async signOut() {
         if (supabase) {

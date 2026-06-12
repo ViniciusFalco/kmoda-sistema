@@ -1,4 +1,4 @@
-import { Edit, Trash2 } from 'lucide-react'
+import { Archive, Edit } from 'lucide-react'
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -9,12 +9,18 @@ import type { Product } from '../../types/database'
 interface ProductTableProps {
   products: Product[]
   onEdit: (product: Product) => void
-  onDelete: (product: Product) => void
+  onArchive: (product: Product) => void
+  readOnly?: boolean
 }
 
-export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) {
+export function ProductTable({ products, onEdit, onArchive, readOnly = false }: ProductTableProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+  const hasActionsColumn = !readOnly
+  const tableMinWidth = hasActionsColumn ? 'min-w-[1080px]' : 'min-w-[1000px]'
+  const colWidths = hasActionsColumn
+    ? ['20%', '8%', '12%', '12%', '8%', '10%', '10%', '6%', '6%', '8%']
+    : ['20%', '8%', '12%', '12%', '8%', '10%', '14%', '8%', '8%']
 
   const totalPages = Math.ceil(products.length / itemsPerPage)
 
@@ -38,29 +44,23 @@ export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) 
   }, [products])
 
   function handleRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, product: Product) {
+    if (readOnly) {
+      return
+    }
+
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       onEdit(product)
     }
   }
-
-
-
   return (
     <div className="w-full overflow-hidden">
       <div className="w-full overflow-x-auto overflow-y-hidden">
-        <table className="w-full min-w-[1080px] table-fixed border-collapse text-sm">
+        <table className={`w-full ${tableMinWidth} table-fixed border-collapse text-sm`}>
           <colgroup>
-            <col className="w-[20%]" />
-            <col className="w-[8%]" />
-            <col className="w-[12%]" />
-            <col className="w-[12%]" />
-            <col className="w-[8%]" />
-            <col className="w-[10%]" />
-            <col className="w-[10%]" />
-            <col className="w-[6%]" />
-            <col className="w-[6%]" />
-            <col className="w-[8%]" />
+            {colWidths.map((width, index) => (
+              <col key={`${width}-${index}`} style={{ width }} />
+            ))}
           </colgroup>
           <thead className="bg-black text-gray-100">
             <tr>
@@ -73,19 +73,19 @@ export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) 
               <th className="whitespace-nowrap px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.18em]">Venda</th>
               <th className="whitespace-nowrap px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.18em]">Estoque</th>
               <th className="whitespace-nowrap px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.18em]">Status</th>
-              <th className="whitespace-nowrap px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.18em]">Ações</th>
+              {hasActionsColumn ? <th className="whitespace-nowrap px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.18em]">Ações</th> : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 bg-white">
             {paginatedProducts.map((product) => (
               <tr
                 key={product.id}
-                className="cursor-pointer transition hover:bg-gray-50/80 focus-within:bg-gray-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-300"
-                tabIndex={0}
-                role="button"
-                aria-label={`Editar produto ${product.product_model?.name ?? product.name}`}
-                onClick={() => onEdit(product)}
-                onKeyDown={(event) => handleRowKeyDown(event, product)}
+                className={`transition ${readOnly ? '' : 'cursor-pointer hover:bg-gray-50/80 focus-within:bg-gray-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-300'}`}
+                tabIndex={readOnly ? undefined : 0}
+                role={readOnly ? undefined : 'button'}
+                aria-label={readOnly ? undefined : `Editar produto ${product.product_model?.name ?? product.name}`}
+                onClick={readOnly ? undefined : () => onEdit(product)}
+                onKeyDown={readOnly ? undefined : (event) => handleRowKeyDown(event, product)}
               >
                 <td className="px-4 py-4 text-left text-gray-950">
                   <p className="truncate font-medium leading-6">{product.product_model?.name ?? product.name}</p>
@@ -124,32 +124,34 @@ export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) 
                 <td className="px-2 py-4 text-center">
                   <Badge variant={product.active ? 'success' : 'neutral'}>{product.active ? 'Ativo' : 'Inativo'}</Badge>
                 </td>
-                <td className="px-2 py-4">
-                  <div className="flex justify-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      aria-label="Editar produto"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onEdit(product)
-                      }}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Excluir produto"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onDelete(product)
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </td>
+                {hasActionsColumn ? (
+                  <td className="px-2 py-4">
+                    <div className="flex justify-center gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        aria-label="Editar produto"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onEdit(product)
+                        }}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label="Arquivar produto"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onArchive(product)
+                        }}
+                      >
+                        <Archive className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>

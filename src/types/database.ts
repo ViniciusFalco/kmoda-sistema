@@ -38,11 +38,14 @@ export type AppActivityType =
   | 'customer_create'
   | 'customer_update'
 
+export type UserRole = 'admin' | 'cashier' | 'operator'
+
 export interface UserProfile {
   id: string
   user_id: string
   name: string
-  role: 'admin' | 'operator'
+  role: UserRole
+  active: boolean
   created_at: string
   updated_at: string
 }
@@ -153,6 +156,10 @@ export interface Customer {
 export interface Sale {
   id: string
   user_id?: string | null
+  created_by_user_id?: string | null
+  created_by_name?: string | null
+  created_by_role?: UserRole | null
+  confirmed_with_pin_at?: string | null
   customer_id?: string | null
   total_amount: number
   payment_method: PaymentMethod
@@ -213,6 +220,10 @@ export interface CashMovement {
   id: string
   user_id?: string | null
   created_by?: string | null
+  created_by_user_id?: string | null
+  created_by_name?: string | null
+  created_by_role?: UserRole | null
+  confirmed_with_pin_at?: string | null
   sale_id?: string | null
   sale_payment_id?: string | null
   cash_session_id?: string | null

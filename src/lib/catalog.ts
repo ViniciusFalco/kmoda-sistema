@@ -27,7 +27,7 @@ import type {
   StockMovementReason,
   StockMovementType,
 } from '../types/database'
-import { formatCurrencyBRL, formatDateBR, getNowLocalTimestamp, todayISODate } from './utils'
+import { formatCurrencyBRL, formatDateBR, todayISODate } from './utils'
 
 type RegistryTableMap = {
   brands: Brand
@@ -221,6 +221,20 @@ export function formatPaymentMethodLabel(method?: PaymentMethod | null, installm
   }
 
   return 'Outro'
+}
+
+export function formatUserRoleLabel(role?: string | null) {
+  if (!role) {
+    return '-'
+  }
+
+  const labels: Record<string, string> = {
+    admin: 'Administradora',
+    cashier: 'Operadora de caixa',
+    operator: 'Operadora',
+  }
+
+  return labels[role] ?? role
 }
 
 export function formatSalePaymentSummary(sale?: Sale | null) {
@@ -942,13 +956,20 @@ export async function updateProduct(id: string, input: ProductInput) {
   return createProductVariant(input, null, id)
 }
 
-export async function deleteProduct(id: string) {
+export async function archiveProduct(id: string) {
   const client = getSupabase()
-  const { error } = await client.from('products').delete().eq('id', id)
+  const { error } = await client
+    .from('products')
+    .update({ active: false })
+    .eq('id', id)
 
   if (error) {
     throw new Error(error.message)
   }
+}
+
+export async function deleteProduct(id: string) {
+  return archiveProduct(id)
 }
 
 export async function findProductForSale(query: string) {
@@ -1083,6 +1104,7 @@ export interface CashExpenseInput {
   notes?: string | null
   user?: User | null
   cashSessionId?: string | null
+  confirmationPin?: string
 }
 
 export interface CashIncomeInput {
@@ -1093,6 +1115,7 @@ export interface CashIncomeInput {
   notes?: string | null
   user?: User | null
   cashSessionId?: string | null
+  confirmationPin?: string
 }
 
 export interface SaleRegistrationInput {
@@ -1105,6 +1128,7 @@ export interface SaleRegistrationInput {
   notes?: string | null
   user?: User | null
   cashSessionId?: string | null
+  confirmationPin?: string
 }
 
 export interface CustomerInput {
@@ -1120,6 +1144,7 @@ export interface OpenCashSessionInput {
   openingAmount: number
   notes?: string | null
   user?: User | null
+  confirmationPin?: string
 }
 
 export interface CloseCashSessionInput {
@@ -1129,6 +1154,7 @@ export interface CloseCashSessionInput {
   differenceAmount: number
   notes?: string | null
   user?: User | null
+  confirmationPin?: string
 }
 
 export interface CashMovementFilters {
@@ -1460,6 +1486,11 @@ export async function getLastClosedCashSession() {
 
 export async function openCashSession(input: OpenCashSessionInput) {
   const client = getSupabase()
+  const confirmationPin = input.confirmationPin?.trim()
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de abrir o caixa.')
+  }
+
   const existingOpenSession = await client
     .from('cash_sessions')
     .select('id, session_date, opened_at')
@@ -1481,48 +1512,59 @@ export async function openCashSession(input: OpenCashSessionInput) {
     )
   }
 
-  const { data, error } = await client
-    .from('cash_sessions')
-    .insert({
-      session_date: todayISODate(),
-      opening_amount: input.openingAmount,
-      status: 'open',
-      opened_by: input.user?.id ?? null,
-      notes: normalizeNullable(input.notes),
-    })
-    .select()
-    .single()
+  const { data, error } = await client.rpc('open_cash_session_with_pin', {
+    p_opening_amount: input.openingAmount,
+    p_notes: normalizeNullable(input.notes),
+    p_pin: confirmationPin,
+    p_user_id: input.user?.id ?? null,
+  } as never)
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return normalizeCashSession(data as CashSession)
+  const sessionId = (data as { session_id?: string } | null)?.session_id
+  if (!sessionId) {
+    throw new Error('Não foi possível abrir o caixa.')
+  }
+
+  const sessionResponse = await client.from('cash_sessions').select('*').eq('id', sessionId).single()
+  if (sessionResponse.error) {
+    throw new Error(sessionResponse.error.message)
+  }
+
+  return normalizeCashSession(sessionResponse.data as CashSession)
 }
 
 export async function closeCashSession(input: CloseCashSessionInput) {
   const client = getSupabase()
   const sessionId = requireUuid(input.sessionId)
-  const { data, error } = await client
-    .from('cash_sessions')
-    .update({
-      closing_amount: input.closingAmount,
-      expected_amount: input.expectedAmount,
-      difference_amount: input.differenceAmount,
-      status: 'closed',
-      closed_at: getNowLocalTimestamp(),
-      closed_by: input.user?.id ?? null,
-      notes: normalizeNullable(input.notes),
-    })
-    .eq('id', sessionId)
-    .select()
-    .single()
+  const confirmationPin = input.confirmationPin?.trim()
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de fechar o caixa.')
+  }
+
+  const { data, error } = await client.rpc('close_cash_session_with_pin', {
+    p_session_id: sessionId,
+    p_closing_amount: input.closingAmount,
+    p_expected_amount: input.expectedAmount,
+    p_difference_amount: input.differenceAmount,
+    p_notes: normalizeNullable(input.notes),
+    p_pin: confirmationPin,
+    p_user_id: input.user?.id ?? null,
+  } as never)
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return normalizeCashSession(data as CashSession)
+  const returnedSessionId = (data as { session_id?: string } | null)?.session_id ?? sessionId
+  const sessionResponse = await client.from('cash_sessions').select('*').eq('id', returnedSessionId).single()
+  if (sessionResponse.error) {
+    throw new Error(sessionResponse.error.message)
+  }
+
+  return normalizeCashSession(sessionResponse.data as CashSession)
 }
 
 export async function listTodayCashMovements(date = todayISODate()) {
@@ -1838,55 +1880,87 @@ export async function getAllTimeCashExpenseTotal() {
 export async function createCashExpense(input: CashExpenseInput) {
   const sessionId = requireUuid(input.cashSessionId)
   const client = getSupabase()
+  const confirmationPin = input.confirmationPin?.trim()
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de registrar a despesa.')
+  }
+
   const { data, error } = await client
-    .from('cash_movements')
-    .insert({
-      user_id: input.user?.id ?? null,
-      created_by: input.user?.id ?? null,
-      cash_session_id: sessionId,
-      type: 'expense',
-      origin: 'manual_expense',
-      description: input.description.trim(),
-      amount: Math.abs(input.amount),
-      movement_date: input.movementDate,
-      payment_method: input.paymentMethod,
-      notes: normalizeNullable(input.notes),
+    .rpc('register_cash_expense_with_pin', {
+      p_cash_session_id: sessionId,
+      p_description: input.description.trim(),
+      p_amount: Math.abs(input.amount),
+      p_movement_date: input.movementDate,
+      p_payment_method: input.paymentMethod,
+      p_notes: normalizeNullable(input.notes),
+      p_pin: confirmationPin,
+      p_user_id: null,
     } as never)
-    .select(cashMovementSelect)
     .single()
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return normalizeCashMovement(data as CashMovement)
+  const movementId = (data as { cash_movement_id?: string } | null)?.cash_movement_id
+  if (!movementId) {
+    throw new Error('Não foi possível registrar a despesa.')
+  }
+
+  const movementResponse = await client
+    .from('cash_movements')
+    .select(cashMovementSelect)
+    .eq('id', movementId)
+    .single()
+
+  if (movementResponse.error) {
+    throw new Error(movementResponse.error.message)
+  }
+
+  return normalizeCashMovement(movementResponse.data as CashMovement)
 }
 
 export async function createCashIncome(input: CashIncomeInput) {
   const sessionId = requireUuid(input.cashSessionId)
   const client = getSupabase()
+  const confirmationPin = input.confirmationPin?.trim()
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de registrar a entrada.')
+  }
+
   const { data, error } = await client
-    .from('cash_movements')
-    .insert({
-      user_id: input.user?.id ?? null,
-      created_by: input.user?.id ?? null,
-      cash_session_id: sessionId,
-      type: 'income',
-      origin: 'manual_income',
-      description: input.description.trim(),
-      amount: Math.abs(input.amount),
-      movement_date: input.movementDate,
-      payment_method: input.paymentMethod,
-      notes: normalizeNullable(input.notes),
+    .rpc('register_cash_income_with_pin', {
+      p_cash_session_id: sessionId,
+      p_description: input.description.trim(),
+      p_amount: Math.abs(input.amount),
+      p_movement_date: input.movementDate,
+      p_payment_method: input.paymentMethod,
+      p_notes: normalizeNullable(input.notes),
+      p_pin: confirmationPin,
+      p_user_id: null,
     } as never)
-    .select(cashMovementSelect)
     .single()
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return normalizeCashMovement(data as CashMovement)
+  const movementId = (data as { cash_movement_id?: string } | null)?.cash_movement_id
+  if (!movementId) {
+    throw new Error('Não foi possível registrar a entrada.')
+  }
+
+  const movementResponse = await client
+    .from('cash_movements')
+    .select(cashMovementSelect)
+    .eq('id', movementId)
+    .single()
+
+  if (movementResponse.error) {
+    throw new Error(movementResponse.error.message)
+  }
+
+  return normalizeCashMovement(movementResponse.data as CashMovement)
 }
 
 export async function registerSaleWithCashAndStock(input: SaleRegistrationInput) {
@@ -1895,6 +1969,10 @@ export async function registerSaleWithCashAndStock(input: SaleRegistrationInput)
   }
 
   const sessionId = requireUuid(input.cashSessionId)
+  const confirmationPin = input.confirmationPin?.trim()
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de finalizar a venda.')
+  }
 
   const client = getSupabase()
   const rpcItems = input.items.map((item) => {
@@ -1987,8 +2065,9 @@ export async function registerSaleWithCashAndStock(input: SaleRegistrationInput)
     p_installments_count: summaryInstallments,
     p_movement_date: input.movementDate,
     p_notes: normalizeNullable(input.notes),
-    p_user_id: input.user?.id ?? null,
+    p_user_id: null,
     p_cash_session_id: sessionId,
+    p_confirmation_pin: confirmationPin,
   } as never)
 
   if (error) {
@@ -2002,12 +2081,14 @@ export async function finalizeSale(
   items: SaleLineInput[],
   paymentMethod: PaymentMethod,
   user: User | null,
+  confirmationPin: string,
 ) {
   await registerSaleWithCashAndStock({
     items,
     paymentMethod,
     movementDate: todayISODate(),
     user,
+    confirmationPin,
   })
 }
 

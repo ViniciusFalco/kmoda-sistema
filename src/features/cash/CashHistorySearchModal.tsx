@@ -166,12 +166,13 @@ const recordLabel = result?.count === 1 ? 'registro' : 'registros'
             ) : (
               <div className="overflow-hidden rounded-lg border-2 border-gray-200">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm text-gray-700">
+                  <table className="w-full min-w-[860px] border-collapse bg-white text-left text-sm text-gray-700">
                     <thead className="bg-black text-[11px] uppercase tracking-[0.14em] text-gray-100">
                       <tr>
                         <th className="px-4 py-3 font-semibold">ID</th>
                         <th className="px-4 py-3 font-semibold">Tipo</th>
                         <th className="px-4 py-3 font-semibold">Descrição</th>
+                        <th className="px-4 py-3 font-semibold">Operador</th>
                         <th className="px-4 py-3 font-semibold">Valor</th>
                         <th className="px-4 py-3 font-semibold">Data</th>
                         <th className="px-4 py-3 font-semibold">Pagamento</th>
@@ -212,6 +213,9 @@ const recordLabel = result?.count === 1 ? 'registro' : 'registros'
                                   ? 'Abertura de caixa'
                                   : 'Fechamento de caixa'
                                 : movementDescription(entry)}
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">
+                              {isSession ? '-' : entry.created_by_name ?? entry.sale?.created_by_name ?? '-'}
                             </td>
                             <td className={`px-4 py-3 ${isSession ? 'text-gray-700' : isIncome ? 'text-emerald-700' : 'text-rose-700'}`}>
                               {isSession ? '' : entry.type === 'income' ? '+' : '-'}

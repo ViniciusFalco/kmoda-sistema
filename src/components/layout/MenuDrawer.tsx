@@ -5,13 +5,9 @@ import { cn } from '../../lib/utils'
 import { Button } from '../ui/Button'
 
 const menuItems = [
-  { label: 'Início', path: '/' },
-  { label: 'Caixa', path: '/caixa' },
-  { label: 'Estoque', path: '/estoque' },
+  { label: 'Caixa', path: '/' },
   { label: 'Produtos', path: '/produtos' },
   { label: 'Clientes', path: '/clientes' },
-  { label: 'Cadastros', path: '/categorias' },
-  { label: 'Configurações', path: '/configuracoes' },
   { label: 'Tutoriais', path: '/tutoriais' },
 ]
 
@@ -21,7 +17,19 @@ interface MenuDrawerProps {
 }
 
 export function MenuDrawer({ open, onClose }: MenuDrawerProps) {
-  const { signOut, user } = useAuth()
+  const { signOut, profile, isAdmin } = useAuth()
+  const visibleMenuItems = isAdmin
+    ? [
+        { label: 'Início', path: '/' },
+        { label: 'Caixa', path: '/caixa' },
+        { label: 'Estoque', path: '/estoque' },
+        { label: 'Produtos', path: '/produtos' },
+        { label: 'Clientes', path: '/clientes' },
+        { label: 'Cadastros', path: '/categorias' },
+        { label: 'Configurações', path: '/configuracoes' },
+        { label: 'Tutoriais', path: '/tutoriais' },
+      ]
+    : menuItems
 
   return (
     <>
@@ -46,7 +54,7 @@ export function MenuDrawer({ open, onClose }: MenuDrawerProps) {
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
-          {menuItems.map((item) => (
+          {visibleMenuItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
@@ -67,8 +75,8 @@ export function MenuDrawer({ open, onClose }: MenuDrawerProps) {
 
         <div className="border-t border-gray-100 p-3">
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-            <p className="text-sm font-medium text-gray-900">{user?.email ?? 'Sessão ativa'}</p>
-            <p className="mt-1 text-xs text-gray-500">Use o topo para acesso rápido às telas.</p>
+            <p className="text-sm font-medium text-gray-900">{profile?.name ?? 'Sessão ativa'}</p>
+            <p className="mt-1 text-xs text-gray-500">{isAdmin ? 'Perfil administradora' : 'Modo operador de caixa'}</p>
             <Button
               variant="secondary"
               className="mt-3 w-full justify-center"
