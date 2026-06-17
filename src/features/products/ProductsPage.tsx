@@ -11,12 +11,14 @@ import { SearchableSelect, type SelectOption } from '../../components/ui/Searcha
 import {
   createProduct,
   createRegistryItem,
-  archiveProduct,
+  deleteProduct,
   findBarcodeLookup,
   friendlyCatalogError,
+  getProductDeleteImpact,
   listProducts,
   loadProductRegistries,
   updateProduct,
+  type ProductDeleteImpact,
   type ProductInput,
   type RegistryInput,
 } from '../../lib/catalog'
@@ -28,6 +30,7 @@ import {
   type ProductEditorFormValues,
   type ProductEditorSubmitMode,
 } from './ProductEditorForm'
+import { ProductDeleteModal } from './ProductDeleteModal'
 import { ProductTable } from './ProductTable'
 
 interface ProductRegistries {
@@ -64,6 +67,11 @@ export function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [initialBarcode, setInitialBarcode] = useState('')
   const [barcodeResult, setBarcodeResult] = useState<BarcodeLookupResult | null>(null)
+  const [deleteModalProduct, setDeleteModalProduct] = useState<Product | null>(null)
+  const [deleteImpact, setDeleteImpact] = useState<ProductDeleteImpact | null>(null)
+  const [deleteImpactLoading, setDeleteImpactLoading] = useState(false)
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const createBarcodeParam = searchParams.get('barcode') ?? ''
   const shouldOpenCreate = searchParams.get('create') === '1'
@@ -202,6 +210,14 @@ export function ProductsPage() {
     setInitialBarcode('')
   }
 
+  function closeDeleteModal() {
+    setDeleteModalProduct(null)
+    setDeleteImpact(null)
+    setDeleteImpactLoading(false)
+    setDeleteSubmitting(false)
+    setDeleteError('')
+  }
+
   async function handleSubmit(values: ProductEditorFormValues, mode: ProductEditorSubmitMode) {
     if (!isAdmin) {
       setError('Apenas a administradora pode criar ou editar produtos.')
@@ -260,24 +276,44 @@ export function ProductsPage() {
     return item
   }
 
-  async function handleArchive(product: Product) {
+  async function handleDelete(product: Product) {
     if (!isAdmin) {
-      setError('Apenas a administradora pode arquivar produtos.')
-      return
-    }
-
-    const confirmed = window.confirm(`Arquivar o produto "${product.name}"?`)
-    if (!confirmed) {
+      setError('Apenas a administradora pode excluir produtos.')
       return
     }
 
     setError('')
+    setDeleteError('')
+    setDeleteModalProduct(product)
+    setDeleteImpact(null)
+    setDeleteImpactLoading(true)
 
     try {
-      await archiveProduct(product.id)
+      const impact = await getProductDeleteImpact(product.id)
+      setDeleteImpact(impact)
+    } catch (err) {
+      setDeleteError(friendlyCatalogError(err))
+    } finally {
+      setDeleteImpactLoading(false)
+    }
+  }
+
+  async function confirmDeleteProduct(pin: string) {
+    if (!deleteModalProduct) {
+      return
+    }
+
+    setDeleteSubmitting(true)
+    setDeleteError('')
+
+    try {
+      await deleteProduct(deleteModalProduct.id, pin)
+      closeDeleteModal()
       await loadProducts()
     } catch (err) {
-      setError(friendlyCatalogError(err))
+      setDeleteError(friendlyCatalogError(err))
+    } finally {
+      setDeleteSubmitting(false)
     }
   }
 
@@ -417,7 +453,7 @@ export function ProductsPage() {
           <ProductTable
             products={products}
             onEdit={openEditModal}
-            onArchive={(product) => void handleArchive(product)}
+            onDelete={(product) => void handleDelete(product)}
             readOnly={!isAdmin}
           />
         )}
@@ -442,6 +478,18 @@ export function ProductsPage() {
           onQuickCreate={handleQuickCreate}
         />
       </Modal>
+
+      <ProductDeleteModal
+        key={deleteModalProduct?.id ?? 'closed'}
+        open={deleteModalProduct !== null}
+        product={deleteModalProduct}
+        impact={deleteImpact}
+        loadingImpact={deleteImpactLoading}
+        submitting={deleteSubmitting}
+        error={deleteError}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDeleteProduct}
+      />
 
       <BarcodeResultModal
         open={barcodeResult !== null}

@@ -28,6 +28,8 @@ Crie um arquivo `.env` na raiz usando `.env.example` como base:
 ```bash
 VITE_SUPABASE_URL=https://seu-projeto.supabase.co
 VITE_SUPABASE_ANON_KEY=sua-chave-anon
+# Opcional: tempo de inatividade do logout em milissegundos
+VITE_SESSION_INACTIVITY_TIMEOUT_MS=900000
 ```
 
 Depois, execute `supabase/schema.sql` no SQL Editor do Supabase para criar as tabelas iniciais.

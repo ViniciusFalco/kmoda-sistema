@@ -139,6 +139,25 @@ export interface Product {
   color?: Color | null
 }
 
+export interface ProductSnapshot {
+  id?: string | null
+  name: string
+  barcode?: string | null
+  reference?: string | null
+  product_model_id?: string | null
+  product_model_name?: string | null
+  product_model_reference?: string | null
+  product_model_family?: string | null
+  brand_id?: string | null
+  brand_name?: string | null
+  clothing_type_id?: string | null
+  clothing_type_name?: string | null
+  size_id?: string | null
+  size_name?: string | null
+  color_id?: string | null
+  color_name?: string | null
+}
+
 export type ProductWithRelations = Product
 
 export interface Customer {
@@ -176,7 +195,7 @@ export interface Sale {
 export interface SaleItem {
   id: string
   sale_id: string
-  product_id: string
+  product_id: string | null
   quantity: number
   pricing_kind: SalePricingKind
   original_unit_price: number
@@ -185,6 +204,7 @@ export interface SaleItem {
   installments_count: number
   installment_value: number
   created_at: string
+  product_snapshot?: ProductSnapshot | null
   product?: Product | null
 }
 
@@ -203,7 +223,7 @@ export interface SalePayment {
 export interface StockMovement {
   id: string
   user_id?: string | null
-  product_id: string
+  product_id: string | null
   sale_id?: string | null
   cash_movement_id?: string | null
   type: StockMovementType
@@ -211,6 +231,7 @@ export interface StockMovement {
   quantity: number
   notes?: string | null
   created_at: string
+  product_snapshot?: ProductSnapshot | null
   product?: Product | null
   sale?: Sale | null
   cash_movement?: CashMovement | null

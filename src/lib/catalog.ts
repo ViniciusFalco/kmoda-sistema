@@ -15,6 +15,7 @@ import type {
   PaymentMethod,
   Product,
   ProductModel,
+  ProductSnapshot,
   SalePayment,
   SalePaymentSourceKind,
   SalePricingKind,
@@ -92,6 +93,205 @@ function normalizeProduct(product: Product): Product {
   }
 }
 
+function normalizeProductSnapshot(snapshot?: ProductSnapshot | null): ProductSnapshot | null {
+  if (!snapshot) {
+    return null
+  }
+
+  const name = normalizeNullable(snapshot.name)
+
+  if (!name) {
+    return null
+  }
+
+  return {
+    id: normalizeNullable(snapshot.id),
+    name,
+    barcode: normalizeNullable(snapshot.barcode),
+    reference: normalizeNullable(snapshot.reference),
+    product_model_id: normalizeNullable(snapshot.product_model_id),
+    product_model_name: normalizeNullable(snapshot.product_model_name),
+    product_model_reference: normalizeNullable(snapshot.product_model_reference),
+    product_model_family: normalizeNullable(snapshot.product_model_family),
+    brand_id: normalizeNullable(snapshot.brand_id),
+    brand_name: normalizeNullable(snapshot.brand_name),
+    clothing_type_id: normalizeNullable(snapshot.clothing_type_id),
+    clothing_type_name: normalizeNullable(snapshot.clothing_type_name),
+    size_id: normalizeNullable(snapshot.size_id),
+    size_name: normalizeNullable(snapshot.size_name),
+    color_id: normalizeNullable(snapshot.color_id),
+    color_name: normalizeNullable(snapshot.color_name),
+  }
+}
+
+function buildSnapshotBrand(id: string | null | undefined, name?: string | null, timestamp = new Date().toISOString()): Brand | null {
+  const normalizedName = normalizeNullable(name)
+
+  if (!normalizedName) {
+    return null
+  }
+
+  return {
+    id: id ?? '',
+    name: normalizedName,
+    description: null,
+    active: true,
+    created_at: timestamp,
+    updated_at: timestamp,
+  }
+}
+
+function buildSnapshotClothingType(
+  id: string | null | undefined,
+  name?: string | null,
+  timestamp = new Date().toISOString(),
+): ClothingType | null {
+  const normalizedName = normalizeNullable(name)
+
+  if (!normalizedName) {
+    return null
+  }
+
+  return {
+    id: id ?? '',
+    name: normalizedName,
+    description: null,
+    active: true,
+    created_at: timestamp,
+    updated_at: timestamp,
+  }
+}
+
+function buildSnapshotSize(id: string | null | undefined, name?: string | null, timestamp = new Date().toISOString()): Size | null {
+  const normalizedName = normalizeNullable(name)
+
+  if (!normalizedName) {
+    return null
+  }
+
+  return {
+    id: id ?? '',
+    name: normalizedName,
+    sort_order: null,
+    active: true,
+    created_at: timestamp,
+    updated_at: timestamp,
+  }
+}
+
+function buildSnapshotColor(id: string | null | undefined, name?: string | null, timestamp = new Date().toISOString()): Color | null {
+  const normalizedName = normalizeNullable(name)
+
+  if (!normalizedName) {
+    return null
+  }
+
+  return {
+    id: id ?? '',
+    name: normalizedName,
+    hex: null,
+    active: true,
+    created_at: timestamp,
+    updated_at: timestamp,
+  }
+}
+
+function buildSnapshotProductModel(snapshot: ProductSnapshot, timestamp = new Date().toISOString()): ProductModel | null {
+  const name = normalizeNullable(snapshot.product_model_name ?? snapshot.name)
+  const reference = normalizeNullable(snapshot.product_model_reference ?? snapshot.reference)
+
+  if (!name && !reference && !snapshot.product_model_family) {
+    return null
+  }
+
+  const brand = buildSnapshotBrand(snapshot.brand_id, snapshot.brand_name, timestamp)
+  const category = buildSnapshotClothingType(snapshot.clothing_type_id, snapshot.clothing_type_name, timestamp)
+
+  return {
+    id: snapshot.product_model_id ?? snapshot.id ?? '',
+    user_id: null,
+    reference: reference ?? '',
+    name: name ?? reference ?? 'Produto',
+    family: normalizeNullable(snapshot.product_model_family),
+    brand_id: snapshot.brand_id ?? null,
+    category_id: snapshot.clothing_type_id ?? null,
+    created_at: timestamp,
+    updated_at: timestamp,
+    brand,
+    category,
+  }
+}
+
+function buildProductSnapshot(product: Product): ProductSnapshot {
+  const productModel = product.product_model
+  const brand = productModel?.brand ?? product.brand
+  const clothingType = productModel?.category ?? product.clothing_type
+
+  return {
+    id: product.id,
+    name: productModel?.name ?? product.name,
+    barcode: normalizeNullable(product.barcode),
+    reference: normalizeNullable(product.reference ?? productModel?.reference),
+    product_model_id: product.product_model_id ?? productModel?.id ?? null,
+    product_model_name: normalizeNullable(productModel?.name ?? product.name),
+    product_model_reference: normalizeNullable(productModel?.reference ?? product.reference),
+    product_model_family: normalizeNullable(productModel?.family),
+    brand_id: product.brand_id ?? productModel?.brand_id ?? null,
+    brand_name: normalizeNullable(brand?.name),
+    clothing_type_id: product.clothing_type_id ?? productModel?.category_id ?? null,
+    clothing_type_name: normalizeNullable(clothingType?.name),
+    size_id: product.size_id ?? null,
+    size_name: normalizeNullable(product.size?.name),
+    color_id: product.color_id ?? null,
+    color_name: normalizeNullable(product.color?.name),
+  }
+}
+
+function hydrateProductSnapshot(
+  snapshot?: ProductSnapshot | null,
+  fallback?: { id?: string | null; created_at?: string | null; updated_at?: string | null },
+): Product | null {
+  const normalizedSnapshot = normalizeProductSnapshot(snapshot)
+
+  if (!normalizedSnapshot) {
+    return null
+  }
+
+  const timestamp = fallback?.created_at ?? fallback?.updated_at ?? new Date().toISOString()
+  const productModel = buildSnapshotProductModel(normalizedSnapshot, timestamp)
+  const brand = buildSnapshotBrand(normalizedSnapshot.brand_id, normalizedSnapshot.brand_name, timestamp)
+  const clothingType = buildSnapshotClothingType(normalizedSnapshot.clothing_type_id, normalizedSnapshot.clothing_type_name, timestamp)
+  const size = buildSnapshotSize(normalizedSnapshot.size_id, normalizedSnapshot.size_name, timestamp)
+  const color = buildSnapshotColor(normalizedSnapshot.color_id, normalizedSnapshot.color_name, timestamp)
+
+  return normalizeProduct({
+    id: normalizedSnapshot.id ?? fallback?.id ?? productModel?.id ?? '',
+    user_id: null,
+    name: normalizedSnapshot.name,
+    barcode: normalizedSnapshot.barcode ?? null,
+    product_model_id: normalizedSnapshot.product_model_id ?? null,
+    brand_id: normalizedSnapshot.brand_id ?? null,
+    clothing_type_id: normalizedSnapshot.clothing_type_id ?? null,
+    size_id: normalizedSnapshot.size_id ?? null,
+    color_id: normalizedSnapshot.color_id ?? null,
+    reference: normalizedSnapshot.reference ?? normalizedSnapshot.product_model_reference ?? null,
+    cost_price: 0,
+    sale_price: 0,
+    suggested_price: null,
+    stock_quantity: 0,
+    min_stock: 0,
+    description: null,
+    active: false,
+    created_at: timestamp,
+    updated_at: timestamp,
+    product_model: productModel,
+    brand,
+    clothing_type: clothingType,
+    size,
+    color,
+  })
+}
+
 function normalizeSalePayment(payment: SalePayment): SalePayment {
   const installmentsCount = normalizeNumber(payment.installments_count, 1)
   const amount = normalizeNumber(payment.amount)
@@ -120,6 +320,13 @@ function normalizeSaleItem(item: SaleItem): SaleItem {
   const installmentValue = item.installment_value === null || item.installment_value === undefined
     ? totalPrice / Math.max(1, installmentsCount)
     : Number(item.installment_value)
+  const product = item.product
+    ? normalizeProduct(item.product)
+    : hydrateProductSnapshot(item.product_snapshot ?? null, {
+        id: item.product_id,
+        created_at: item.created_at,
+        updated_at: item.created_at,
+      })
 
   return {
     ...item,
@@ -130,10 +337,12 @@ function normalizeSaleItem(item: SaleItem): SaleItem {
     total_price: totalPrice,
     installments_count: installmentsCount,
     installment_value: installmentValue,
+    product_snapshot: normalizeProductSnapshot(item.product_snapshot ?? null),
+    product,
   }
 }
 
-function normalizeSale(sale: Sale): Sale {
+export function normalizeSaleWithRelations(sale: Sale): Sale {
   return {
     ...sale,
     total_amount: normalizeNumber(sale.total_amount),
@@ -141,18 +350,6 @@ function normalizeSale(sale: Sale): Sale {
     customer: sale.customer ?? null,
     sale_items: sale.sale_items?.map(normalizeSaleItem),
     sale_payments: sale.sale_payments?.map(normalizeSalePayment),
-  }
-}
-
-function normalizeSaleWithRelations(sale: Sale): Sale {
-  const normalizedSale = normalizeSale(sale)
-
-  return {
-    ...normalizedSale,
-    sale_items: normalizedSale.sale_items?.map((item) => ({
-      ...item,
-      product: item.product ? normalizeProduct(item.product) : null,
-    })),
   }
 }
 
@@ -197,6 +394,26 @@ function normalizeCashMovement(movement: CashMovement): CashMovement {
     sale_payment: movement.sale_payment ? normalizeSalePayment(movement.sale_payment) : null,
     sale: movement.sale ? normalizeSaleWithRelations(movement.sale) : null,
   }
+}
+
+function normalizeStockMovement(movement: StockMovement): StockMovement {
+  return {
+    ...movement,
+    product_snapshot: normalizeProductSnapshot(movement.product_snapshot ?? null),
+    product: movement.product
+      ? normalizeProduct(movement.product)
+      : hydrateProductSnapshot(movement.product_snapshot ?? null, {
+          id: movement.product_id,
+          created_at: movement.created_at,
+          updated_at: movement.created_at,
+        }),
+    sale: movement.sale ? normalizeSaleWithRelations(movement.sale) : null,
+    cash_movement: movement.cash_movement ? normalizeCashMovement(movement.cash_movement) : null,
+  }
+}
+
+export function normalizeStockMovementWithRelations(movement: StockMovement): StockMovement {
+  return normalizeStockMovement(movement)
 }
 
 export function formatPaymentMethodLabel(method?: PaymentMethod | null, installmentsCount = 1) {
@@ -567,22 +784,48 @@ const salePaymentSelect = `
   created_at
 `
 
-const saleSelect = `
-  *,
-  customer:customers(${customerSelect}),
-  sale_items(
+function isMissingProductSnapshotColumnError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+
+  return message.includes('product_snapshot') && message.includes('does not exist')
+}
+
+export function buildSaleSelect(includeProductSnapshot = true) {
+  return `
     *,
-    product:products(
+    customer:customers(${customerSelect}),
+    sale_items(
       *,
-      product_model:product_models(${productModelSelect}),
-      brand:brands(id, name, description, active, created_at, updated_at),
-      clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
-      size:sizes(id, name, sort_order, active, created_at, updated_at),
-      color:colors(id, name, hex, active, created_at, updated_at)
-    )
-  ),
-  sale_payments(${salePaymentSelect})
-`
+      ${includeProductSnapshot ? 'product_snapshot,' : ''}
+      product:products(
+        *,
+        product_model:product_models(${productModelSelect}),
+        brand:brands(id, name, description, active, created_at, updated_at),
+        clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
+        size:sizes(id, name, sort_order, active, created_at, updated_at),
+        color:colors(id, name, hex, active, created_at, updated_at)
+      )
+    ),
+    sale_payments(${salePaymentSelect})
+  `
+}
+
+export function buildStockMovementSelect(includeProductSnapshot = true) {
+  return `
+        *,
+        ${includeProductSnapshot ? 'product_snapshot,' : ''}
+        product:products(
+          *,
+          product_model:product_models(${productModelSelect}),
+          brand:brands(id, name, description, active, created_at, updated_at),
+          clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
+          size:sizes(id, name, sort_order, active, created_at, updated_at),
+          color:colors(id, name, hex, active, created_at, updated_at)
+        ),
+        sale:sales(${buildSaleSelect(includeProductSnapshot)}),
+        cash_movement:cash_movements(id, movement_code, description, amount, movement_date)
+      `
+}
 
 export async function listProducts(filters: ProductFilters = {}) {
   const client = getSupabase()
@@ -956,20 +1199,60 @@ export async function updateProduct(id: string, input: ProductInput) {
   return createProductVariant(input, null, id)
 }
 
-export async function archiveProduct(id: string) {
+// Mantido por compatibilidade com chamadas antigas; agora a ação é exclusão real.
+export async function archiveProduct(id: string, confirmationPin?: string) {
+  return deleteProduct(id, confirmationPin ?? '')
+}
+
+export interface ProductDeleteImpact {
+  sale_items_count: number
+  stock_movements_count: number
+  total_related_count: number
+}
+
+export async function getProductDeleteImpact(productId: string): Promise<ProductDeleteImpact> {
   const client = getSupabase()
-  const { error } = await client
-    .from('products')
-    .update({ active: false })
-    .eq('id', id)
+  const [saleItemsResponse, stockMovementsResponse] = await Promise.all([
+    client.from('sale_items').select('id', { count: 'exact', head: true }).eq('product_id', productId),
+    client.from('stock_movements').select('id', { count: 'exact', head: true }).eq('product_id', productId),
+  ])
+
+  if (saleItemsResponse.error) {
+    throw new Error(saleItemsResponse.error.message)
+  }
+
+  if (stockMovementsResponse.error) {
+    throw new Error(stockMovementsResponse.error.message)
+  }
+
+  const saleItemsCount = saleItemsResponse.count ?? 0
+  const stockMovementsCount = stockMovementsResponse.count ?? 0
+
+  return {
+    sale_items_count: saleItemsCount,
+    stock_movements_count: stockMovementsCount,
+    total_related_count: saleItemsCount + stockMovementsCount,
+  }
+}
+
+export async function deleteProduct(id: string, confirmationPin: string) {
+  const client = getSupabase()
+  const pin = confirmationPin.trim()
+
+  if (!pin) {
+    throw new Error('Confirme a exclusão com o PIN de administrador.')
+  }
+
+  const { error } = await client.rpc('admin_delete_product_with_pin', {
+    p_product_id: id,
+    p_pin: pin,
+    p_user_id: null,
+  } as never)
 
   if (error) {
     throw new Error(error.message)
   }
-}
 
-export async function deleteProduct(id: string) {
-  return archiveProduct(id)
 }
 
 export async function findProductForSale(query: string) {
@@ -1006,7 +1289,7 @@ export async function createStockMovement({
   const client = getSupabase()
   const { data: product, error: productError } = await client
     .from('products')
-    .select('id, stock_quantity')
+    .select(productSelect)
     .eq('id', productId)
     .single()
 
@@ -1014,8 +1297,10 @@ export async function createStockMovement({
     throw new Error(productError.message)
   }
 
+  const normalizedProduct = normalizeProduct(product as Product)
+
   if (applyStockUpdate) {
-    const currentStock = Number(product.stock_quantity ?? 0)
+    const currentStock = Number(normalizedProduct.stock_quantity ?? 0)
     const nextStock = type === 'entrada' ? currentStock + quantity : currentStock - quantity
 
     if (nextStock < 0) {
@@ -1035,6 +1320,7 @@ export async function createStockMovement({
   const { error } = await client.from('stock_movements').insert({
     user_id: user?.id ?? null,
     product_id: productId,
+    product_snapshot: buildProductSnapshot(normalizedProduct),
     type,
     reason,
     quantity,
@@ -1048,34 +1334,25 @@ export async function createStockMovement({
 
 export async function listStockMovements() {
   const client = getSupabase()
-  const { data, error } = await client
-    .from('stock_movements')
-    .select(
-      `
-        *,
-        product:products(
-          *,
-          product_model:product_models(${productModelSelect}),
-          brand:brands(id, name, description, active, created_at, updated_at),
-          clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
-          size:sizes(id, name, sort_order, active, created_at, updated_at),
-          color:colors(id, name, hex, active, created_at, updated_at)
-        ),
-        sale:sales(${saleSelect}),
-        cash_movement:cash_movements(id, movement_code, description, amount, movement_date)
-      `,
-    )
-    .order('created_at', { ascending: false })
-    .limit(50)
+  for (const includeProductSnapshot of [true, false] as const) {
+    const { data, error } = await client
+      .from('stock_movements')
+      .select(buildStockMovementSelect(includeProductSnapshot))
+      .order('created_at', { ascending: false })
+      .limit(50)
 
-  if (error) {
-    throw new Error(error.message)
+    if (error) {
+      if (includeProductSnapshot && isMissingProductSnapshotColumnError(error)) {
+        continue
+      }
+
+      throw new Error(error.message)
+    }
+
+    return ((data ?? []) as unknown as StockMovement[]).map(normalizeStockMovement)
   }
 
-  return ((data ?? []) as StockMovement[]).map((movement) => ({
-    ...movement,
-    product: movement.product ? normalizeProduct(movement.product) : null,
-  }))
+  return []
 }
 
 export interface SaleLineInput {
@@ -1194,11 +1471,37 @@ export interface CustomerSalesSearchResult {
   pageSize: number
 }
 
-const cashMovementSelect = `
-  *,
-  sale:sales(${saleSelect}),
-  sale_payment:sale_payments!cash_movements_sale_payment_id_fkey(${salePaymentSelect})
-`
+function buildCashMovementSelect(includeProductSnapshot = true) {
+  return `
+    *,
+    sale:sales(${buildSaleSelect(includeProductSnapshot)}),
+    sale_payment:sale_payments!cash_movements_sale_payment_id_fkey(${salePaymentSelect})
+  `
+}
+
+async function executeWithProductSnapshotFallback(
+  executor: (includeProductSnapshot: boolean) => unknown,
+) {
+  for (const includeProductSnapshot of [true, false] as const) {
+    const response = (await executor(includeProductSnapshot)) as {
+      error?: { message: string } | null
+      data?: unknown
+      count?: number | null
+    }
+
+    if (response.error) {
+      if (includeProductSnapshot && isMissingProductSnapshotColumnError(response.error)) {
+        continue
+      }
+
+      throw new Error(response.error.message)
+    }
+
+    return response
+  }
+
+  return null
+}
 
 function normalizeCashSession(session: CashSession): CashSession {
   return {
@@ -1275,33 +1578,39 @@ export async function listCustomers() {
 
 export async function getCashMovementBySaleId(saleId: string) {
   const client = getSupabase()
-  const movementResponse = await client
-    .from('cash_movements')
-    .select(cashMovementSelect)
-    .eq('sale_id', saleId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const movementResponse = await executeWithProductSnapshotFallback((includeProductSnapshot) =>
+    client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .eq('sale_id', saleId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  )
 
-  if (movementResponse.error) {
-    throw new Error(movementResponse.error.message)
-  }
-
-  if (movementResponse.data) {
+  if (movementResponse?.data) {
     return normalizeCashHistoryMovement(movementResponse.data as CashMovement)
   }
 
-  const saleResponse = await client
-    .from('sales')
-    .select(saleSelect)
-    .eq('id', saleId)
-    .maybeSingle()
+  for (const includeProductSnapshot of [true, false] as const) {
+    const saleResponse = await client
+      .from('sales')
+      .select(buildSaleSelect(includeProductSnapshot))
+      .eq('id', saleId)
+      .maybeSingle()
 
-  if (saleResponse.error) {
-    throw new Error(saleResponse.error.message)
+    if (saleResponse.error) {
+      if (includeProductSnapshot && isMissingProductSnapshotColumnError(saleResponse.error)) {
+        continue
+      }
+
+      throw new Error(saleResponse.error.message)
+    }
+
+    return saleResponse.data ? buildCashHistoryMovementFromSale(saleResponse.data as unknown as Sale) : null
   }
 
-  return saleResponse.data ? buildCashHistoryMovementFromSale(saleResponse.data as Sale) : null
+  return null
 }
 
 export async function listSalesByCustomer(customerId: string, page = 1, pageSize = 5): Promise<CustomerSalesSearchResult> {
@@ -1311,21 +1620,34 @@ export async function listSalesByCustomer(customerId: string, page = 1, pageSize
   const from = (safePage - 1) * safePageSize
   const to = from + safePageSize - 1
 
-  const { data, error, count } = await client
-    .from('sales')
-    .select(saleSelect, { count: 'exact' })
-    .eq('customer_id', customerId)
-    .order('sale_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .range(from, to)
+  for (const includeProductSnapshot of [true, false] as const) {
+    const { data, error, count } = await client
+      .from('sales')
+      .select(buildSaleSelect(includeProductSnapshot), { count: 'exact' })
+      .eq('customer_id', customerId)
+      .order('sale_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(from, to)
 
-  if (error) {
-    throw new Error(error.message)
+    if (error) {
+      if (includeProductSnapshot && isMissingProductSnapshotColumnError(error)) {
+        continue
+      }
+
+      throw new Error(error.message)
+    }
+
+    return {
+      data: ((data ?? []) as unknown as Sale[]).map(normalizeSaleWithRelations),
+      count: count ?? 0,
+      page: safePage,
+      pageSize: safePageSize,
+    }
   }
 
   return {
-    data: ((data ?? []) as Sale[]).map(normalizeSaleWithRelations),
-    count: count ?? 0,
+    data: [],
+    count: 0,
     page: safePage,
     pageSize: safePageSize,
   }
@@ -1569,33 +1891,37 @@ export async function closeCashSession(input: CloseCashSessionInput) {
 
 export async function listTodayCashMovements(date = todayISODate()) {
   const client = getSupabase()
-  const { data, error } = await client
-    .from('cash_movements')
-    .select(cashMovementSelect)
-    .eq('movement_date', date)
-    .order('created_at', { ascending: false })
+  const response = await executeWithProductSnapshotFallback((includeProductSnapshot) =>
+    client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .eq('movement_date', date)
+      .order('created_at', { ascending: false }),
+  )
 
-  if (error) {
-    throw new Error(error.message)
+  if (!response) {
+    return []
   }
 
-  return ((data ?? []) as CashMovement[]).map(normalizeCashMovement)
+  return ((response.data ?? []) as CashMovement[]).map(normalizeCashMovement)
 }
 
 export async function listCashMovementsForSession(sessionId: string, openedAt: string) {
   const client = getSupabase()
-  const { data, error } = await client
-    .from('cash_movements')
-    .select(cashMovementSelect)
-    .eq('cash_session_id', sessionId)
-    .gte('created_at', openedAt)
-    .order('created_at', { ascending: false })
+  const response = await executeWithProductSnapshotFallback((includeProductSnapshot) =>
+    client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .eq('cash_session_id', sessionId)
+      .gte('created_at', openedAt)
+      .order('created_at', { ascending: false }),
+  )
 
-  if (error) {
-    throw new Error(error.message)
+  if (!response) {
+    return []
   }
 
-  return ((data ?? []) as CashMovement[]).map(normalizeCashMovement)
+  return ((response.data ?? []) as CashMovement[]).map(normalizeCashMovement)
 }
 
 export async function listCashSessionHistoryEvents(date = todayISODate()) {
@@ -1645,50 +1971,57 @@ export async function searchCashMovements(filters: CashMovementFilters): Promise
   const to = from + pageSize - 1
   const movementType = filters.type === 'income' || filters.type === 'expense' ? filters.type : 'all'
 
-  let request = client
-    .from('cash_movements')
-    .select(cashMovementSelect, { count: 'exact' })
-    .order('movement_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .range(from, to)
+  const response = await executeWithProductSnapshotFallback((includeProductSnapshot) => {
+    let request = client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot), { count: 'exact' })
+      .order('movement_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(from, to)
 
-  if (movementType !== 'all') {
-    request = request.eq('type', movementType)
-  }
+    if (movementType !== 'all') {
+      request = request.eq('type', movementType)
+    }
 
-  if (filters.description?.trim()) {
-    request = request.ilike('description', `%${filters.description.trim()}%`)
-  }
+    if (filters.description?.trim()) {
+      request = request.ilike('description', `%${filters.description.trim()}%`)
+    }
 
-  if (filters.minAmount !== null && filters.minAmount !== undefined) {
-    request = request.gte('amount', filters.minAmount)
-  }
+    if (filters.minAmount !== null && filters.minAmount !== undefined) {
+      request = request.gte('amount', filters.minAmount)
+    }
 
-  if (filters.maxAmount !== null && filters.maxAmount !== undefined) {
-    request = request.lte('amount', filters.maxAmount)
-  }
+    if (filters.maxAmount !== null && filters.maxAmount !== undefined) {
+      request = request.lte('amount', filters.maxAmount)
+    }
 
-  if (filters.startDate) {
-    request = request.gte('movement_date', filters.startDate)
-  }
+    if (filters.startDate) {
+      request = request.gte('movement_date', filters.startDate)
+    }
 
-  if (filters.endDate) {
-    request = request.lte('movement_date', filters.endDate)
-  }
+    if (filters.endDate) {
+      request = request.lte('movement_date', filters.endDate)
+    }
 
-  if (filters.paymentMethod && filters.paymentMethod !== 'all') {
-    request = request.eq('payment_method', filters.paymentMethod)
-  }
+    if (filters.paymentMethod && filters.paymentMethod !== 'all') {
+      request = request.eq('payment_method', filters.paymentMethod)
+    }
 
-  const { data, error, count } = await request
+    return request
+  })
 
-  if (error) {
-    throw new Error(error.message)
+  if (!response) {
+    return {
+      data: [],
+      count: 0,
+      page,
+      pageSize,
+    }
   }
 
   return {
-    data: ((data ?? []) as CashMovement[]).map(normalizeCashMovement),
-    count: count ?? 0,
+    data: ((response.data ?? []) as CashMovement[]).map(normalizeCashMovement),
+    count: response.count ?? 0,
     page,
     pageSize,
   }
@@ -1702,47 +2035,49 @@ async function listCashMovementsForHistory(filters: CashHistoryFilters) {
   const client = getSupabase()
   const movementType = filters.type === 'income' || filters.type === 'expense' ? filters.type : 'all'
 
-  let request = client
-    .from('cash_movements')
-    .select(cashMovementSelect)
-    .order('movement_date', { ascending: false })
-    .order('created_at', { ascending: false })
+  const response = await executeWithProductSnapshotFallback((includeProductSnapshot) => {
+    let request = client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .order('movement_date', { ascending: false })
+      .order('created_at', { ascending: false })
 
-  if (movementType !== 'all') {
-    request = request.eq('type', movementType)
+    if (movementType !== 'all') {
+      request = request.eq('type', movementType)
+    }
+
+    if (filters.description?.trim()) {
+      request = request.ilike('description', `%${filters.description.trim()}%`)
+    }
+
+    if (filters.minAmount !== null && filters.minAmount !== undefined) {
+      request = request.gte('amount', filters.minAmount)
+    }
+
+    if (filters.maxAmount !== null && filters.maxAmount !== undefined) {
+      request = request.lte('amount', filters.maxAmount)
+    }
+
+    if (filters.startDate) {
+      request = request.gte('movement_date', filters.startDate)
+    }
+
+    if (filters.endDate) {
+      request = request.lte('movement_date', filters.endDate)
+    }
+
+    if (filters.paymentMethod && filters.paymentMethod !== 'all') {
+      request = request.eq('payment_method', filters.paymentMethod)
+    }
+
+    return request
+  })
+
+  if (!response) {
+    return []
   }
 
-  if (filters.description?.trim()) {
-    request = request.ilike('description', `%${filters.description.trim()}%`)
-  }
-
-  if (filters.minAmount !== null && filters.minAmount !== undefined) {
-    request = request.gte('amount', filters.minAmount)
-  }
-
-  if (filters.maxAmount !== null && filters.maxAmount !== undefined) {
-    request = request.lte('amount', filters.maxAmount)
-  }
-
-  if (filters.startDate) {
-    request = request.gte('movement_date', filters.startDate)
-  }
-
-  if (filters.endDate) {
-    request = request.lte('movement_date', filters.endDate)
-  }
-
-  if (filters.paymentMethod && filters.paymentMethod !== 'all') {
-    request = request.eq('payment_method', filters.paymentMethod)
-  }
-
-  const { data, error } = await request
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return ((data ?? []) as CashMovement[]).map(normalizeCashHistoryMovement)
+  return ((response.data ?? []) as CashMovement[]).map(normalizeCashHistoryMovement)
 }
 
 async function listCashSessionHistoryEventsForSearch(filters: CashHistoryFilters) {
@@ -1907,14 +2242,16 @@ export async function createCashExpense(input: CashExpenseInput) {
     throw new Error('Não foi possível registrar a despesa.')
   }
 
-  const movementResponse = await client
-    .from('cash_movements')
-    .select(cashMovementSelect)
-    .eq('id', movementId)
-    .single()
+  const movementResponse = await executeWithProductSnapshotFallback((includeProductSnapshot) =>
+    client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .eq('id', movementId)
+      .single(),
+  )
 
-  if (movementResponse.error) {
-    throw new Error(movementResponse.error.message)
+  if (!movementResponse?.data) {
+    throw new Error('Não foi possível registrar a despesa.')
   }
 
   return normalizeCashMovement(movementResponse.data as CashMovement)
@@ -1950,14 +2287,16 @@ export async function createCashIncome(input: CashIncomeInput) {
     throw new Error('Não foi possível registrar a entrada.')
   }
 
-  const movementResponse = await client
-    .from('cash_movements')
-    .select(cashMovementSelect)
-    .eq('id', movementId)
-    .single()
+  const movementResponse = await executeWithProductSnapshotFallback((includeProductSnapshot) =>
+    client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .eq('id', movementId)
+      .single(),
+  )
 
-  if (movementResponse.error) {
-    throw new Error(movementResponse.error.message)
+  if (!movementResponse?.data) {
+    throw new Error('Não foi possível registrar a entrada.')
   }
 
   return normalizeCashMovement(movementResponse.data as CashMovement)

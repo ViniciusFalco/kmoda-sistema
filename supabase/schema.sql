@@ -330,7 +330,8 @@ check (installments_count >= 1);
 create table if not exists public.sale_items (
   id uuid primary key default gen_random_uuid(),
   sale_id uuid not null references public.sales(id) on delete cascade,
-  product_id uuid not null references public.products(id) on delete restrict,
+  product_id uuid references public.products(id) on delete set null,
+  product_snapshot jsonb not null default '{}'::jsonb,
   quantity integer not null check (quantity > 0),
   pricing_kind text not null default 'cash' check (pricing_kind in ('cash', 'installment')),
   original_unit_price numeric(12, 2) not null default 0,
@@ -345,6 +346,12 @@ alter table public.sale_items add column if not exists pricing_kind text not nul
 alter table public.sale_items add column if not exists original_unit_price numeric(12, 2) not null default 0;
 alter table public.sale_items add column if not exists installments_count integer not null default 1;
 alter table public.sale_items add column if not exists installment_value numeric(12, 2) not null default 0;
+alter table public.sale_items add column if not exists product_snapshot jsonb not null default '{}'::jsonb;
+alter table public.sale_items alter column product_id drop not null;
+alter table public.sale_items drop constraint if exists sale_items_product_id_fkey;
+alter table public.sale_items
+add constraint sale_items_product_id_fkey
+foreign key (product_id) references public.products(id) on delete set null;
 
 alter table public.sale_items drop constraint if exists sale_items_pricing_kind_check;
 alter table public.sale_items
@@ -385,7 +392,8 @@ where s.id = si.sale_id;
 create table if not exists public.stock_movements (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete set null,
-  product_id uuid not null references public.products(id) on delete restrict,
+  product_id uuid references public.products(id) on delete set null,
+  product_snapshot jsonb not null default '{}'::jsonb,
   sale_id uuid references public.sales(id) on delete set null,
   type text not null check (type in ('entrada', 'saida')),
   reason text not null check (
@@ -411,6 +419,12 @@ create table if not exists public.stock_movements (
 );
 
 alter table public.stock_movements drop constraint if exists stock_movements_reason_check;
+alter table public.stock_movements add column if not exists product_snapshot jsonb not null default '{}'::jsonb;
+alter table public.stock_movements alter column product_id drop not null;
+alter table public.stock_movements drop constraint if exists stock_movements_product_id_fkey;
+alter table public.stock_movements
+add constraint stock_movements_product_id_fkey
+foreign key (product_id) references public.products(id) on delete set null;
 alter table public.stock_movements
 add constraint stock_movements_reason_check
 check (
@@ -430,6 +444,100 @@ check (
     'devolucao_ao_fornecedor'
   )
 );
+
+create or replace function public.build_product_snapshot(p_product_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'id', p.id,
+    'name', coalesce(pm.name, p.name),
+    'barcode', p.barcode,
+    'reference', coalesce(pm.reference, p.reference),
+    'product_model_id', p.product_model_id,
+    'product_model_name', pm.name,
+    'product_model_reference', pm.reference,
+    'product_model_family', pm.family,
+    'brand_id', p.brand_id,
+    'brand_name', b.name,
+    'clothing_type_id', p.clothing_type_id,
+    'clothing_type_name', ct.name,
+    'size_id', p.size_id,
+    'size_name', sz.name,
+    'color_id', p.color_id,
+    'color_name', cl.name
+  )
+  from public.products p
+  left join public.product_models pm on pm.id = p.product_model_id
+  left join public.brands b on b.id = p.brand_id
+  left join public.clothing_types ct on ct.id = p.clothing_type_id
+  left join public.sizes sz on sz.id = p.size_id
+  left join public.colors cl on cl.id = p.color_id
+  where p.id = p_product_id;
+$$;
+
+create or replace function public.populate_product_snapshot()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.product_id is not null and coalesce(new.product_snapshot, '{}'::jsonb) = '{}'::jsonb then
+    new.product_snapshot := public.build_product_snapshot(new.product_id);
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists sale_items_populate_product_snapshot on public.sale_items;
+create trigger sale_items_populate_product_snapshot
+before insert on public.sale_items
+for each row execute function public.populate_product_snapshot();
+
+drop trigger if exists stock_movements_populate_product_snapshot on public.stock_movements;
+create trigger stock_movements_populate_product_snapshot
+before insert on public.stock_movements
+for each row execute function public.populate_product_snapshot();
+
+create or replace function public.admin_delete_product_with_pin(
+  p_product_id uuid,
+  p_pin text,
+  p_user_id uuid default auth.uid()
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_actor_user_id uuid;
+  v_actor_role text;
+begin
+  if auth.uid() is null then
+    raise exception 'Usuário não autenticado.';
+  end if;
+
+  select user_id, role
+  into v_actor_user_id, v_actor_role
+  from public.get_authenticated_user_by_pin(p_pin, coalesce(p_user_id, auth.uid()));
+
+  if v_actor_user_id is null then
+    raise exception 'PIN inválido para o usuário autenticado.';
+  end if;
+
+  if v_actor_role <> 'admin' then
+    raise exception 'Acesso restrito.';
+  end if;
+
+  delete from public.products
+  where id = p_product_id;
+end;
+$$;
 
 -- Movimentações financeiras do caixa.
 create table if not exists public.cash_movements (
@@ -627,6 +735,7 @@ create index if not exists products_color_id_idx on public.products (color_id);
 create index if not exists products_active_idx on public.products (active);
 create index if not exists sales_customer_id_idx on public.sales (customer_id);
 create index if not exists sale_items_sale_id_idx on public.sale_items (sale_id);
+create index if not exists sale_items_product_id_idx on public.sale_items (product_id);
 create index if not exists sale_payments_sale_id_idx on public.sale_payments (sale_id);
 create unique index if not exists sale_payments_cash_movement_id_key on public.sale_payments (cash_movement_id);
 create index if not exists stock_movements_product_id_idx on public.stock_movements (product_id);
@@ -639,6 +748,7 @@ create index if not exists cash_movements_cash_session_id_idx on public.cash_mov
 create index if not exists cash_movements_sale_payment_id_idx on public.cash_movements (sale_payment_id);
 create unique index if not exists cash_movements_movement_code_key on public.cash_movements (movement_code);
 create unique index if not exists cash_sessions_one_open_per_day_idx on public.cash_sessions (session_date) where status = 'open';
+grant execute on function public.admin_delete_product_with_pin(uuid, text, uuid) to authenticated;
 
 insert into public.sale_payments (
   sale_id,

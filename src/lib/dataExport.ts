@@ -1,4 +1,10 @@
-import { listCustomers, listProducts, formatSalePaymentSummary } from './catalog'
+import {
+  formatSalePaymentSummary,
+  listCustomers,
+  listProducts,
+  normalizeSaleWithRelations,
+  normalizeStockMovementWithRelations,
+} from './catalog'
 import { isSupabaseConfigured, supabase } from './supabase'
 import { formatCurrencyBRL, formatDateBR, formatDateTimeBR } from './utils'
 import type {
@@ -74,6 +80,89 @@ export interface CsvExportResult {
 interface CsvColumn<T> {
   header: string
   value: (row: T) => unknown
+}
+
+function isMissingProductSnapshotColumnError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+
+  return message.includes('product_snapshot') && message.includes('does not exist')
+}
+
+function buildSalesExportSelect(includeProductSnapshot: boolean) {
+  return `
+    id,
+    user_id,
+    customer_id,
+    total_amount,
+    payment_method,
+    installments_count,
+    status,
+    sale_date,
+    created_at,
+    updated_at,
+    customer:customers(id, name, phone, email, cpf),
+    sale_items(
+      id,
+      sale_id,
+      product_id,
+      ${includeProductSnapshot ? 'product_snapshot,' : ''}
+      quantity,
+      pricing_kind,
+      original_unit_price,
+      unit_price,
+      total_price,
+      installments_count,
+      installment_value,
+      created_at,
+      product:products(
+        id,
+        name,
+        barcode,
+        reference,
+        product_model:product_models(id, reference, name, family)
+      )
+    ),
+    sale_payments(
+      id,
+      sale_id,
+      source_kind,
+      payment_method,
+      amount,
+      installments_count,
+      installment_value,
+      cash_movement_id,
+      created_at
+    )
+  `
+}
+
+function buildStockMovementsExportSelect(includeProductSnapshot: boolean) {
+  return `
+    id,
+    user_id,
+    product_id,
+    ${includeProductSnapshot ? 'product_snapshot,' : ''}
+    sale_id,
+    cash_movement_id,
+    type,
+    reason,
+    quantity,
+    notes,
+    created_at,
+    product:products(
+      id,
+      name,
+      barcode,
+      reference,
+      product_model:product_models(id, reference, name, family),
+      brand:brands(id, name),
+      clothing_type:clothing_types(id, name),
+      size:sizes(id, name),
+      color:colors(id, name)
+    ),
+    cash_movement:cash_movements(id, movement_code, description, amount, movement_date),
+    sale:sales(id, sale_date, total_amount)
+  `
 }
 
 function getClient() {
@@ -268,62 +357,25 @@ function mapStockMovementRowsForCsv(rows: StockMovement[]) {
 
 async function fetchSalesForExport() {
   const client = getClient()
-  const { data, error } = await client
-    .from('sales')
-    .select(
-      `
-        id,
-        user_id,
-        customer_id,
-        total_amount,
-        payment_method,
-        installments_count,
-        status,
-        sale_date,
-        created_at,
-        updated_at,
-        customer:customers(id, name, phone, email, cpf),
-        sale_items(
-          id,
-          sale_id,
-          product_id,
-          quantity,
-          pricing_kind,
-          original_unit_price,
-          unit_price,
-          total_price,
-          installments_count,
-          installment_value,
-          created_at,
-          product:products(
-            id,
-            name,
-            barcode,
-            reference,
-            product_model:product_models(id, reference, name, family)
-          )
-        ),
-        sale_payments(
-          id,
-          sale_id,
-          source_kind,
-          payment_method,
-          amount,
-          installments_count,
-          installment_value,
-          cash_movement_id,
-          created_at
-        )
-      `,
-    )
-    .order('sale_date', { ascending: false })
-    .order('created_at', { ascending: false })
+  for (const includeProductSnapshot of [true, false] as const) {
+    const { data, error } = await client
+      .from('sales')
+      .select(buildSalesExportSelect(includeProductSnapshot))
+      .order('sale_date', { ascending: false })
+      .order('created_at', { ascending: false })
 
-  if (error) {
-    throw new Error(error.message)
+    if (error) {
+      if (includeProductSnapshot && isMissingProductSnapshotColumnError(error)) {
+        continue
+      }
+
+      throw new Error(error.message)
+    }
+
+    return (data ?? []).map((sale) => normalizeSaleWithRelations(sale as unknown as Sale))
   }
 
-  return (data ?? []) as unknown as Sale[]
+  return []
 }
 
 async function fetchCashMovementsForExport(type?: 'expense') {
@@ -383,42 +435,24 @@ async function fetchCashMovementsForExport(type?: 'expense') {
 
 async function fetchStockMovementsForExport() {
   const client = getClient()
-  const { data, error } = await client
-    .from('stock_movements')
-    .select(
-      `
-        id,
-        user_id,
-        product_id,
-        sale_id,
-        cash_movement_id,
-        type,
-        reason,
-        quantity,
-        notes,
-        created_at,
-        product:products(
-          id,
-          name,
-          barcode,
-          reference,
-          product_model:product_models(id, reference, name, family),
-          brand:brands(id, name),
-          clothing_type:clothing_types(id, name),
-          size:sizes(id, name),
-          color:colors(id, name)
-        ),
-        cash_movement:cash_movements(id, movement_code, description, amount, movement_date),
-        sale:sales(id, sale_date, total_amount)
-      `,
-    )
-    .order('created_at', { ascending: false })
+  for (const includeProductSnapshot of [true, false] as const) {
+    const { data, error } = await client
+      .from('stock_movements')
+      .select(buildStockMovementsExportSelect(includeProductSnapshot))
+      .order('created_at', { ascending: false })
 
-  if (error) {
-    throw new Error(error.message)
+    if (error) {
+      if (includeProductSnapshot && isMissingProductSnapshotColumnError(error)) {
+        continue
+      }
+
+      throw new Error(error.message)
+    }
+
+    return (data ?? []).map((movement) => normalizeStockMovementWithRelations(movement as unknown as StockMovement))
   }
 
-  return (data ?? []) as unknown as StockMovement[]
+  return []
 }
 
 export async function buildBackupExport() {

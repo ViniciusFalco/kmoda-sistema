@@ -1,4 +1,4 @@
-import { Archive, Edit } from 'lucide-react'
+import { Edit, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -9,11 +9,11 @@ import type { Product } from '../../types/database'
 interface ProductTableProps {
   products: Product[]
   onEdit: (product: Product) => void
-  onArchive: (product: Product) => void
+  onDelete: (product: Product) => void
   readOnly?: boolean
 }
 
-export function ProductTable({ products, onEdit, onArchive, readOnly = false }: ProductTableProps) {
+export function ProductTable({ products, onEdit, onDelete, readOnly = false }: ProductTableProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
   const hasActionsColumn = !readOnly
@@ -40,6 +40,8 @@ export function ProductTable({ products, onEdit, onArchive, readOnly = false }: 
   )
 
   useEffect(() => {
+    // Mantém a paginação coerente quando a lista muda de tamanho.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1)
   }, [products])
 
@@ -139,15 +141,15 @@ export function ProductTable({ products, onEdit, onArchive, readOnly = false }: 
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="danger"
                         size="sm"
-                        aria-label="Arquivar produto"
+                        aria-label="Excluir produto"
                         onClick={(event) => {
                           event.stopPropagation()
-                          onArchive(product)
+                          onDelete(product)
                         }}
                       >
-                        <Archive className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </td>

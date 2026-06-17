@@ -2,10 +2,12 @@ import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './useAuth'
 
-const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000
 
 const ACTIVITY_EVENTS: Array<keyof DocumentEventMap> = [
   'click',
+  'mousemove',
+  'pointerdown',
   'keydown',
   'input',
   'change',
@@ -15,13 +17,24 @@ const ACTIVITY_EVENTS: Array<keyof DocumentEventMap> = [
   'scroll',
 ]
 
+function getInactivityTimeoutMs() {
+  const configuredTimeout = Number(import.meta.env.VITE_SESSION_INACTIVITY_TIMEOUT_MS)
+
+  if (Number.isFinite(configuredTimeout) && configuredTimeout > 0) {
+    return configuredTimeout
+  }
+
+  return DEFAULT_INACTIVITY_TIMEOUT_MS
+}
+
 export function useSessionInactivityTimeout() {
   const { user, signOut } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const timeoutRef = useRef<number | null>(null)
-  const lastActivityRef = useRef(Date.now())
+  const lastActivityRef = useRef(0)
   const signingOutRef = useRef(false)
+  const inactivityTimeoutMs = getInactivityTimeoutMs()
 
   useEffect(() => {
     if (!user) {
@@ -49,7 +62,7 @@ export function useSessionInactivityTimeout() {
     function scheduleTimer() {
       clearTimer()
       const elapsed = Date.now() - lastActivityRef.current
-      const remaining = Math.max(0, INACTIVITY_TIMEOUT_MS - elapsed)
+      const remaining = Math.max(0, inactivityTimeoutMs - elapsed)
 
       timeoutRef.current = window.setTimeout(() => {
         void endSession()
@@ -71,7 +84,7 @@ export function useSessionInactivityTimeout() {
         return
       }
 
-      if (Date.now() - lastActivityRef.current >= INACTIVITY_TIMEOUT_MS) {
+      if (Date.now() - lastActivityRef.current >= inactivityTimeoutMs) {
         void endSession()
         return
       }
@@ -95,5 +108,5 @@ export function useSessionInactivityTimeout() {
       window.removeEventListener('focus', markActivity)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [navigate, signOut, user, location.key])
+  }, [inactivityTimeoutMs, navigate, signOut, user, location.key])
 }
