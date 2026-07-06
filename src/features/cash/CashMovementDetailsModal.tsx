@@ -148,6 +148,7 @@ function shortCode(id: string) {
 function originLabel(origin?: string | null) {
   const labels: Record<string, string> = {
     sale: 'Venda',
+    promissory: 'Promissória',
     manual_expense: 'Despesa manual',
     manual_income: 'Entrada avulsa',
     stock: 'Estoque',
@@ -169,6 +170,12 @@ function movementLabel(movement: CashMovement | null) {
 
   if (movement.origin === 'sale' && movement.sale?.installments_count && movement.sale.installments_count > 1) {
     return `Venda ${movement.sale.installments_count}x`
+  }
+
+  if (movement.origin === 'promissory') {
+    return movement.sale?.installments_count && movement.sale.installments_count > 1
+      ? `Promissória ${movement.sale.installments_count}x`
+      : 'Promissória'
   }
 
   return movement.origin === 'sale' ? 'Venda' : 'Entrada avulsa'

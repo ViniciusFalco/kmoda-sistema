@@ -97,7 +97,14 @@ export function DashboardPage() {
       createdAt: movement.created_at,
       time: formatTime(movement.created_at),
       source: 'Caixa',
-      type: movement.type === 'income' ? (movement.origin === 'sale' ? 'Venda' : 'Entrada') : 'Despesa',
+      type:
+        movement.type === 'income'
+          ? movement.origin === 'sale'
+            ? 'Venda'
+            : movement.origin === 'promissory'
+              ? 'Promissória'
+              : 'Entrada'
+          : 'Despesa',
       description: movementDescription(movement),
       detail:
         movement.type === 'expense'

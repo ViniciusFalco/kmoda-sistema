@@ -37,6 +37,21 @@ export interface SaleReceiptSuggestion {
   installmentsCount: number
 }
 
+export interface DraftPromissoryInstallment {
+  installmentNumber: number
+  dueDate: string
+  amount: number
+}
+
+export interface DraftPromissoryPlan {
+  total: number
+  entryAmount: number
+  installmentsCount: number
+  intervalDays: number
+  firstDueDate: string
+  installments: DraftPromissoryInstallment[]
+}
+
 export function getProductDescription(product: Product) {
   return [
     product.product_model?.reference,
@@ -174,6 +189,79 @@ export function formatDraftLineLabel(line: DraftSaleLine) {
   const suffix = getProductDescription(line.product)
 
   return suffix ? { base, suffix } : { base, suffix: '-' }
+}
+
+export function buildPromissoryPlan(
+  total: number,
+  installmentsCount: number,
+  intervalDays: number,
+  firstDueDate: string,
+  entryAmount = 0,
+): DraftPromissoryPlan {
+  const safeTotal = roundCurrency(Math.max(0, total))
+  const safeInstallmentsCount = Math.max(1, Math.floor(installmentsCount))
+  const safeIntervalDays = Math.max(1, Math.floor(intervalDays))
+  const safeEntryAmount = roundCurrency(Math.min(Math.max(0, entryAmount), safeTotal))
+  const installments: DraftPromissoryInstallment[] = []
+
+  if (safeEntryAmount > 0) {
+    const remainingInstallmentsCount = Math.max(1, safeInstallmentsCount - 1)
+    const remainingTotal = roundCurrency(safeTotal - safeEntryAmount)
+    const baseAmount = roundCurrency(remainingTotal / remainingInstallmentsCount)
+
+    installments.push({
+      installmentNumber: 1,
+      dueDate: firstDueDate,
+      amount: safeEntryAmount,
+    })
+
+    for (let index = 0; index < remainingInstallmentsCount; index += 1) {
+      const dueDate = addDays(firstDueDate, (index + 1) * safeIntervalDays)
+      installments.push({
+        installmentNumber: index + 2,
+        dueDate,
+        amount:
+          index === remainingInstallmentsCount - 1
+            ? roundCurrency(remainingTotal - baseAmount * (remainingInstallmentsCount - 1))
+            : baseAmount,
+      })
+    }
+  } else {
+    const baseAmount = roundCurrency(safeTotal / safeInstallmentsCount)
+
+    for (let index = 0; index < safeInstallmentsCount; index += 1) {
+      const dueDate = addDays(firstDueDate, index * safeIntervalDays)
+      installments.push({
+        installmentNumber: index + 1,
+        dueDate,
+        amount:
+          index === safeInstallmentsCount - 1
+            ? roundCurrency(safeTotal - baseAmount * (safeInstallmentsCount - 1))
+            : baseAmount,
+      })
+    }
+  }
+
+  return {
+    total: safeTotal,
+    entryAmount: safeEntryAmount,
+    installmentsCount: safeInstallmentsCount,
+    intervalDays: safeIntervalDays,
+    firstDueDate,
+    installments,
+  }
+}
+
+function addDays(dateISO: string, days: number) {
+  const [year, month, day] = dateISO.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  date.setDate(date.getDate() + days)
+
+  const nextYear = date.getFullYear()
+  const nextMonth = String(date.getMonth() + 1).padStart(2, '0')
+  const nextDay = String(date.getDate()).padStart(2, '0')
+
+  return `${nextYear}-${nextMonth}-${nextDay}`
 }
 
 function roundCurrency(value: number) {

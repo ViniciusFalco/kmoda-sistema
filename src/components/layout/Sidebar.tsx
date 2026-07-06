@@ -5,6 +5,7 @@ import {
   BookOpenText,
   LayoutDashboard,
   Package,
+  ReceiptText,
   Settings,
   Tags,
   Users,
@@ -19,6 +20,7 @@ const adminMenuItems = [
   { label: 'Cadastros', path: '/categorias', icon: Tags },
   { label: 'Clientes', path: '/clientes', icon: Users },
   { label: 'Caixa', path: '/caixa', icon: CreditCard },
+  { label: 'Promissórias', path: '/promissorias', icon: ReceiptText },
   { label: 'Estoque', path: '/estoque', icon: Boxes },
   { label: 'Configurações', path: '/configuracoes', icon: Settings },
   { label: 'Tutoriais', path: '/tutoriais', icon: BookOpenText },
@@ -26,6 +28,7 @@ const adminMenuItems = [
 
 const cashierMenuItems = [
   { label: 'Caixa', path: '/caixa', icon: CreditCard },
+  { label: 'Promissórias', path: '/promissorias', icon: ReceiptText },
   { label: 'Produtos', path: '/produtos', icon: Package },
   { label: 'Clientes', path: '/clientes', icon: Users },
   { label: 'Tutoriais', path: '/tutoriais', icon: BookOpenText },

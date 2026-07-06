@@ -272,6 +272,12 @@ function movementLabel(entry: Extract<CashHistoryEntry, { kind: 'movement' }>) {
     return `Venda ${entry.sale.installments_count}x`
   }
 
+  if (entry.origin === 'promissory') {
+    return entry.sale?.installments_count && entry.sale.installments_count > 1
+      ? `Promissória ${entry.sale.installments_count}x`
+      : 'Promissória'
+  }
+
   return entry.origin === 'sale' ? 'Venda' : 'Entrada avulsa'
 }
 

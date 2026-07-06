@@ -1,7 +1,7 @@
 export type EntityStatus = 'active' | 'inactive'
-export type PaymentMethod = 'dinheiro' | 'pix' | 'cartao_credito' | 'cartao_debito' | 'outro'
+export type PaymentMethod = 'dinheiro' | 'pix' | 'cartao_credito' | 'cartao_debito' | 'outro' | 'promissoria'
 export type SalePricingKind = 'cash' | 'installment'
-export type SalePaymentSourceKind = 'cash_total' | 'installment_group'
+export type SalePaymentSourceKind = 'cash_total' | 'installment_group' | 'promissory_group'
 export type StockMovementType = 'entrada' | 'saida'
 export type StockMovementReason =
   | 'cadastro_inicial'
@@ -18,7 +18,7 @@ export type StockMovementReason =
   | 'ajuste_negativo'
   | 'devolucao_ao_fornecedor'
 export type CashMovementType = 'income' | 'expense'
-export type CashMovementOrigin = 'sale' | 'manual_expense' | 'manual_income' | 'stock'
+export type CashMovementOrigin = 'sale' | 'promissory' | 'manual_expense' | 'manual_income' | 'stock'
 export type CashSessionStatus = 'open' | 'closed'
 export type SaleStatus = 'aberta' | 'finalizada' | 'cancelada'
 export type MonitoringSpaceStatus = 'normal' | 'attention' | 'warning' | 'critical'
@@ -218,6 +218,43 @@ export interface SalePayment {
   installment_value: number
   cash_movement_id?: string | null
   created_at: string
+}
+
+export type PromissoryNoteStatus = 'open' | 'paid' | 'cancelled'
+export type PromissoryInstallmentStatus = 'pending' | 'paid' | 'cancelled'
+
+export interface PromissoryInstallment {
+  id: string
+  promissory_note_id: string
+  installment_number: number
+  due_date: string
+  amount: number
+  status: PromissoryInstallmentStatus
+  paid_at?: string | null
+  payment_method?: PaymentMethod | null
+  cash_movement_id?: string | null
+  notes?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PromissoryNote {
+  id: string
+  sale_id: string
+  customer_id?: string | null
+  total_amount: number
+  installments_count: number
+  interval_days: number
+  first_due_date: string
+  status: PromissoryNoteStatus
+  notes?: string | null
+  created_at: string
+  updated_at: string
+  sale?: Sale | null
+  customer?: Customer | null
+  installments?: PromissoryInstallment[]
+  paid_amount?: number
+  remaining_amount?: number
 }
 
 export interface StockMovement {

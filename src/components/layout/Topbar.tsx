@@ -13,6 +13,7 @@ import { QuickSearch } from '../ui/QuickSearch'
 const adminNavItems = [
   { label: 'Início', path: '/' },
   { label: 'Caixa', path: '/caixa' },
+  { label: 'Promissórias', path: '/promissorias' },
   { label: 'Estoque', path: '/estoque' },
   { label: 'Produtos', path: '/produtos' },
   { label: 'Clientes', path: '/clientes' },
@@ -24,6 +25,7 @@ const adminNavItems = [
 
 const cashierNavItems = [
   { label: 'Caixa', path: '/' },
+  { label: 'Promissórias', path: '/promissorias' },
   { label: 'Produtos', path: '/produtos' },
   { label: 'Clientes', path: '/clientes' },
   { label: 'Tutoriais', path: '/tutoriais' },

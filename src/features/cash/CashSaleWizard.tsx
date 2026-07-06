@@ -16,6 +16,7 @@ import { isValidBarcode, normalizeBarcode } from '../../lib/barcode'
 import {
   formatCurrencyBRL,
   formatCurrencyInput,
+  formatDateBR,
   getTodayLocalDate,
   parseCurrencyToNumber,
 } from '../../lib/utils'
@@ -24,16 +25,19 @@ import type { Customer, PaymentMethod, Product } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import {
   buildInitialReceiptLines,
+  buildPromissoryPlan,
   calculateSaleTotals,
   createBlankReceiptLine,
   getLineTotal,
   getProductDescription,
   type DraftReceiptLine,
+  type DraftPromissoryPlan,
   type DraftSaleLine,
 } from './saleFlow'
 
 type EntryMode = 'product_sale' | 'manual_income' | null
 type ProductStep = 1 | 2 | 3 | 4 | 5
+type SaleSettlementMode = 'immediate' | 'promissory'
 
 interface CashSaleFormProps {
   onCancel: () => void
@@ -89,7 +93,12 @@ export function CashSaleForm({
   const [receiptLines, setReceiptLines] = useState<DraftReceiptLine[]>([])
   const [confirmedReceiptIds, setConfirmedReceiptIds] = useState<string[]>([])
   const [cashTenderedAmounts, setCashTenderedAmounts] = useState<Record<string, number>>({})
-  const [saleCompletionData, setSaleCompletionData] = useState<{ customerName: string; total: number } | null>(null)
+  const [saleSettlementMode, setSaleSettlementMode] = useState<SaleSettlementMode>('immediate')
+  const [promissoryInstallmentsCount, setPromissoryInstallmentsCount] = useState(3)
+  const [promissoryIntervalDays, setPromissoryIntervalDays] = useState(30)
+  const [promissoryFirstDueDate, setPromissoryFirstDueDate] = useState(addDaysToDate(getTodayLocalDate(), 30))
+  const [promissoryEntryAmount, setPromissoryEntryAmount] = useState('')
+  const [saleCompletionData, setSaleCompletionData] = useState<{ customerName: string; total: number; message?: string } | null>(null)
   const [saleCompletionOpen, setSaleCompletionOpen] = useState(false)
   const [pinModalOpen, setPinModalOpen] = useState(false)
   const [manualDescription, setManualDescription] = useState('')
@@ -107,6 +116,48 @@ export function CashSaleForm({
   const saleCompletionCloseTimerRef = useRef<number | null>(null)
 
   const productTotals = useMemo(() => calculateSaleTotals(items), [items])
+  const promissoryEntryAmountValue = useMemo(() => parseCurrencyToNumber(promissoryEntryAmount), [promissoryEntryAmount])
+  const promissoryEntryValidationMessage = useMemo(() => {
+    if (saleSettlementMode !== 'promissory' || items.length === 0 || promissoryEntryAmountValue <= 0) {
+      return ''
+    }
+
+    if (promissoryInstallmentsCount < 2) {
+      return 'Com entrada, use ao menos 2 parcelas.'
+    }
+
+    if (promissoryEntryAmountValue >= productTotals.total) {
+      return 'A entrada precisa ser menor que o total da venda.'
+    }
+
+    return ''
+  }, [items.length, promissoryEntryAmountValue, promissoryInstallmentsCount, productTotals.total, saleSettlementMode])
+  const promissoryPlan = useMemo<DraftPromissoryPlan | null>(() => {
+    if (saleSettlementMode !== 'promissory' || items.length === 0) {
+      return null
+    }
+
+    if (promissoryEntryValidationMessage) {
+      return null
+    }
+
+    return buildPromissoryPlan(
+      productTotals.total,
+      promissoryInstallmentsCount,
+      promissoryIntervalDays,
+      promissoryFirstDueDate,
+      promissoryEntryAmountValue,
+    )
+  }, [
+    items.length,
+    promissoryEntryAmountValue,
+    promissoryEntryValidationMessage,
+    productTotals.total,
+    promissoryFirstDueDate,
+    promissoryInstallmentsCount,
+    promissoryIntervalDays,
+    saleSettlementMode,
+  ])
   const receiptSummary = useMemo(() => {
     const confirmedLines = receiptLines.filter((line) => confirmedReceiptIds.includes(line.id))
     const confirmed = roundCurrency(confirmedLines.reduce((sum, line) => sum + line.amount, 0))
@@ -262,10 +313,17 @@ export function CashSaleForm({
       return
     }
 
-    setReceiptLines(buildInitialReceiptLines(items))
+    if (saleSettlementMode === 'immediate') {
+      setReceiptLines(buildInitialReceiptLines(items))
+      setConfirmedReceiptIds([])
+      setCashTenderedAmounts({})
+      return
+    }
+
+    setReceiptLines([])
     setConfirmedReceiptIds([])
     setCashTenderedAmounts({})
-  }, [items, mode])
+  }, [items, mode, saleSettlementMode])
 
   useEffect(() => {
     if (!onHeaderCenterChange) {
@@ -369,6 +427,11 @@ export function CashSaleForm({
     setManualDescription('')
     setManualAmount('')
     setManualPaymentMethod('dinheiro')
+    setSaleSettlementMode('immediate')
+    setPromissoryInstallmentsCount(3)
+    setPromissoryIntervalDays(30)
+    setPromissoryFirstDueDate(addDaysToDate(getTodayLocalDate(), 30))
+    setPromissoryEntryAmount('')
     setMovementDate(getTodayLocalDate())
     setNotes('')
     setSubmitting(false)
@@ -385,6 +448,7 @@ export function CashSaleForm({
 
     if (nextMode === 'product_sale') {
       setProductStep(2)
+      setSaleSettlementMode('immediate')
     }
   }
 
@@ -739,6 +803,15 @@ export function CashSaleForm({
       return false
     }
 
+    if (saleSettlementMode === 'promissory') {
+      if (promissoryEntryValidationMessage) {
+        setError(promissoryEntryValidationMessage)
+        return false
+      }
+
+      return submitPromissorySale(confirmationPin)
+    }
+
     if (items.length === 0) {
       setError('Adicione pelo menos um produto.')
       return false
@@ -816,6 +889,80 @@ export function CashSaleForm({
       setSaleCompletionData({
         customerName: selectedCustomer?.name ?? 'Cliente avulso',
         total: productTotals.total,
+      })
+      setSaleCompletionOpen(true)
+      return true
+    } catch (err) {
+      setError(friendlyCatalogError(err))
+      return false
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function submitPromissorySale(confirmationPin: string) {
+    if (!cashSessionOpen) {
+      setError(blockedMessage)
+      return false
+    }
+
+    if (items.length === 0) {
+      setError('Adicione pelo menos um produto.')
+      return false
+    }
+
+    if (!selectedCustomer) {
+      setError('Selecione um cliente para vender em promissória.')
+      return false
+    }
+
+    if (!promissoryPlan) {
+      setError('Configure a promissória antes de finalizar a venda.')
+      return false
+    }
+
+    setSubmitting(true)
+    setError('')
+
+    try {
+      await registerSaleWithCashAndStock({
+        customerId: selectedCustomer.id,
+        items: items.map((item) => ({
+          product: item.product,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          pricingKind: item.pricingKind,
+          originalUnitPrice: item.originalUnitPrice,
+          installmentsCount: item.installmentsCount,
+          installmentValue: item.installmentValue,
+        })),
+        payments: [
+          {
+            sourceKind: 'promissory_group',
+            paymentMethod: 'promissoria',
+            amount: productTotals.total,
+            installmentsCount: promissoryPlan.installmentsCount,
+            installmentValue: promissoryPlan.installments[0]?.amount ?? roundCurrency(productTotals.total / Math.max(1, promissoryPlan.installmentsCount)),
+          },
+        ],
+        promissoryPlan: {
+          installmentsCount: promissoryPlan.installmentsCount,
+          intervalDays: promissoryPlan.intervalDays,
+          firstDueDate: promissoryPlan.firstDueDate,
+          entryAmount: promissoryPlan.entryAmount,
+          notes,
+        },
+        movementDate,
+        notes,
+        user,
+        cashSessionId,
+        confirmationPin,
+      })
+
+      setSaleCompletionData({
+        customerName: selectedCustomer.name,
+        total: productTotals.total,
+        message: 'A venda foi registrada e a promissória foi gerada com sucesso.',
       })
       setSaleCompletionOpen(true)
       return true
@@ -1154,12 +1301,163 @@ export function CashSaleForm({
   )
 
   const renderReceiptStep = () => {
+    const renderSettlementModeSwitch = () => (
+      <div className="grid gap-2 md:grid-cols-2">
+        <button
+          type="button"
+          className={`rounded-md border-2 p-4 text-left transition ${
+            saleSettlementMode === 'immediate'
+              ? 'border-gray-950 bg-gray-950 text-white'
+              : 'border-gray-300 bg-white text-gray-800 hover:border-gray-900 hover:bg-gray-50'
+          }`}
+          onClick={() => setSaleSettlementMode('immediate')}
+        >
+          <span className="block text-sm font-semibold">Recebimento imediato</span>
+          <span className={`mt-1 block text-xs ${saleSettlementMode === 'immediate' ? 'text-white/75' : 'text-gray-500'}`}>
+            À vista, pix, débito ou crédito na hora.
+          </span>
+        </button>
+        <button
+          type="button"
+          className={`rounded-md border-2 p-4 text-left transition ${
+            saleSettlementMode === 'promissory'
+              ? 'border-gray-950 bg-gray-950 text-white'
+              : 'border-gray-300 bg-white text-gray-800 hover:border-gray-900 hover:bg-gray-50'
+          }`}
+          onClick={() => setSaleSettlementMode('promissory')}
+        >
+          <span className="block text-sm font-semibold">Promissória</span>
+          <span className={`mt-1 block text-xs ${saleSettlementMode === 'promissory' ? 'text-white/75' : 'text-gray-500'}`}>
+            Gere parcelas futuras para controlar o recebimento depois.
+          </span>
+        </button>
+      </div>
+    )
+
+    if (saleSettlementMode === 'promissory') {
+      const promissoryRows = promissoryPlan?.installments.map((installment) => ({
+        id: `promissory-${installment.installmentNumber}`,
+        ...installment,
+      })) ?? []
+
+      return (
+        <div className="flex min-h-0 flex-col gap-3">
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-500">Etapa 5</p>
+            <h2 className="text-lg font-semibold tracking-[-0.03em] text-gray-950">Recebimento</h2>
+          </div>
+
+          {renderSettlementModeSwitch()}
+
+          {!selectedCustomer ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Selecione um cliente para concluir uma venda em promissória.
+            </div>
+          ) : (
+            <div className="rounded-md border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+              <span className="font-semibold text-gray-950">{selectedCustomer.name}</span> ficará vinculado a esta promissória.
+            </div>
+          )}
+
+          <div className="rounded-md border-2 border-gray-200 bg-white p-4 shadow-sm">
+            <div className="grid gap-4 md:grid-cols-4">
+              <Input
+                label="Número de parcelas"
+                type="number"
+                min="1"
+                value={promissoryInstallmentsCount}
+                onChange={(event) => setPromissoryInstallmentsCount(Math.max(1, Number(event.target.value) || 1))}
+              />
+              <Input
+                label="Entrada opcional"
+                type="text"
+                inputMode="decimal"
+                value={promissoryEntryAmount}
+                onChange={(event) => setPromissoryEntryAmount(formatCurrencyInput(event.target.value))}
+                placeholder="R$ 0,00"
+              />
+              <Input
+                label="Intervalo entre parcelas (dias)"
+                type="number"
+                min="1"
+                value={promissoryIntervalDays}
+                onChange={(event) => setPromissoryIntervalDays(Math.max(1, Number(event.target.value) || 1))}
+              />
+              <Input
+                label="Primeiro vencimento"
+                type="date"
+                value={promissoryFirstDueDate}
+                onChange={(event) => setPromissoryFirstDueDate(event.target.value)}
+              />
+            </div>
+            {promissoryEntryValidationMessage ? (
+              <p className="mt-3 text-sm text-red-600">{promissoryEntryValidationMessage}</p>
+            ) : null}
+          </div>
+
+          <div className="rounded-md border-2 border-gray-200 bg-white shadow-sm">
+            <div className="border-b-2 border-gray-100 px-4 py-3">
+              <p className="text-sm font-semibold text-gray-950">Agenda da promissória</p>
+            </div>
+            <Table
+              data={promissoryRows}
+              emptyMessage="Configure a quantidade de parcelas para gerar a agenda."
+              columns={[
+                {
+                  key: 'installment',
+                  header: 'Parcela',
+                  render: (row) => <span className="font-medium text-gray-950">{row.installmentNumber}ª</span>,
+                },
+                {
+                  key: 'due-date',
+                  header: 'Vencimento',
+                  render: (row) => formatDateBR(row.dueDate),
+                },
+                {
+                  key: 'amount',
+                  header: 'Valor',
+                  render: (row) => formatCurrencyBRL(row.amount),
+                },
+              ]}
+            />
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[200px_minmax(0,1fr)]">
+            <div className="rounded-md border-2 border-gray-200 bg-white p-3 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">Data</p>
+                </div>
+              </div>
+              <div className="mt-2">
+                <Input type="date" value={movementDate} onChange={(event) => setMovementDate(event.target.value)} />
+              </div>
+            </div>
+
+            <div className="rounded-md border-2 border-gray-200 bg-white p-3 shadow-sm">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">Observação</p>
+              </div>
+              <textarea
+                className="mt-2 min-h-16 w-full rounded-md border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+                placeholder="Digite uma observação opcional."
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="flex min-h-0 flex-col gap-3">
         <div className="space-y-0.5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-500">Etapa 5</p>
           <h2 className="text-lg font-semibold tracking-[-0.03em] text-gray-950">Recebimento</h2>
         </div>
+
+        {renderSettlementModeSwitch()}
 
         <div className="rounded-md border-2 border-gray-200 bg-gray-50 text-center p-2 shadow-sm">
           <div className="rounded-md border-2 border-gray-300 bg-black px-3 py-2">
@@ -1432,7 +1730,11 @@ export function CashSaleForm({
     }
 
     const isLastStep = productStep === 5
-    const isFinalizeBlocked = isLastStep && !receiptSummary.balanced
+    const isFinalizeBlocked =
+      isLastStep &&
+      (saleSettlementMode === 'immediate'
+        ? !receiptSummary.balanced
+        : !selectedCustomer || !promissoryPlan)
 
     return (
       <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 border-t border-gray-200 bg-white px-6 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
@@ -1440,7 +1742,13 @@ export function CashSaleForm({
           Cancelar
         </Button>
         <div className="flex flex-col items-end gap-1">
-          {isFinalizeBlocked ? <p className="text-xs text-gray-500">Confira todos os pagamentos para finalizar.</p> : null}
+          {isFinalizeBlocked ? (
+            <p className="text-xs text-gray-500">
+              {saleSettlementMode === 'immediate'
+                ? 'Confira todos os pagamentos para finalizar.'
+                : 'Selecione um cliente e configure a promissória para finalizar.'}
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="secondary" type="button" onClick={backFromProductStep}>
               <ArrowLeft className="h-4 w-4" />
@@ -1497,6 +1805,7 @@ export function CashSaleForm({
         open={saleCompletionOpen}
         total={saleCompletionData?.total ?? 0}
         customerName={saleCompletionData?.customerName ?? ''}
+        message={saleCompletionData?.message}
         onClose={requestSaleCompletionClose}
       />
 
@@ -1553,6 +1862,18 @@ function SummaryCard({
       />
     </div>
   )
+}
+
+function addDaysToDate(dateISO: string, days: number) {
+  const [year, month, day] = dateISO.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  date.setDate(date.getDate() + days)
+
+  const nextYear = date.getFullYear()
+  const nextMonth = String(date.getMonth() + 1).padStart(2, '0')
+  const nextDay = String(date.getDate()).padStart(2, '0')
+
+  return `${nextYear}-${nextMonth}-${nextDay}`
 }
 
 function roundCurrency(value: number) {

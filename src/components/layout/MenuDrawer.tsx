@@ -19,12 +19,13 @@ interface MenuDrawerProps {
 export function MenuDrawer({ open, onClose }: MenuDrawerProps) {
   const { signOut, profile, isAdmin } = useAuth()
   const visibleMenuItems = isAdmin
-    ? [
-        { label: 'Início', path: '/' },
-        { label: 'Caixa', path: '/caixa' },
-        { label: 'Estoque', path: '/estoque' },
-        { label: 'Produtos', path: '/produtos' },
-        { label: 'Clientes', path: '/clientes' },
+      ? [
+          { label: 'Início', path: '/' },
+          { label: 'Caixa', path: '/caixa' },
+          { label: 'Promissórias', path: '/promissorias' },
+          { label: 'Estoque', path: '/estoque' },
+          { label: 'Produtos', path: '/produtos' },
+          { label: 'Clientes', path: '/clientes' },
         { label: 'Cadastros', path: '/categorias' },
         { label: 'Configurações', path: '/configuracoes' },
         { label: 'Tutoriais', path: '/tutoriais' },

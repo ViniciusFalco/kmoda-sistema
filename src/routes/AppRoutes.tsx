@@ -7,6 +7,7 @@ import { CustomersPage } from '../features/customers/CustomersPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { PinRecoveryPage } from '../features/auth/PinRecoveryPage'
 import { ProductsPage } from '../features/products/ProductsPage'
+import { PromissoriesPage } from '../features/promissories/PromissoriesPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
 import { TutorialsPage } from '../features/tutorials/TutorialsPage'
 import { StockPage } from '../features/stock/StockPage'
@@ -64,6 +65,7 @@ export function AppRoutes() {
               <Route path="/estoque" element={<StockPage />} />
               <Route path="/vendas" element={<Navigate to="/caixa" replace />} />
               <Route path="/caixa" element={<CashPage />} />
+              <Route path="/promissorias" element={<PromissoriesPage />} />
               <Route
                 path="/configuracoes"
                 element={

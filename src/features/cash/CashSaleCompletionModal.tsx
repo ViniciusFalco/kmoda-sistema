@@ -8,6 +8,7 @@ interface CashSaleCompletionModalProps {
   open: boolean
   total: number
   customerName: string
+  message?: string
   onClose: () => void
   durationMs?: number
 }
@@ -18,6 +19,7 @@ export function CashSaleCompletionModal({
   open,
   total,
   customerName,
+  message = 'O lançamento foi registrado no caixa com sucesso.',
   onClose,
   durationMs = defaultDurationMs,
 }: CashSaleCompletionModalProps) {
@@ -65,7 +67,7 @@ export function CashSaleCompletionModal({
           </div>
 
           <h3 className="mt-4 text-xl font-semibold tracking-[-0.04em] text-gray-950">Venda concluída</h3>
-          <p className="mt-2 text-sm text-gray-600">O lançamento foi registrado no caixa com sucesso.</p>
+          <p className="mt-2 text-sm text-gray-600">{message}</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">

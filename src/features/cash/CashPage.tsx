@@ -801,6 +801,12 @@ function movementLabel(movement: CashMovement) {
     return 'Despesa'
   }
 
+  if (movement.origin === 'promissory') {
+    return movement.sale?.installments_count && movement.sale.installments_count > 1
+      ? `Promissória ${movement.sale.installments_count}x`
+      : 'Promissória'
+  }
+
   return movement.origin === 'sale' ? 'Venda' : 'Entrada avulsa'
 }
 
@@ -826,6 +832,7 @@ function paymentLabel(method?: string | null) {
     pix: 'Pix',
     cartao_debito: 'Cartão de débito',
     cartao_credito: 'Cartão de crédito',
+    promissoria: 'Promissória',
     outro: 'Outro',
   }
 

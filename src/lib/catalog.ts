@@ -16,6 +16,9 @@ import type {
   Product,
   ProductModel,
   ProductSnapshot,
+  PromissoryInstallment,
+  PromissoryNote,
+  PromissoryNoteStatus,
   SalePayment,
   SalePaymentSourceKind,
   SalePricingKind,
@@ -308,6 +311,43 @@ function normalizeSalePayment(payment: SalePayment): SalePayment {
   }
 }
 
+function normalizePromissoryInstallment(installment: PromissoryInstallment): PromissoryInstallment {
+  return {
+    ...installment,
+    installment_number: normalizeNumber(installment.installment_number, 1),
+    due_date: installment.due_date,
+    amount: normalizeNumber(installment.amount),
+    status: (installment.status ?? 'pending') as PromissoryInstallment['status'],
+    paid_at: installment.paid_at ?? null,
+    payment_method: installment.payment_method ?? null,
+    cash_movement_id: installment.cash_movement_id ?? null,
+    notes: normalizeNullable(installment.notes),
+  }
+}
+
+function normalizePromissoryNote(note: PromissoryNote): PromissoryNote {
+  const installments = note.installments?.map(normalizePromissoryInstallment).sort((a, b) => a.installment_number - b.installment_number) ?? []
+  const totalAmount = normalizeNumber(note.total_amount)
+  const paidAmount = installments
+    .filter((installment) => installment.status === 'paid')
+    .reduce((sum, installment) => sum + installment.amount, 0)
+
+  return {
+    ...note,
+    total_amount: totalAmount,
+    installments_count: normalizeNumber(note.installments_count, installments.length || 1),
+    interval_days: normalizeNumber(note.interval_days, 30),
+    first_due_date: note.first_due_date,
+    status: (note.status ?? 'open') as PromissoryNote['status'],
+    notes: normalizeNullable(note.notes),
+    customer: note.customer ?? null,
+    sale: note.sale ? normalizeSaleWithRelations(note.sale) : null,
+    installments,
+    paid_amount: roundCurrency(paidAmount),
+    remaining_amount: roundCurrency(Math.max(0, totalAmount - paidAmount)),
+  }
+}
+
 function normalizeSaleItem(item: SaleItem): SaleItem {
   const pricingKind = (item.pricing_kind ?? 'cash') as SalePricingKind
   const quantity = normalizeNumber(item.quantity, 1)
@@ -358,6 +398,9 @@ function buildCashHistoryMovementFromSale(sale: Sale): CashHistoryMovement {
   const itemNames = normalizedSale.sale_items
     ?.map((item) => item.product?.product_model?.name ?? item.product?.name)
     .filter(Boolean)
+  const isPromissorySale =
+    normalizedSale.payment_method === 'promissoria' ||
+    normalizedSale.sale_payments?.some((payment) => payment.source_kind === 'promissory_group')
 
   return {
     kind: 'movement',
@@ -369,7 +412,7 @@ function buildCashHistoryMovementFromSale(sale: Sale): CashHistoryMovement {
     cash_session_id: null,
     movement_code: null,
     type: 'income',
-    origin: 'sale',
+    origin: isPromissorySale ? 'promissory' : 'sale',
     description: itemNames?.length ? itemNames.join(', ') : 'Venda',
     amount: normalizeNumber(normalizedSale.total_amount),
     movement_date: normalizedSale.sale_date,
@@ -389,7 +432,15 @@ function normalizeCashMovement(movement: CashMovement): CashMovement {
   return {
     ...movement,
     type,
-    origin: movement.origin ?? (movement.sale_id ? 'sale' : type === 'income' ? 'manual_income' : 'manual_expense'),
+    origin:
+      movement.origin ??
+      (movement.sale_payment?.source_kind === 'promissory_group'
+        ? 'promissory'
+        : movement.sale_id
+          ? 'sale'
+          : type === 'income'
+            ? 'manual_income'
+            : 'manual_expense'),
     amount: Math.abs(normalizeNumber(movement.amount)),
     sale_payment: movement.sale_payment ? normalizeSalePayment(movement.sale_payment) : null,
     sale: movement.sale ? normalizeSaleWithRelations(movement.sale) : null,
@@ -435,6 +486,10 @@ export function formatPaymentMethodLabel(method?: PaymentMethod | null, installm
 
   if (method === 'cartao_credito') {
     return installmentsCount > 1 ? `Crédito parcelado ${installmentsCount}x` : 'Crédito à vista'
+  }
+
+  if (method === 'promissoria') {
+    return installmentsCount > 1 ? `Promissória ${installmentsCount}x` : 'Promissória'
   }
 
   return 'Outro'
@@ -782,6 +837,47 @@ const salePaymentSelect = `
   installment_value,
   cash_movement_id,
   created_at
+`
+
+const promissoryInstallmentSelect = `
+  id,
+  promissory_note_id,
+  installment_number,
+  due_date,
+  amount,
+  status,
+  paid_at,
+  payment_method,
+  cash_movement_id,
+  notes,
+  created_at,
+  updated_at
+`
+
+const promissoryNoteSelect = `
+  id,
+  sale_id,
+  customer_id,
+  total_amount,
+  installments_count,
+  interval_days,
+  first_due_date,
+  status,
+  notes,
+  created_at,
+  updated_at,
+  sale:sales(
+    id,
+    customer_id,
+    total_amount,
+    payment_method,
+    installments_count,
+    sale_date,
+    status,
+    customer:customers(id, name, phone, cpf)
+  ),
+  customer:customers(id, name, phone, cpf),
+  installments:promissory_installments(${promissoryInstallmentSelect})
 `
 
 function isMissingProductSnapshotColumnError(error: unknown) {
@@ -1373,6 +1469,14 @@ export interface SalePaymentInput {
   installmentValue?: number
 }
 
+export interface PromissoryPlanInput {
+  installmentsCount: number
+  intervalDays: number
+  firstDueDate: string
+  entryAmount?: number | null
+  notes?: string | null
+}
+
 export interface CashExpenseInput {
   description: string
   amount: number
@@ -1400,7 +1504,23 @@ export interface SaleRegistrationInput {
   payments?: SalePaymentInput[]
   paymentMethod?: PaymentMethod
   installmentsCount?: number
+  promissoryPlan?: PromissoryPlanInput | null
   customerId?: string | null
+  movementDate: string
+  notes?: string | null
+  user?: User | null
+  cashSessionId?: string | null
+  confirmationPin?: string
+}
+
+export interface PromissoryNoteFilters {
+  status?: PromissoryNoteStatus | 'all'
+  query?: string
+}
+
+export interface PromissoryInstallmentPaymentInput {
+  promissoryInstallmentId: string
+  paymentMethod: PaymentMethod
   movementDate: string
   notes?: string | null
   user?: User | null
@@ -1813,10 +1933,12 @@ export async function openCashSession(input: OpenCashSessionInput) {
     throw new Error('Confirme a operação com o PIN antes de abrir o caixa.')
   }
 
+  const today = todayISODate()
   const existingOpenSession = await client
     .from('cash_sessions')
     .select('id, session_date, opened_at')
     .eq('status', 'open')
+    .eq('session_date', today)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -2402,6 +2524,15 @@ export async function registerSaleWithCashAndStock(input: SaleRegistrationInput)
     p_payments: normalizedPayments,
     p_payment_method: summaryPaymentMethod,
     p_installments_count: summaryInstallments,
+    p_promissory_plan: input.promissoryPlan
+      ? {
+          installments_count: input.promissoryPlan.installmentsCount,
+          interval_days: input.promissoryPlan.intervalDays,
+          first_due_date: input.promissoryPlan.firstDueDate,
+          entry_amount: roundCurrency(input.promissoryPlan.entryAmount ?? 0),
+          notes: normalizeNullable(input.promissoryPlan.notes),
+        }
+      : null,
     p_movement_date: input.movementDate,
     p_notes: normalizeNullable(input.notes),
     p_user_id: null,
@@ -2414,6 +2545,68 @@ export async function registerSaleWithCashAndStock(input: SaleRegistrationInput)
   }
 
   return data as { sale_id: string; cash_movement_id: string | null; movement_code: string | null }
+}
+
+export async function listPromissoryNotes(filters: PromissoryNoteFilters = {}) {
+  const client = getSupabase()
+  let request = client.from('promissory_notes').select(promissoryNoteSelect).order('created_at', { ascending: false })
+
+  if (filters.status && filters.status !== 'all') {
+    request = request.eq('status', filters.status)
+  }
+
+  const { data, error } = await request
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  let notes = ((data ?? []) as unknown as PromissoryNote[]).map(normalizePromissoryNote)
+  const query = filters.query?.trim().toLowerCase()
+
+  if (query) {
+    notes = notes.filter((note) => {
+      const customerName = note.customer?.name?.toLowerCase() ?? ''
+      const saleId = note.sale_id.toLowerCase()
+      const notesText = note.notes?.toLowerCase() ?? ''
+      const saleText = String(note.sale?.sale_date ?? '').toLowerCase()
+
+      return [customerName, saleId, notesText, saleText].some((value) => value.includes(query))
+    })
+  }
+
+  return notes
+}
+
+export async function registerPromissoryInstallmentPayment(input: PromissoryInstallmentPaymentInput) {
+  const client = getSupabase()
+  const installmentId = requireUuid(input.promissoryInstallmentId)
+  const confirmationPin = input.confirmationPin?.trim()
+
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de receber a promissória.')
+  }
+
+  const cashSessionId = input.cashSessionId?.trim()
+  if (!cashSessionId) {
+    throw new Error('Abra o caixa para receber a promissória.')
+  }
+
+  const { data, error } = await client.rpc('register_promissory_installment_payment_with_cash', {
+    p_installment_id: installmentId,
+    p_payment_method: input.paymentMethod,
+    p_movement_date: input.movementDate,
+    p_notes: normalizeNullable(input.notes),
+    p_user_id: input.user?.id ?? null,
+    p_cash_session_id: cashSessionId,
+    p_confirmation_pin: confirmationPin,
+  } as never)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data as { installment_id: string; note_id: string; cash_movement_id: string | null }
 }
 
 export async function finalizeSale(
