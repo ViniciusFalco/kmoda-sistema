@@ -1,18 +1,21 @@
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  BookOpenText,
   Lock,
   LockOpen,
   Wallet,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Badge } from '../../components/ui/Badge'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
+import { SensitiveValue } from '../../components/ui/SensitiveValue'
 import {
   friendlyCatalogError,
+  getCashMovementBySaleId,
   getLastClosedCashSession,
   getPreviousOpenCashSession,
   getTodayCashSession,
@@ -25,17 +28,23 @@ import type { CashHistoryEntry, CashHistoryMovement, CashMovement, CashSession }
 import { CashExpenseForm } from './CashExpenseForm'
 import { CashHistorySearchModal } from './CashHistorySearchModal'
 import { CashMovementDetailsModal } from './CashMovementDetailsModal'
-import { CashSaleCompletionModal } from './CashSaleCompletionModal'
 import { CashSaleForm } from './CashSaleForm'
 import { CloseCashSessionForm, OpenCashSessionForm } from './CashSessionModals'
+import { Pagination } from '../../components/ui/Pagination'
+import { useSensitiveValuesHidden } from '../../hooks/useAppSettings'
+import { useAuth } from '../../hooks/useAuth'
 
 type CashModal = 'sale' | 'expense' | 'history' | 'overview' | 'daily-history' | 'open-session' | 'close-session' | null
 
 export function CashPage() {
+  const { isAdmin, user } = useAuth()
+  const [sensitiveValuesHidden] = useSensitiveValuesHidden()
   const location = useLocation()
+  const navigate = useNavigate()
   const searchParams = new URLSearchParams(location.search)
   const initialModal = searchParams.get('acao') === 'nova-venda' ? 'sale' : null
   const initialSaleBarcode = searchParams.get('barcode') ?? ''
+  const saleIdFromQuery = searchParams.get('sale_id') ?? ''
   const [activeModal, setActiveModal] = useState<CashModal>(initialModal)
   const [saleBarcodePrefill, setSaleBarcodePrefill] = useState(initialSaleBarcode)
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<CashHistoryEntry | null>(null)
@@ -44,17 +53,35 @@ export function CashPage() {
   const [previousOpenSession, setPreviousOpenSession] = useState<CashSession | null>(null)
   const [lastClosedSession, setLastClosedSession] = useState<CashSession | null>(null)
   const [saleHeaderCenter, setSaleHeaderCenter] = useState<ReactNode | null>(null)
-  const [saleCompletionTestOpen, setSaleCompletionTestOpen] = useState(false)
   const [sessionMovements, setSessionMovements] = useState<CashMovement[]>([])
   const [sessionMovementsLoading, setSessionMovementsLoading] = useState(false)
   const [sessionMovementsRefreshKey, setSessionMovementsRefreshKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const [dailyHistoryPage, setDailyHistoryPage] = useState(1)
+  const historyItemsPerPage = 10
+
   const todayMovements = useMemo(
     () => historyEntries.filter((entry): entry is CashHistoryMovement => entry.kind === 'movement'),
     [historyEntries],
   )
+
+  const dailyHistoryTotalPages = Math.ceil(historyEntries.length / historyItemsPerPage)
+
+const paginatedDailyHistoryEntries = useMemo(() => {
+  const startIndex = (dailyHistoryPage - 1) * historyItemsPerPage
+  const endIndex = dailyHistoryPage * historyItemsPerPage
+
+  return historyEntries.slice(startIndex, endIndex)
+}, [historyEntries, dailyHistoryPage, historyItemsPerPage])
+
+const dailyHistoryFirstRecord = (dailyHistoryPage - 1) * historyItemsPerPage + 1
+
+const dailyHistoryLastRecord = Math.min(
+  dailyHistoryPage * historyItemsPerPage,
+  historyEntries.length,
+)
 
   const sessionForDetails = cashSession?.status === 'open' ? cashSession : previousOpenSession ?? cashSession
   const sessionForDetailsId = sessionForDetails?.id
@@ -73,6 +100,8 @@ export function CashPage() {
     : isCashOpen
       ? 'Resumo da sessão atual e lançamentos recentes.'
       : 'Resumo do último fechamento e lançamentos do dia.'
+  const canViewCashReports = Boolean(user)
+  const canViewAdminCashSearch = isAdmin
 
   const loadData = useCallback(async (showLoading = false) => {
     if (showLoading) {
@@ -140,6 +169,44 @@ export function CashPage() {
   }, [])
 
   useEffect(() => {
+    if (!canViewAdminCashSearch || !saleIdFromQuery) {
+      return
+    }
+
+    let active = true
+
+    setActiveModal(null)
+    setSelectedHistoryEntry(null)
+
+    async function loadSaleMovement() {
+      try {
+        const entry = await getCashMovementBySaleId(saleIdFromQuery)
+
+        if (!active) {
+          return
+        }
+
+        if (entry) {
+          setSelectedHistoryEntry(entry)
+          setError('')
+        } else {
+          setError('Não foi possível localizar essa venda no caixa.')
+        }
+      } catch (err) {
+        if (active) {
+          setError(friendlyCatalogError(err))
+        }
+      }
+    }
+
+    void loadSaleMovement()
+
+    return () => {
+      active = false
+    }
+  }, [canViewAdminCashSearch, saleIdFromQuery])
+
+  useEffect(() => {
     let active = true
 
     async function loadSessionMovements() {
@@ -173,6 +240,14 @@ export function CashPage() {
       active = false
     }
   }, [sessionForDetailsId, sessionForDetailsOpenedAt, sessionMovementsRefreshKey])
+
+  useEffect(() => {
+    if (!canViewCashReports || activeModal !== 'daily-history') {
+      return
+    }
+
+    setDailyHistoryPage(1)
+  }, [activeModal, canViewCashReports])
 
   const dayTotals = useMemo(() => {
     const income = todayMovements
@@ -226,6 +301,14 @@ export function CashPage() {
     setSaleHeaderCenter(null)
   }
 
+  function closeSelectedHistoryEntry() {
+    setSelectedHistoryEntry(null)
+
+    if (saleIdFromQuery) {
+      navigate('/caixa', { replace: true })
+    }
+  }
+
   return (
     <div className="flex h-[calc(100dvh-12rem)] w-full min-w-0 flex-col gap-2.5 overflow-hidden [@media(max-height:820px)]:h-auto [@media(max-height:820px)]:gap-2 [@media(max-height:820px)]:overflow-y-auto">
       <section className="shrink-0 rounded-md border-2 border-gray-300 bg-white p-2.5 shadow-[0_6px_18px_rgba(15,23,42,0.05)] [@media(max-height:820px)]:p-2">
@@ -270,46 +353,81 @@ export function CashPage() {
             disabled={loading}
             onClick={() => setActiveModal('expense')}
           />
-          <CashMenuButton
-            title="Histórico do dia"
-            active={activeModal === 'daily-history'}
-            disabled={loading}
-            onClick={() => setActiveModal('daily-history')}
-          />
-          <CashMenuButton
-            title="Histórico por pesquisa"
-            active={activeModal === 'history'}
-            disabled={loading}
-            onClick={() => setActiveModal('history')}
-          />
-          <div className="sm:col-span-2">
+          {canViewCashReports ? (
+            <CashMenuButton
+              title="Histórico do dia"
+              active={activeModal === 'daily-history'}
+              disabled={loading}
+              onClick={() => setActiveModal('daily-history')}
+            />
+          ) : null}
+          {canViewAdminCashSearch ? (
+            <CashMenuButton
+              title="Histórico por pesquisa"
+              active={activeModal === 'history'}
+              disabled={loading}
+              onClick={() => setActiveModal('history')}
+            />
+          ) : null}
+          {canViewAdminCashSearch ? (
+            <div className="sm:col-span-2">
+              <CashMenuButton
+                title="Visão geral"
+                active={activeModal === 'overview'}
+                disabled={loading}
+                onClick={() => setActiveModal('overview')}
+              />
+            </div>
+          ) : canViewCashReports ? (
             <CashMenuButton
               title="Visão geral"
               active={activeModal === 'overview'}
               disabled={loading}
               onClick={() => setActiveModal('overview')}
             />
-          </div>
+          ) : null}
         </div>
       </section>
 
       <section className="grid shrink-0 grid-cols-3 gap-1 [@media(max-height:820px)]:gap-0.5">
-        <CashMetricCard label="Dinheiro no caixa" value={formatCurrencyBRL(dinheiroNoCaixa)} icon={<Wallet className="h-4 w-4" />} />
-        <CashMetricCard label="Entradas do dia" value={formatCurrencyBRL(dayTotals.income)} icon={<ArrowUpCircle className="h-4 w-4" />} accent="green" />
-        <CashMetricCard label="Despesas do dia" value={formatCurrencyBRL(dayTotals.expense)} icon={<ArrowDownCircle className="h-4 w-4" />} accent="red" />
+        <CashMetricCard
+          label="Dinheiro no caixa"
+          value={formatCurrencyBRL(dinheiroNoCaixa)}
+          icon={<Wallet className="h-4 w-4" />}
+          blurred={sensitiveValuesHidden}
+        />
+        <CashMetricCard
+          label="Entradas do dia"
+          value={formatCurrencyBRL(dayTotals.income)}
+          icon={<ArrowUpCircle className="h-4 w-4" />}
+          accent="green"
+          blurred={sensitiveValuesHidden}
+        />
+        <CashMetricCard
+          label="Despesas do dia"
+          value={formatCurrencyBRL(dayTotals.expense)}
+          icon={<ArrowDownCircle className="h-4 w-4" />}
+          accent="red"
+          blurred={sensitiveValuesHidden}
+        />
       </section>
 
-      <section className="shrink-0 flex justify-end">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => setSaleCompletionTestOpen(true)}
-          className="border-gray-300 bg-white text-gray-700 shadow-sm hover:border-gray-900 hover:text-gray-900"
-        >
-          Testar animação de venda
-        </Button>
-      </section>
+      {canViewAdminCashSearch ? (
+        <section className="shrink-0 flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate('/tutoriais/criar-venda')}
+              className="border-gray-300 bg-white text-gray-700 shadow-sm hover:border-gray-900 hover:text-gray-900"
+            >
+              <BookOpenText className="h-4 w-4" />
+              Ver tutorial de venda
+            </Button>
+          </div>
+        </section>
+      ) : null}
 
       {error ? (
         <div className="shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
@@ -392,14 +510,8 @@ export function CashPage() {
         </div>
       </Modal>
 
-      <CashSaleCompletionModal
-        open={saleCompletionTestOpen}
-        total={98}
-        customerName="Cliente teste"
-        onClose={() => setSaleCompletionTestOpen(false)}
-      />
-
-      <Modal open={activeModal === 'daily-history'} title="Histórico do dia" onClose={() => setActiveModal(null)} size="6xl">
+      {canViewCashReports ? (
+        <Modal open={activeModal === 'daily-history'} title="Histórico do dia" onClose={() => setActiveModal(null)} size="6xl">
         <div className="space-y-4">
           <p className="text-sm text-gray-500">
             Lançamentos de {formatDateBR(todayISODate())}. Clique em uma linha para ver detalhes.
@@ -414,19 +526,20 @@ export function CashPage() {
           ) : (
             <div className="overflow-hidden rounded-md border-2 border-gray-200">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] border-collapse bg-white text-left text-sm text-gray-700">
+                <table className="w-full min-w-[860px] border-collapse bg-white text-left text-sm text-gray-700">
                   <thead className="bg-black text-[11px] uppercase tracking-[0.14em] text-gray-100">
                     <tr>
                       <th className="px-4 py-3 font-semibold">ID</th>
                       <th className="px-4 py-3 font-semibold">Tipo</th>
                       <th className="px-4 py-3 font-semibold">Descrição</th>
+                      <th className="px-4 py-3 font-semibold">Operador</th>
                       <th className="px-4 py-3 font-semibold">Valor</th>
                       <th className="px-4 py-3 font-semibold">Data</th>
                       <th className="px-4 py-3 font-semibold">Pagamento</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {historyEntries.map((entry) => {
+                    {paginatedDailyHistoryEntries.map((entry) => {
                       const isSession = entry.kind === 'session'
                       const isIncome = !isSession && entry.type === 'income'
 
@@ -457,6 +570,9 @@ export function CashPage() {
                                 : 'Fechamento de caixa'
                               : movementDescription(entry)}
                           </td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {isSession ? '-' : entry.created_by_name ?? entry.sale?.created_by_name ?? '-'}
+                          </td>
                           <td className={`px-4 py-3 ${isSession ? 'text-gray-700' : isIncome ? 'text-emerald-700' : 'text-rose-700'}`}>
                             {isSession ? '' : entry.type === 'income' ? '+' : '-'}
                             {formatCurrencyBRL(entry.amount)}
@@ -470,11 +586,26 @@ export function CashPage() {
                     })}
                   </tbody>
                 </table>
+                <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+  <span className="text-xs text-gray-500">
+    Exibindo {dailyHistoryFirstRecord}–{dailyHistoryLastRecord} de {historyEntries.length}{' '}
+    {historyEntries.length === 1 ? 'registro' : 'registros'}
+    <span className="text-gray-400"> • </span>
+    {historyItemsPerPage} por página
+  </span>
+
+  <Pagination
+    currentPage={dailyHistoryPage}
+    totalPages={dailyHistoryTotalPages}
+    onPageChange={setDailyHistoryPage}
+  />
+</div>
               </div>
             </div>
           )}
         </div>
-      </Modal>
+        </Modal>
+      ) : null}
 
       <Modal
         open={activeModal === 'sale'}
@@ -537,13 +668,15 @@ export function CashPage() {
         ) : null}
       </Modal>
 
-      <CashHistorySearchModal
-        open={activeModal === 'history'}
-        onClose={() => setActiveModal(null)}
-        onSelectEntry={setSelectedHistoryEntry}
-      />
+      {canViewAdminCashSearch ? (
+        <CashHistorySearchModal
+          open={activeModal === 'history'}
+          onClose={() => setActiveModal(null)}
+          onSelectEntry={setSelectedHistoryEntry}
+        />
+      ) : null}
 
-      <CashMovementDetailsModal entry={selectedHistoryEntry} onClose={() => setSelectedHistoryEntry(null)} />
+      {canViewCashReports ? <CashMovementDetailsModal entry={selectedHistoryEntry} onClose={closeSelectedHistoryEntry} /> : null}
     </div>
   )
 }
@@ -587,11 +720,13 @@ function CashMetricCard({
   value,
   icon,
   accent = 'default',
+  blurred = false,
 }: {
   label: string
   value: string
   icon: ReactNode
   accent?: 'default' | 'green' | 'red'
+  blurred?: boolean
 }) {
   const accentStyles =
     accent === 'green'
@@ -606,7 +741,11 @@ function CashMetricCard({
       <div className="min-w-0">
         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">{label}</p>
       </div>
-      <p className="truncate text-[22px] font-semibold tracking-[-0.04em] text-gray-950 [@media(max-height:820px)]:text-[20px]">{value}</p>
+      <SensitiveValue
+        value={value}
+        hidden={blurred}
+        className="truncate text-[22px] font-semibold tracking-[-0.04em] text-gray-950 [@media(max-height:820px)]:text-[20px]"
+      />
     </div>
   )
 }
@@ -662,6 +801,12 @@ function movementLabel(movement: CashMovement) {
     return 'Despesa'
   }
 
+  if (movement.origin === 'promissory') {
+    return movement.sale?.installments_count && movement.sale.installments_count > 1
+      ? `Promissória ${movement.sale.installments_count}x`
+      : 'Promissória'
+  }
+
   return movement.origin === 'sale' ? 'Venda' : 'Entrada avulsa'
 }
 
@@ -687,6 +832,7 @@ function paymentLabel(method?: string | null) {
     pix: 'Pix',
     cartao_debito: 'Cartão de débito',
     cartao_credito: 'Cartão de crédito',
+    promissoria: 'Promissória',
     outro: 'Outro',
   }
 

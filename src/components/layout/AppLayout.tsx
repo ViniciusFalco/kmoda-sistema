@@ -1,7 +1,10 @@
 import { Outlet } from 'react-router-dom'
+import { useSessionInactivityTimeout } from '../../hooks/useSessionInactivityTimeout'
 import { Topbar } from './Topbar'
 
 export function AppLayout() {
+  useSessionInactivityTimeout()
+
   return (
     <div className="min-h-screen bg-transparent text-gray-950">
       <Topbar />

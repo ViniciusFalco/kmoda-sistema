@@ -1,5 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useAuth } from './useAuth'
+import {
+  getSensitiveValuesHidden,
+  setSensitiveValuesHidden,
+  subscribeSensitiveValuesHiddenChange,
+} from '../lib/appSettings'
 import { loadDisplayName, subscribeDisplayNameChange } from '../lib/profileSettings'
 
 export function useDisplayName() {
@@ -49,4 +54,19 @@ export function useDisplayName() {
   )
 
   return displayName
+}
+
+export function useSensitiveValuesHidden() {
+  const hidden = useSyncExternalStore(
+    subscribeSensitiveValuesHiddenChange,
+    getSensitiveValuesHidden,
+    () => false,
+  )
+
+  const updateHidden = (value: boolean | ((current: boolean) => boolean)) => {
+    const nextValue = typeof value === 'function' ? value(getSensitiveValuesHidden()) : value
+    setSensitiveValuesHidden(nextValue)
+  }
+
+  return [hidden, updateHidden] as const
 }

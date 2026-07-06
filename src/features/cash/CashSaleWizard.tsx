@@ -1,9 +1,11 @@
 import { ArrowLeft, ArrowRight, CheckCircle2, Circle, Plus, Search, Trash2, UserPlus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { BarcodeScanButton } from '../../components/barcode/BarcodeScanButton'
+import { PinConfirmationModal } from '../../components/auth/PinConfirmationModal'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
+import { SensitiveValue } from '../../components/ui/SensitiveValue'
 import { Table } from '../../components/ui/Table'
 import { CashSessionBlockedOverlay } from './CashSessionBlockedOverlay'
 import { CashCustomerQuickCreateModal } from './CashCustomerQuickCreateModal'
@@ -12,27 +14,30 @@ import { CashItemInstallmentModal } from './CashItemInstallmentModal'
 import { createCashIncome, findProductByBarcode, friendlyCatalogError, listProducts, registerSaleWithCashAndStock, searchCustomers } from '../../lib/catalog'
 import { isValidBarcode, normalizeBarcode } from '../../lib/barcode'
 import {
-  formatCPF,
   formatCurrencyBRL,
   formatCurrencyInput,
-  formatPhoneBR,
+  formatDateBR,
   getTodayLocalDate,
   parseCurrencyToNumber,
 } from '../../lib/utils'
+import { useSensitiveValuesHidden } from '../../hooks/useAppSettings'
 import type { Customer, PaymentMethod, Product } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import {
   buildInitialReceiptLines,
+  buildPromissoryPlan,
   calculateSaleTotals,
   createBlankReceiptLine,
   getLineTotal,
   getProductDescription,
   type DraftReceiptLine,
+  type DraftPromissoryPlan,
   type DraftSaleLine,
 } from './saleFlow'
 
 type EntryMode = 'product_sale' | 'manual_income' | null
 type ProductStep = 1 | 2 | 3 | 4 | 5
+type SaleSettlementMode = 'immediate' | 'promissory'
 
 interface CashSaleFormProps {
   onCancel: () => void
@@ -70,7 +75,8 @@ export function CashSaleForm({
   sessionClosed,
   initialBarcode = '',
 }: CashSaleFormProps) {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
+  const [sensitiveValuesHidden] = useSensitiveValuesHidden()
   const [mode, setMode] = useState<EntryMode>(null)
   const [productStep, setProductStep] = useState<ProductStep>(1)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -87,8 +93,14 @@ export function CashSaleForm({
   const [receiptLines, setReceiptLines] = useState<DraftReceiptLine[]>([])
   const [confirmedReceiptIds, setConfirmedReceiptIds] = useState<string[]>([])
   const [cashTenderedAmounts, setCashTenderedAmounts] = useState<Record<string, number>>({})
-  const [saleCompletionData, setSaleCompletionData] = useState<{ customerName: string; total: number } | null>(null)
+  const [saleSettlementMode, setSaleSettlementMode] = useState<SaleSettlementMode>('immediate')
+  const [promissoryInstallmentsCount, setPromissoryInstallmentsCount] = useState(3)
+  const [promissoryIntervalDays, setPromissoryIntervalDays] = useState(30)
+  const [promissoryFirstDueDate, setPromissoryFirstDueDate] = useState(addDaysToDate(getTodayLocalDate(), 30))
+  const [promissoryEntryAmount, setPromissoryEntryAmount] = useState('')
+  const [saleCompletionData, setSaleCompletionData] = useState<{ customerName: string; total: number; message?: string } | null>(null)
   const [saleCompletionOpen, setSaleCompletionOpen] = useState(false)
+  const [pinModalOpen, setPinModalOpen] = useState(false)
   const [manualDescription, setManualDescription] = useState('')
   const [manualAmount, setManualAmount] = useState('')
   const [manualPaymentMethod, setManualPaymentMethod] = useState<PaymentMethod>('dinheiro')
@@ -104,6 +116,48 @@ export function CashSaleForm({
   const saleCompletionCloseTimerRef = useRef<number | null>(null)
 
   const productTotals = useMemo(() => calculateSaleTotals(items), [items])
+  const promissoryEntryAmountValue = useMemo(() => parseCurrencyToNumber(promissoryEntryAmount), [promissoryEntryAmount])
+  const promissoryEntryValidationMessage = useMemo(() => {
+    if (saleSettlementMode !== 'promissory' || items.length === 0 || promissoryEntryAmountValue <= 0) {
+      return ''
+    }
+
+    if (promissoryInstallmentsCount < 2) {
+      return 'Com entrada, use ao menos 2 parcelas.'
+    }
+
+    if (promissoryEntryAmountValue >= productTotals.total) {
+      return 'A entrada precisa ser menor que o total da venda.'
+    }
+
+    return ''
+  }, [items.length, promissoryEntryAmountValue, promissoryInstallmentsCount, productTotals.total, saleSettlementMode])
+  const promissoryPlan = useMemo<DraftPromissoryPlan | null>(() => {
+    if (saleSettlementMode !== 'promissory' || items.length === 0) {
+      return null
+    }
+
+    if (promissoryEntryValidationMessage) {
+      return null
+    }
+
+    return buildPromissoryPlan(
+      productTotals.total,
+      promissoryInstallmentsCount,
+      promissoryIntervalDays,
+      promissoryFirstDueDate,
+      promissoryEntryAmountValue,
+    )
+  }, [
+    items.length,
+    promissoryEntryAmountValue,
+    promissoryEntryValidationMessage,
+    productTotals.total,
+    promissoryFirstDueDate,
+    promissoryInstallmentsCount,
+    promissoryIntervalDays,
+    saleSettlementMode,
+  ])
   const receiptSummary = useMemo(() => {
     const confirmedLines = receiptLines.filter((line) => confirmedReceiptIds.includes(line.id))
     const confirmed = roundCurrency(confirmedLines.reduce((sum, line) => sum + line.amount, 0))
@@ -259,10 +313,17 @@ export function CashSaleForm({
       return
     }
 
-    setReceiptLines(buildInitialReceiptLines(items))
+    if (saleSettlementMode === 'immediate') {
+      setReceiptLines(buildInitialReceiptLines(items))
+      setConfirmedReceiptIds([])
+      setCashTenderedAmounts({})
+      return
+    }
+
+    setReceiptLines([])
     setConfirmedReceiptIds([])
     setCashTenderedAmounts({})
-  }, [items, mode])
+  }, [items, mode, saleSettlementMode])
 
   useEffect(() => {
     if (!onHeaderCenterChange) {
@@ -366,6 +427,11 @@ export function CashSaleForm({
     setManualDescription('')
     setManualAmount('')
     setManualPaymentMethod('dinheiro')
+    setSaleSettlementMode('immediate')
+    setPromissoryInstallmentsCount(3)
+    setPromissoryIntervalDays(30)
+    setPromissoryFirstDueDate(addDaysToDate(getTodayLocalDate(), 30))
+    setPromissoryEntryAmount('')
     setMovementDate(getTodayLocalDate())
     setNotes('')
     setSubmitting(false)
@@ -382,6 +448,7 @@ export function CashSaleForm({
 
     if (nextMode === 'product_sale') {
       setProductStep(2)
+      setSaleSettlementMode('immediate')
     }
   }
 
@@ -416,6 +483,10 @@ export function CashSaleForm({
   }
 
   function openCustomerModal() {
+    if (!isAdmin) {
+      return
+    }
+
     setCustomerDraftName(customerQuery.trim())
     setCustomerModalOpen(true)
   }
@@ -711,46 +782,62 @@ export function CashSaleForm({
   }
 
   async function handleSubmit() {
-    if (mode === 'manual_income') {
-      await submitManualIncome()
-      return
-    }
-
-    await submitProductSale()
+    setError('')
+    setPinModalOpen(true)
   }
 
-  async function submitProductSale() {
+  async function handlePinConfirm(pin: string) {
+    const success =
+      mode === 'manual_income'
+        ? await submitManualIncome(pin)
+        : await submitProductSale(pin)
+
+    if (success) {
+      setPinModalOpen(false)
+    }
+  }
+
+  async function submitProductSale(confirmationPin: string) {
     if (!cashSessionOpen) {
       setError(blockedMessage)
-      return
+      return false
+    }
+
+    if (saleSettlementMode === 'promissory') {
+      if (promissoryEntryValidationMessage) {
+        setError(promissoryEntryValidationMessage)
+        return false
+      }
+
+      return submitPromissorySale(confirmationPin)
     }
 
     if (items.length === 0) {
       setError('Adicione pelo menos um produto.')
-      return
+      return false
     }
 
     const invalidItem = items.find((item) => item.quantity > item.product.stock_quantity)
     if (invalidItem) {
       setError(`Estoque insuficiente para ${invalidItem.product.name}.`)
-      return
+      return false
     }
 
     const total = productTotals.total
     const allocated = roundCurrency(receiptLines.reduce((sum, line) => sum + line.amount, 0))
     if (Math.abs(total - allocated) > 0.01) {
       setError('A soma dos recebimentos precisa fechar exatamente com o total da venda.')
-      return
+      return false
     }
 
     if (receiptLines.some((line) => line.amount <= 0)) {
       setError('Informe valores válidos para todos os recebimentos.')
-      return
+      return false
     }
 
     if (receiptLines.some((line) => !confirmedReceiptIds.includes(line.id))) {
       setError('Confirme todos os pagamentos antes de finalizar a venda.')
-      return
+      return false
     }
 
     if (
@@ -762,12 +849,12 @@ export function CashSaleForm({
       )
     ) {
       setError('Informe o valor entregue pelo cliente para o pagamento em dinheiro.')
-      return
+      return false
     }
 
     if (receiptLines.some((line) => line.sourceKind === 'installment_group' && line.paymentMethod !== 'cartao_credito')) {
       setError('Os itens parcelados precisam ser recebidos no crédito parcelado.')
-      return
+      return false
     }
 
     setSubmitting(true)
@@ -796,6 +883,7 @@ export function CashSaleForm({
         notes,
         user,
         cashSessionId,
+        confirmationPin,
       })
 
       setSaleCompletionData({
@@ -803,29 +891,105 @@ export function CashSaleForm({
         total: productTotals.total,
       })
       setSaleCompletionOpen(true)
+      return true
     } catch (err) {
       setError(friendlyCatalogError(err))
+      return false
     } finally {
       setSubmitting(false)
     }
   }
 
-  async function submitManualIncome() {
+  async function submitPromissorySale(confirmationPin: string) {
     if (!cashSessionOpen) {
       setError(blockedMessage)
-      return
+      return false
+    }
+
+    if (items.length === 0) {
+      setError('Adicione pelo menos um produto.')
+      return false
+    }
+
+    if (!selectedCustomer) {
+      setError('Selecione um cliente para vender em promissória.')
+      return false
+    }
+
+    if (!promissoryPlan) {
+      setError('Configure a promissória antes de finalizar a venda.')
+      return false
+    }
+
+    setSubmitting(true)
+    setError('')
+
+    try {
+      await registerSaleWithCashAndStock({
+        customerId: selectedCustomer.id,
+        items: items.map((item) => ({
+          product: item.product,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          pricingKind: item.pricingKind,
+          originalUnitPrice: item.originalUnitPrice,
+          installmentsCount: item.installmentsCount,
+          installmentValue: item.installmentValue,
+        })),
+        payments: [
+          {
+            sourceKind: 'promissory_group',
+            paymentMethod: 'promissoria',
+            amount: productTotals.total,
+            installmentsCount: promissoryPlan.installmentsCount,
+            installmentValue: promissoryPlan.installments[0]?.amount ?? roundCurrency(productTotals.total / Math.max(1, promissoryPlan.installmentsCount)),
+          },
+        ],
+        promissoryPlan: {
+          installmentsCount: promissoryPlan.installmentsCount,
+          intervalDays: promissoryPlan.intervalDays,
+          firstDueDate: promissoryPlan.firstDueDate,
+          entryAmount: promissoryPlan.entryAmount,
+          notes,
+        },
+        movementDate,
+        notes,
+        user,
+        cashSessionId,
+        confirmationPin,
+      })
+
+      setSaleCompletionData({
+        customerName: selectedCustomer.name,
+        total: productTotals.total,
+        message: 'A venda foi registrada e a promissória foi gerada com sucesso.',
+      })
+      setSaleCompletionOpen(true)
+      return true
+    } catch (err) {
+      setError(friendlyCatalogError(err))
+      return false
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function submitManualIncome(confirmationPin: string) {
+    if (!cashSessionOpen) {
+      setError(blockedMessage)
+      return false
     }
 
     const amount = parseCurrencyToNumber(manualAmount)
 
     if (!manualDescription.trim()) {
       setError('Informe a descrição da entrada.')
-      return
+      return false
     }
 
     if (amount <= 0) {
       setError('Informe um valor maior que zero.')
-      return
+      return false
     }
 
     setSubmitting(true)
@@ -840,10 +1004,13 @@ export function CashSaleForm({
         notes,
         user,
         cashSessionId,
+        confirmationPin,
       })
       onSaved()
+      return true
     } catch (err) {
       setError(friendlyCatalogError(err))
+      return false
     } finally {
       setSubmitting(false)
     }
@@ -915,14 +1082,6 @@ export function CashSaleForm({
                       >
                         <span className="min-w-0">
                           <span className="block font-medium text-gray-950">{customer.name}</span>
-                          <span className="block text-xs text-gray-500">
-                            {[
-                              formatPhoneBR(customer.phone),
-                              formatCPF(customer.cpf),
-                            ]
-                              .filter((value) => value && value !== '-')
-                              .join(' • ') || 'Sem telefone ou CPF'}
-                          </span>
                         </span>
                         {isSelected ? <Badge variant="success">Selecionado</Badge> : null}
                       </button>
@@ -932,10 +1091,14 @@ export function CashSaleForm({
               ) : (
                 <div className="space-y-3 px-4 py-5">
                   <div className="text-sm text-gray-600">Cliente não encontrado.</div>
-                  <Button type="button" variant="secondary" onClick={openCustomerModal}>
-                    <UserPlus className="h-4 w-4" />
-                    Criar novo cliente
-                  </Button>
+                  {isAdmin ? (
+                    <Button type="button" variant="secondary" onClick={openCustomerModal}>
+                      <UserPlus className="h-4 w-4" />
+                      Criar novo cliente
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-gray-500">Continue a venda sem cadastrar o cliente.</p>
+                  )}
                 </div>
               )}
             </div>
@@ -947,10 +1110,6 @@ export function CashSaleForm({
             <div className="space-y-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-500">Cliente selecionado</p>
               <p className="text-lg font-semibold text-gray-950">{selectedCustomer.name}</p>
-              <div className="space-y-1 text-sm text-gray-600">
-                <p>{formatPhoneBR(selectedCustomer.phone)}</p>
-                <p>{formatCPF(selectedCustomer.cpf)}</p>
-              </div>
               <Button variant="secondary" onClick={() => setSelectedCustomer(null)}>
                 Limpar cliente
               </Button>
@@ -1061,6 +1220,7 @@ export function CashSaleForm({
                     type="text"
                     inputMode="decimal"
                     value={formatCurrencyBRL(item.unitPrice)}
+                    readOnly={!isAdmin}
                     onChange={(event) => updateItemUnitPrice(item.id, formatCurrencyInput(event.target.value))}
                   />
                 ),
@@ -1118,14 +1278,178 @@ export function CashSaleForm({
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <SummaryCard label="Total a vista" value={formatCurrencyBRL(productTotals.cashSubtotal)} labelClassName="text-gray-950" />
-        <SummaryCard label="Total Parcelado" value={formatCurrencyBRL(productTotals.installmentSubtotal)} labelClassName="text-gray-950" />
-        <SummaryCard label="Total da venda" value={formatCurrencyBRL(productTotals.total)} emphasis />
+        <SummaryCard
+          label="Total a vista"
+          value={formatCurrencyBRL(productTotals.cashSubtotal)}
+          labelClassName="text-gray-950"
+          blurred={sensitiveValuesHidden}
+        />
+        <SummaryCard
+          label="Total Parcelado"
+          value={formatCurrencyBRL(productTotals.installmentSubtotal)}
+          labelClassName="text-gray-950"
+          blurred={sensitiveValuesHidden}
+        />
+        <SummaryCard
+          label="Total da venda"
+          value={formatCurrencyBRL(productTotals.total)}
+          emphasis
+          blurred={sensitiveValuesHidden}
+        />
       </div>
     </div>
   )
 
   const renderReceiptStep = () => {
+    const renderSettlementModeSwitch = () => (
+      <div className="grid gap-2 md:grid-cols-2">
+        <button
+          type="button"
+          className={`rounded-md border-2 p-4 text-left transition ${
+            saleSettlementMode === 'immediate'
+              ? 'border-gray-950 bg-gray-950 text-white'
+              : 'border-gray-300 bg-white text-gray-800 hover:border-gray-900 hover:bg-gray-50'
+          }`}
+          onClick={() => setSaleSettlementMode('immediate')}
+        >
+          <span className="block text-sm font-semibold">Recebimento imediato</span>
+          <span className={`mt-1 block text-xs ${saleSettlementMode === 'immediate' ? 'text-white/75' : 'text-gray-500'}`}>
+            À vista, pix, débito ou crédito na hora.
+          </span>
+        </button>
+        <button
+          type="button"
+          className={`rounded-md border-2 p-4 text-left transition ${
+            saleSettlementMode === 'promissory'
+              ? 'border-gray-950 bg-gray-950 text-white'
+              : 'border-gray-300 bg-white text-gray-800 hover:border-gray-900 hover:bg-gray-50'
+          }`}
+          onClick={() => setSaleSettlementMode('promissory')}
+        >
+          <span className="block text-sm font-semibold">Promissória</span>
+          <span className={`mt-1 block text-xs ${saleSettlementMode === 'promissory' ? 'text-white/75' : 'text-gray-500'}`}>
+            Gere parcelas futuras para controlar o recebimento depois.
+          </span>
+        </button>
+      </div>
+    )
+
+    if (saleSettlementMode === 'promissory') {
+      const promissoryRows = promissoryPlan?.installments.map((installment) => ({
+        id: `promissory-${installment.installmentNumber}`,
+        ...installment,
+      })) ?? []
+
+      return (
+        <div className="flex min-h-0 flex-col gap-3">
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-500">Etapa 5</p>
+            <h2 className="text-lg font-semibold tracking-[-0.03em] text-gray-950">Recebimento</h2>
+          </div>
+
+          {renderSettlementModeSwitch()}
+
+          {!selectedCustomer ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Selecione um cliente para concluir uma venda em promissória.
+            </div>
+          ) : (
+            <div className="rounded-md border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+              <span className="font-semibold text-gray-950">{selectedCustomer.name}</span> ficará vinculado a esta promissória.
+            </div>
+          )}
+
+          <div className="rounded-md border-2 border-gray-200 bg-white p-4 shadow-sm">
+            <div className="grid gap-4 md:grid-cols-4">
+              <Input
+                label="Número de parcelas"
+                type="number"
+                min="1"
+                value={promissoryInstallmentsCount}
+                onChange={(event) => setPromissoryInstallmentsCount(Math.max(1, Number(event.target.value) || 1))}
+              />
+              <Input
+                label="Entrada opcional"
+                type="text"
+                inputMode="decimal"
+                value={promissoryEntryAmount}
+                onChange={(event) => setPromissoryEntryAmount(formatCurrencyInput(event.target.value))}
+                placeholder="R$ 0,00"
+              />
+              <Input
+                label="Intervalo entre parcelas (dias)"
+                type="number"
+                min="1"
+                value={promissoryIntervalDays}
+                onChange={(event) => setPromissoryIntervalDays(Math.max(1, Number(event.target.value) || 1))}
+              />
+              <Input
+                label="Primeiro vencimento"
+                type="date"
+                value={promissoryFirstDueDate}
+                onChange={(event) => setPromissoryFirstDueDate(event.target.value)}
+              />
+            </div>
+            {promissoryEntryValidationMessage ? (
+              <p className="mt-3 text-sm text-red-600">{promissoryEntryValidationMessage}</p>
+            ) : null}
+          </div>
+
+          <div className="rounded-md border-2 border-gray-200 bg-white shadow-sm">
+            <div className="border-b-2 border-gray-100 px-4 py-3">
+              <p className="text-sm font-semibold text-gray-950">Agenda da promissória</p>
+            </div>
+            <Table
+              data={promissoryRows}
+              emptyMessage="Configure a quantidade de parcelas para gerar a agenda."
+              columns={[
+                {
+                  key: 'installment',
+                  header: 'Parcela',
+                  render: (row) => <span className="font-medium text-gray-950">{row.installmentNumber}ª</span>,
+                },
+                {
+                  key: 'due-date',
+                  header: 'Vencimento',
+                  render: (row) => formatDateBR(row.dueDate),
+                },
+                {
+                  key: 'amount',
+                  header: 'Valor',
+                  render: (row) => formatCurrencyBRL(row.amount),
+                },
+              ]}
+            />
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[200px_minmax(0,1fr)]">
+            <div className="rounded-md border-2 border-gray-200 bg-white p-3 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">Data</p>
+                </div>
+              </div>
+              <div className="mt-2">
+                <Input type="date" value={movementDate} onChange={(event) => setMovementDate(event.target.value)} />
+              </div>
+            </div>
+
+            <div className="rounded-md border-2 border-gray-200 bg-white p-3 shadow-sm">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">Observação</p>
+              </div>
+              <textarea
+                className="mt-2 min-h-16 w-full rounded-md border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+                placeholder="Digite uma observação opcional."
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="flex min-h-0 flex-col gap-3">
         <div className="space-y-0.5">
@@ -1133,10 +1457,17 @@ export function CashSaleForm({
           <h2 className="text-lg font-semibold tracking-[-0.03em] text-gray-950">Recebimento</h2>
         </div>
 
+        {renderSettlementModeSwitch()}
+
         <div className="rounded-md border-2 border-gray-200 bg-gray-50 text-center p-2 shadow-sm">
           <div className="rounded-md border-2 border-gray-300 bg-black px-3 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white">Total da venda</p>
-            <p className="mt-1 text-xl font-semibold tracking-[-0.04em] text-white">{formatCurrencyBRL(receiptSummary.total)}</p>
+            <SensitiveValue
+              value={formatCurrencyBRL(receiptSummary.total)}
+              hidden={sensitiveValuesHidden}
+              tone="dark"
+              className="mt-1 text-xl font-semibold tracking-[-0.04em] text-white"
+            />
           </div>
         </div>
 
@@ -1399,7 +1730,11 @@ export function CashSaleForm({
     }
 
     const isLastStep = productStep === 5
-    const isFinalizeBlocked = isLastStep && !receiptSummary.balanced
+    const isFinalizeBlocked =
+      isLastStep &&
+      (saleSettlementMode === 'immediate'
+        ? !receiptSummary.balanced
+        : !selectedCustomer || !promissoryPlan)
 
     return (
       <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 border-t border-gray-200 bg-white px-6 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
@@ -1407,7 +1742,13 @@ export function CashSaleForm({
           Cancelar
         </Button>
         <div className="flex flex-col items-end gap-1">
-          {isFinalizeBlocked ? <p className="text-xs text-gray-500">Confira todos os pagamentos para finalizar.</p> : null}
+          {isFinalizeBlocked ? (
+            <p className="text-xs text-gray-500">
+              {saleSettlementMode === 'immediate'
+                ? 'Confira todos os pagamentos para finalizar.'
+                : 'Selecione um cliente e configure a promissória para finalizar.'}
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="secondary" type="button" onClick={backFromProductStep}>
               <ArrowLeft className="h-4 w-4" />
@@ -1464,6 +1805,7 @@ export function CashSaleForm({
         open={saleCompletionOpen}
         total={saleCompletionData?.total ?? 0}
         customerName={saleCompletionData?.customerName ?? ''}
+        message={saleCompletionData?.message}
         onClose={requestSaleCompletionClose}
       />
 
@@ -1476,6 +1818,22 @@ export function CashSaleForm({
       />
 
       {isBlocked ? <CashSessionBlockedOverlay onOpenCash={onOpenCash} /> : null}
+
+      <PinConfirmationModal
+        open={pinModalOpen}
+        title={mode === 'manual_income' ? 'Confirmar entrada avulsa' : 'Confirmar venda'}
+        description="Digite seu PIN para confirmar e salvar o lançamento no caixa."
+        confirmLabel={mode === 'manual_income' ? 'Confirmar entrada' : 'Confirmar venda'}
+        submitting={submitting}
+        error={error}
+        onClose={() => {
+          if (submitting) {
+            return
+          }
+          setPinModalOpen(false)
+        }}
+        onConfirm={handlePinConfirm}
+      />
     </div>
   )
 }
@@ -1485,18 +1843,37 @@ function SummaryCard({
   value,
   emphasis = false,
   labelClassName,
+  blurred = false,
 }: {
   label: string
   value: string
   emphasis?: boolean
   labelClassName?: string
+  blurred?: boolean
 }) {
   return (
     <div className={`rounded-md border-2 p-4 ${emphasis ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white'}`}>
       <p className={`text-[10px] font-semibold uppercase tracking-[0.22em] ${labelClassName ?? (emphasis ? 'text-white/70' : 'text-gray-500')}`}>{label}</p>
-      <p className={`mt-2 text-2xl font-semibold tracking-[-0.04em] ${emphasis ? 'text-white' : 'text-gray-950'}`}>{value}</p>
+      <SensitiveValue
+        value={value}
+        hidden={blurred}
+        tone={emphasis ? 'dark' : 'light'}
+        className={`mt-2 text-2xl font-semibold tracking-[-0.04em] ${emphasis ? 'text-white' : 'text-gray-950'}`}
+      />
     </div>
   )
+}
+
+function addDaysToDate(dateISO: string, days: number) {
+  const [year, month, day] = dateISO.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  date.setDate(date.getDate() + days)
+
+  const nextYear = date.getFullYear()
+  const nextMonth = String(date.getMonth() + 1).padStart(2, '0')
+  const nextDay = String(date.getDate()).padStart(2, '0')
+
+  return `${nextYear}-${nextMonth}-${nextDay}`
 }
 
 function roundCurrency(value: number) {

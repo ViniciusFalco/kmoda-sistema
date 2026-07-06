@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
 export function PrivateRoute() {
-  const { user, loading, authReady } = useAuth()
+  const { user, profile, loading, authReady } = useAuth()
   const location = useLocation()
 
   if (loading || !authReady) {
@@ -13,7 +13,7 @@ export function PrivateRoute() {
     )
   }
 
-  if (!user) {
+  if (!user || !profile || profile.active === false) {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 

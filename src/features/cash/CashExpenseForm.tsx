@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
+import { PinConfirmationModal } from '../../components/auth/PinConfirmationModal'
 import { createCashExpense, friendlyCatalogError } from '../../lib/catalog'
 import { formatCurrencyBRL, formatCurrencyInput, getTodayLocalDate, parseCurrencyToNumber } from '../../lib/utils'
 import type { PaymentMethod } from '../../types/database'
@@ -23,6 +24,8 @@ export function CashExpenseForm({ onCancel, onSaved, onOpenCash, cashSessionId, 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('dinheiro')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [pinModalOpen, setPinModalOpen] = useState(false)
+  const [pinError, setPinError] = useState('')
   const [error, setError] = useState('')
   const cashSessionOpen = Boolean(cashSessionId) && !sessionClosed
   const isBlocked = !cashSessionOpen
@@ -47,28 +50,37 @@ export function CashExpenseForm({ onCancel, onSaved, onOpenCash, cashSessionId, 
       return
     }
 
-    setSubmitting(true)
     setError('')
+    setPinError('')
+    setPinModalOpen(true)
+  }
+
+  async function handlePinConfirm(pin: string) {
+    setSubmitting(true)
+    setPinError('')
 
     try {
       await createCashExpense({
         description,
-        amount: parsedAmount,
+        amount: parseCurrencyToNumber(amount),
         movementDate,
         paymentMethod,
         notes,
         user,
         cashSessionId,
+        confirmationPin: pin,
       })
+      setPinModalOpen(false)
       onSaved()
     } catch (err) {
-      setError(friendlyCatalogError(err))
+      setPinError(friendlyCatalogError(err))
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
+    <>
     <form className="relative space-y-5 text-gray-950" onSubmit={handleSubmit}>
       <div className={`space-y-5 ${isBlocked ? 'pointer-events-none blur-[1px] select-none' : ''}`}>
         <div className="grid gap-4 rounded-lg border border-gray-200 bg-white p-4 md:grid-cols-2">
@@ -133,5 +145,23 @@ export function CashExpenseForm({ onCancel, onSaved, onOpenCash, cashSessionId, 
 
       {isBlocked ? <CashSessionBlockedOverlay onOpenCash={onOpenCash} /> : null}
     </form>
+
+    <PinConfirmationModal
+      open={pinModalOpen}
+      title="Confirmar despesa"
+      description="Digite seu PIN para confirmar e salvar esta despesa no caixa."
+      confirmLabel="Confirmar despesa"
+      submitting={submitting}
+      error={pinError}
+      onClose={() => {
+        if (submitting) {
+          return
+        }
+        setPinModalOpen(false)
+        setPinError('')
+      }}
+      onConfirm={handlePinConfirm}
+    />
+    </>
   )
 }

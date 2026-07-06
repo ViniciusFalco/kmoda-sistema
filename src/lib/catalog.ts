@@ -15,6 +15,10 @@ import type {
   PaymentMethod,
   Product,
   ProductModel,
+  ProductSnapshot,
+  PromissoryInstallment,
+  PromissoryNote,
+  PromissoryNoteStatus,
   SalePayment,
   SalePaymentSourceKind,
   SalePricingKind,
@@ -27,7 +31,7 @@ import type {
   StockMovementReason,
   StockMovementType,
 } from '../types/database'
-import { formatCurrencyBRL, formatDateBR, getNowLocalTimestamp, todayISODate } from './utils'
+import { formatCurrencyBRL, formatDateBR, todayISODate } from './utils'
 
 type RegistryTableMap = {
   brands: Brand
@@ -92,6 +96,205 @@ function normalizeProduct(product: Product): Product {
   }
 }
 
+function normalizeProductSnapshot(snapshot?: ProductSnapshot | null): ProductSnapshot | null {
+  if (!snapshot) {
+    return null
+  }
+
+  const name = normalizeNullable(snapshot.name)
+
+  if (!name) {
+    return null
+  }
+
+  return {
+    id: normalizeNullable(snapshot.id),
+    name,
+    barcode: normalizeNullable(snapshot.barcode),
+    reference: normalizeNullable(snapshot.reference),
+    product_model_id: normalizeNullable(snapshot.product_model_id),
+    product_model_name: normalizeNullable(snapshot.product_model_name),
+    product_model_reference: normalizeNullable(snapshot.product_model_reference),
+    product_model_family: normalizeNullable(snapshot.product_model_family),
+    brand_id: normalizeNullable(snapshot.brand_id),
+    brand_name: normalizeNullable(snapshot.brand_name),
+    clothing_type_id: normalizeNullable(snapshot.clothing_type_id),
+    clothing_type_name: normalizeNullable(snapshot.clothing_type_name),
+    size_id: normalizeNullable(snapshot.size_id),
+    size_name: normalizeNullable(snapshot.size_name),
+    color_id: normalizeNullable(snapshot.color_id),
+    color_name: normalizeNullable(snapshot.color_name),
+  }
+}
+
+function buildSnapshotBrand(id: string | null | undefined, name?: string | null, timestamp = new Date().toISOString()): Brand | null {
+  const normalizedName = normalizeNullable(name)
+
+  if (!normalizedName) {
+    return null
+  }
+
+  return {
+    id: id ?? '',
+    name: normalizedName,
+    description: null,
+    active: true,
+    created_at: timestamp,
+    updated_at: timestamp,
+  }
+}
+
+function buildSnapshotClothingType(
+  id: string | null | undefined,
+  name?: string | null,
+  timestamp = new Date().toISOString(),
+): ClothingType | null {
+  const normalizedName = normalizeNullable(name)
+
+  if (!normalizedName) {
+    return null
+  }
+
+  return {
+    id: id ?? '',
+    name: normalizedName,
+    description: null,
+    active: true,
+    created_at: timestamp,
+    updated_at: timestamp,
+  }
+}
+
+function buildSnapshotSize(id: string | null | undefined, name?: string | null, timestamp = new Date().toISOString()): Size | null {
+  const normalizedName = normalizeNullable(name)
+
+  if (!normalizedName) {
+    return null
+  }
+
+  return {
+    id: id ?? '',
+    name: normalizedName,
+    sort_order: null,
+    active: true,
+    created_at: timestamp,
+    updated_at: timestamp,
+  }
+}
+
+function buildSnapshotColor(id: string | null | undefined, name?: string | null, timestamp = new Date().toISOString()): Color | null {
+  const normalizedName = normalizeNullable(name)
+
+  if (!normalizedName) {
+    return null
+  }
+
+  return {
+    id: id ?? '',
+    name: normalizedName,
+    hex: null,
+    active: true,
+    created_at: timestamp,
+    updated_at: timestamp,
+  }
+}
+
+function buildSnapshotProductModel(snapshot: ProductSnapshot, timestamp = new Date().toISOString()): ProductModel | null {
+  const name = normalizeNullable(snapshot.product_model_name ?? snapshot.name)
+  const reference = normalizeNullable(snapshot.product_model_reference ?? snapshot.reference)
+
+  if (!name && !reference && !snapshot.product_model_family) {
+    return null
+  }
+
+  const brand = buildSnapshotBrand(snapshot.brand_id, snapshot.brand_name, timestamp)
+  const category = buildSnapshotClothingType(snapshot.clothing_type_id, snapshot.clothing_type_name, timestamp)
+
+  return {
+    id: snapshot.product_model_id ?? snapshot.id ?? '',
+    user_id: null,
+    reference: reference ?? '',
+    name: name ?? reference ?? 'Produto',
+    family: normalizeNullable(snapshot.product_model_family),
+    brand_id: snapshot.brand_id ?? null,
+    category_id: snapshot.clothing_type_id ?? null,
+    created_at: timestamp,
+    updated_at: timestamp,
+    brand,
+    category,
+  }
+}
+
+function buildProductSnapshot(product: Product): ProductSnapshot {
+  const productModel = product.product_model
+  const brand = productModel?.brand ?? product.brand
+  const clothingType = productModel?.category ?? product.clothing_type
+
+  return {
+    id: product.id,
+    name: productModel?.name ?? product.name,
+    barcode: normalizeNullable(product.barcode),
+    reference: normalizeNullable(product.reference ?? productModel?.reference),
+    product_model_id: product.product_model_id ?? productModel?.id ?? null,
+    product_model_name: normalizeNullable(productModel?.name ?? product.name),
+    product_model_reference: normalizeNullable(productModel?.reference ?? product.reference),
+    product_model_family: normalizeNullable(productModel?.family),
+    brand_id: product.brand_id ?? productModel?.brand_id ?? null,
+    brand_name: normalizeNullable(brand?.name),
+    clothing_type_id: product.clothing_type_id ?? productModel?.category_id ?? null,
+    clothing_type_name: normalizeNullable(clothingType?.name),
+    size_id: product.size_id ?? null,
+    size_name: normalizeNullable(product.size?.name),
+    color_id: product.color_id ?? null,
+    color_name: normalizeNullable(product.color?.name),
+  }
+}
+
+function hydrateProductSnapshot(
+  snapshot?: ProductSnapshot | null,
+  fallback?: { id?: string | null; created_at?: string | null; updated_at?: string | null },
+): Product | null {
+  const normalizedSnapshot = normalizeProductSnapshot(snapshot)
+
+  if (!normalizedSnapshot) {
+    return null
+  }
+
+  const timestamp = fallback?.created_at ?? fallback?.updated_at ?? new Date().toISOString()
+  const productModel = buildSnapshotProductModel(normalizedSnapshot, timestamp)
+  const brand = buildSnapshotBrand(normalizedSnapshot.brand_id, normalizedSnapshot.brand_name, timestamp)
+  const clothingType = buildSnapshotClothingType(normalizedSnapshot.clothing_type_id, normalizedSnapshot.clothing_type_name, timestamp)
+  const size = buildSnapshotSize(normalizedSnapshot.size_id, normalizedSnapshot.size_name, timestamp)
+  const color = buildSnapshotColor(normalizedSnapshot.color_id, normalizedSnapshot.color_name, timestamp)
+
+  return normalizeProduct({
+    id: normalizedSnapshot.id ?? fallback?.id ?? productModel?.id ?? '',
+    user_id: null,
+    name: normalizedSnapshot.name,
+    barcode: normalizedSnapshot.barcode ?? null,
+    product_model_id: normalizedSnapshot.product_model_id ?? null,
+    brand_id: normalizedSnapshot.brand_id ?? null,
+    clothing_type_id: normalizedSnapshot.clothing_type_id ?? null,
+    size_id: normalizedSnapshot.size_id ?? null,
+    color_id: normalizedSnapshot.color_id ?? null,
+    reference: normalizedSnapshot.reference ?? normalizedSnapshot.product_model_reference ?? null,
+    cost_price: 0,
+    sale_price: 0,
+    suggested_price: null,
+    stock_quantity: 0,
+    min_stock: 0,
+    description: null,
+    active: false,
+    created_at: timestamp,
+    updated_at: timestamp,
+    product_model: productModel,
+    brand,
+    clothing_type: clothingType,
+    size,
+    color,
+  })
+}
+
 function normalizeSalePayment(payment: SalePayment): SalePayment {
   const installmentsCount = normalizeNumber(payment.installments_count, 1)
   const amount = normalizeNumber(payment.amount)
@@ -108,6 +311,43 @@ function normalizeSalePayment(payment: SalePayment): SalePayment {
   }
 }
 
+function normalizePromissoryInstallment(installment: PromissoryInstallment): PromissoryInstallment {
+  return {
+    ...installment,
+    installment_number: normalizeNumber(installment.installment_number, 1),
+    due_date: installment.due_date,
+    amount: normalizeNumber(installment.amount),
+    status: (installment.status ?? 'pending') as PromissoryInstallment['status'],
+    paid_at: installment.paid_at ?? null,
+    payment_method: installment.payment_method ?? null,
+    cash_movement_id: installment.cash_movement_id ?? null,
+    notes: normalizeNullable(installment.notes),
+  }
+}
+
+function normalizePromissoryNote(note: PromissoryNote): PromissoryNote {
+  const installments = note.installments?.map(normalizePromissoryInstallment).sort((a, b) => a.installment_number - b.installment_number) ?? []
+  const totalAmount = normalizeNumber(note.total_amount)
+  const paidAmount = installments
+    .filter((installment) => installment.status === 'paid')
+    .reduce((sum, installment) => sum + installment.amount, 0)
+
+  return {
+    ...note,
+    total_amount: totalAmount,
+    installments_count: normalizeNumber(note.installments_count, installments.length || 1),
+    interval_days: normalizeNumber(note.interval_days, 30),
+    first_due_date: note.first_due_date,
+    status: (note.status ?? 'open') as PromissoryNote['status'],
+    notes: normalizeNullable(note.notes),
+    customer: note.customer ?? null,
+    sale: note.sale ? normalizeSaleWithRelations(note.sale) : null,
+    installments,
+    paid_amount: roundCurrency(paidAmount),
+    remaining_amount: roundCurrency(Math.max(0, totalAmount - paidAmount)),
+  }
+}
+
 function normalizeSaleItem(item: SaleItem): SaleItem {
   const pricingKind = (item.pricing_kind ?? 'cash') as SalePricingKind
   const quantity = normalizeNumber(item.quantity, 1)
@@ -120,6 +360,13 @@ function normalizeSaleItem(item: SaleItem): SaleItem {
   const installmentValue = item.installment_value === null || item.installment_value === undefined
     ? totalPrice / Math.max(1, installmentsCount)
     : Number(item.installment_value)
+  const product = item.product
+    ? normalizeProduct(item.product)
+    : hydrateProductSnapshot(item.product_snapshot ?? null, {
+        id: item.product_id,
+        created_at: item.created_at,
+        updated_at: item.created_at,
+      })
 
   return {
     ...item,
@@ -130,10 +377,12 @@ function normalizeSaleItem(item: SaleItem): SaleItem {
     total_price: totalPrice,
     installments_count: installmentsCount,
     installment_value: installmentValue,
+    product_snapshot: normalizeProductSnapshot(item.product_snapshot ?? null),
+    product,
   }
 }
 
-function normalizeSale(sale: Sale): Sale {
+export function normalizeSaleWithRelations(sale: Sale): Sale {
   return {
     ...sale,
     total_amount: normalizeNumber(sale.total_amount),
@@ -144,6 +393,38 @@ function normalizeSale(sale: Sale): Sale {
   }
 }
 
+function buildCashHistoryMovementFromSale(sale: Sale): CashHistoryMovement {
+  const normalizedSale = normalizeSaleWithRelations(sale)
+  const itemNames = normalizedSale.sale_items
+    ?.map((item) => item.product?.product_model?.name ?? item.product?.name)
+    .filter(Boolean)
+  const isPromissorySale =
+    normalizedSale.payment_method === 'promissoria' ||
+    normalizedSale.sale_payments?.some((payment) => payment.source_kind === 'promissory_group')
+
+  return {
+    kind: 'movement',
+    id: normalizedSale.id,
+    user_id: normalizedSale.user_id ?? null,
+    created_by: null,
+    sale_id: normalizedSale.id,
+    sale_payment_id: null,
+    cash_session_id: null,
+    movement_code: null,
+    type: 'income',
+    origin: isPromissorySale ? 'promissory' : 'sale',
+    description: itemNames?.length ? itemNames.join(', ') : 'Venda',
+    amount: normalizeNumber(normalizedSale.total_amount),
+    movement_date: normalizedSale.sale_date,
+    payment_method: normalizedSale.payment_method ?? null,
+    notes: null,
+    created_at: normalizedSale.created_at,
+    updated_at: normalizedSale.updated_at,
+    sale: normalizedSale,
+    sale_payment: null,
+  }
+}
+
 function normalizeCashMovement(movement: CashMovement): CashMovement {
   const legacyType = movement.type as CashMovementType | 'entrada' | 'saida'
   const type: CashMovementType = legacyType === 'entrada' ? 'income' : legacyType === 'saida' ? 'expense' : legacyType
@@ -151,20 +432,39 @@ function normalizeCashMovement(movement: CashMovement): CashMovement {
   return {
     ...movement,
     type,
-    origin: movement.origin ?? (movement.sale_id ? 'sale' : type === 'income' ? 'manual_income' : 'manual_expense'),
+    origin:
+      movement.origin ??
+      (movement.sale_payment?.source_kind === 'promissory_group'
+        ? 'promissory'
+        : movement.sale_id
+          ? 'sale'
+          : type === 'income'
+            ? 'manual_income'
+            : 'manual_expense'),
     amount: Math.abs(normalizeNumber(movement.amount)),
     sale_payment: movement.sale_payment ? normalizeSalePayment(movement.sale_payment) : null,
-    sale: movement.sale
-      ? {
-          ...normalizeSale(movement.sale),
-          sale_items: movement.sale.sale_items?.map((item) => ({
-            ...normalizeSaleItem(item),
-            product: item.product ? normalizeProduct(item.product) : null,
-          })),
-          sale_payments: movement.sale.sale_payments?.map(normalizeSalePayment),
-        }
-      : null,
+    sale: movement.sale ? normalizeSaleWithRelations(movement.sale) : null,
   }
+}
+
+function normalizeStockMovement(movement: StockMovement): StockMovement {
+  return {
+    ...movement,
+    product_snapshot: normalizeProductSnapshot(movement.product_snapshot ?? null),
+    product: movement.product
+      ? normalizeProduct(movement.product)
+      : hydrateProductSnapshot(movement.product_snapshot ?? null, {
+          id: movement.product_id,
+          created_at: movement.created_at,
+          updated_at: movement.created_at,
+        }),
+    sale: movement.sale ? normalizeSaleWithRelations(movement.sale) : null,
+    cash_movement: movement.cash_movement ? normalizeCashMovement(movement.cash_movement) : null,
+  }
+}
+
+export function normalizeStockMovementWithRelations(movement: StockMovement): StockMovement {
+  return normalizeStockMovement(movement)
 }
 
 export function formatPaymentMethodLabel(method?: PaymentMethod | null, installmentsCount = 1) {
@@ -188,7 +488,25 @@ export function formatPaymentMethodLabel(method?: PaymentMethod | null, installm
     return installmentsCount > 1 ? `Crédito parcelado ${installmentsCount}x` : 'Crédito à vista'
   }
 
+  if (method === 'promissoria') {
+    return installmentsCount > 1 ? `Promissória ${installmentsCount}x` : 'Promissória'
+  }
+
   return 'Outro'
+}
+
+export function formatUserRoleLabel(role?: string | null) {
+  if (!role) {
+    return '-'
+  }
+
+  const labels: Record<string, string> = {
+    admin: 'Administradora',
+    cashier: 'Operadora de caixa',
+    operator: 'Operadora',
+  }
+
+  return labels[role] ?? role
 }
 
 export function formatSalePaymentSummary(sale?: Sale | null) {
@@ -521,22 +839,89 @@ const salePaymentSelect = `
   created_at
 `
 
-const saleSelect = `
-  *,
-  customer:customers(${customerSelect}),
-  sale_items(
-    *,
-    product:products(
-      *,
-      product_model:product_models(${productModelSelect}),
-      brand:brands(id, name, description, active, created_at, updated_at),
-      clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
-      size:sizes(id, name, sort_order, active, created_at, updated_at),
-      color:colors(id, name, hex, active, created_at, updated_at)
-    )
-  ),
-  sale_payments(${salePaymentSelect})
+const promissoryInstallmentSelect = `
+  id,
+  promissory_note_id,
+  installment_number,
+  due_date,
+  amount,
+  status,
+  paid_at,
+  payment_method,
+  cash_movement_id,
+  notes,
+  created_at,
+  updated_at
 `
+
+const promissoryNoteSelect = `
+  id,
+  sale_id,
+  customer_id,
+  total_amount,
+  installments_count,
+  interval_days,
+  first_due_date,
+  status,
+  notes,
+  created_at,
+  updated_at,
+  sale:sales(
+    id,
+    customer_id,
+    total_amount,
+    payment_method,
+    installments_count,
+    sale_date,
+    status,
+    customer:customers(id, name, phone, cpf)
+  ),
+  customer:customers(id, name, phone, cpf),
+  installments:promissory_installments(${promissoryInstallmentSelect})
+`
+
+function isMissingProductSnapshotColumnError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+
+  return message.includes('product_snapshot') && message.includes('does not exist')
+}
+
+export function buildSaleSelect(includeProductSnapshot = true) {
+  return `
+    *,
+    customer:customers(${customerSelect}),
+    sale_items(
+      *,
+      ${includeProductSnapshot ? 'product_snapshot,' : ''}
+      product:products(
+        *,
+        product_model:product_models(${productModelSelect}),
+        brand:brands(id, name, description, active, created_at, updated_at),
+        clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
+        size:sizes(id, name, sort_order, active, created_at, updated_at),
+        color:colors(id, name, hex, active, created_at, updated_at)
+      )
+    ),
+    sale_payments(${salePaymentSelect})
+  `
+}
+
+export function buildStockMovementSelect(includeProductSnapshot = true) {
+  return `
+        *,
+        ${includeProductSnapshot ? 'product_snapshot,' : ''}
+        product:products(
+          *,
+          product_model:product_models(${productModelSelect}),
+          brand:brands(id, name, description, active, created_at, updated_at),
+          clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
+          size:sizes(id, name, sort_order, active, created_at, updated_at),
+          color:colors(id, name, hex, active, created_at, updated_at)
+        ),
+        sale:sales(${buildSaleSelect(includeProductSnapshot)}),
+        cash_movement:cash_movements(id, movement_code, description, amount, movement_date)
+      `
+}
 
 export async function listProducts(filters: ProductFilters = {}) {
   const client = getSupabase()
@@ -910,13 +1295,60 @@ export async function updateProduct(id: string, input: ProductInput) {
   return createProductVariant(input, null, id)
 }
 
-export async function deleteProduct(id: string) {
+// Mantido por compatibilidade com chamadas antigas; agora a ação é exclusão real.
+export async function archiveProduct(id: string, confirmationPin?: string) {
+  return deleteProduct(id, confirmationPin ?? '')
+}
+
+export interface ProductDeleteImpact {
+  sale_items_count: number
+  stock_movements_count: number
+  total_related_count: number
+}
+
+export async function getProductDeleteImpact(productId: string): Promise<ProductDeleteImpact> {
   const client = getSupabase()
-  const { error } = await client.from('products').delete().eq('id', id)
+  const [saleItemsResponse, stockMovementsResponse] = await Promise.all([
+    client.from('sale_items').select('id', { count: 'exact', head: true }).eq('product_id', productId),
+    client.from('stock_movements').select('id', { count: 'exact', head: true }).eq('product_id', productId),
+  ])
+
+  if (saleItemsResponse.error) {
+    throw new Error(saleItemsResponse.error.message)
+  }
+
+  if (stockMovementsResponse.error) {
+    throw new Error(stockMovementsResponse.error.message)
+  }
+
+  const saleItemsCount = saleItemsResponse.count ?? 0
+  const stockMovementsCount = stockMovementsResponse.count ?? 0
+
+  return {
+    sale_items_count: saleItemsCount,
+    stock_movements_count: stockMovementsCount,
+    total_related_count: saleItemsCount + stockMovementsCount,
+  }
+}
+
+export async function deleteProduct(id: string, confirmationPin: string) {
+  const client = getSupabase()
+  const pin = confirmationPin.trim()
+
+  if (!pin) {
+    throw new Error('Confirme a exclusão com o PIN de administrador.')
+  }
+
+  const { error } = await client.rpc('admin_delete_product_with_pin', {
+    p_product_id: id,
+    p_pin: pin,
+    p_user_id: null,
+  } as never)
 
   if (error) {
     throw new Error(error.message)
   }
+
 }
 
 export async function findProductForSale(query: string) {
@@ -953,7 +1385,7 @@ export async function createStockMovement({
   const client = getSupabase()
   const { data: product, error: productError } = await client
     .from('products')
-    .select('id, stock_quantity')
+    .select(productSelect)
     .eq('id', productId)
     .single()
 
@@ -961,8 +1393,10 @@ export async function createStockMovement({
     throw new Error(productError.message)
   }
 
+  const normalizedProduct = normalizeProduct(product as Product)
+
   if (applyStockUpdate) {
-    const currentStock = Number(product.stock_quantity ?? 0)
+    const currentStock = Number(normalizedProduct.stock_quantity ?? 0)
     const nextStock = type === 'entrada' ? currentStock + quantity : currentStock - quantity
 
     if (nextStock < 0) {
@@ -982,6 +1416,7 @@ export async function createStockMovement({
   const { error } = await client.from('stock_movements').insert({
     user_id: user?.id ?? null,
     product_id: productId,
+    product_snapshot: buildProductSnapshot(normalizedProduct),
     type,
     reason,
     quantity,
@@ -995,34 +1430,25 @@ export async function createStockMovement({
 
 export async function listStockMovements() {
   const client = getSupabase()
-  const { data, error } = await client
-    .from('stock_movements')
-    .select(
-      `
-        *,
-        product:products(
-          *,
-          product_model:product_models(${productModelSelect}),
-          brand:brands(id, name, description, active, created_at, updated_at),
-          clothing_type:clothing_types(id, name, description, active, created_at, updated_at),
-          size:sizes(id, name, sort_order, active, created_at, updated_at),
-          color:colors(id, name, hex, active, created_at, updated_at)
-        ),
-        sale:sales(${saleSelect}),
-        cash_movement:cash_movements(id, movement_code, description, amount, movement_date)
-      `,
-    )
-    .order('created_at', { ascending: false })
-    .limit(50)
+  for (const includeProductSnapshot of [true, false] as const) {
+    const { data, error } = await client
+      .from('stock_movements')
+      .select(buildStockMovementSelect(includeProductSnapshot))
+      .order('created_at', { ascending: false })
+      .limit(50)
 
-  if (error) {
-    throw new Error(error.message)
+    if (error) {
+      if (includeProductSnapshot && isMissingProductSnapshotColumnError(error)) {
+        continue
+      }
+
+      throw new Error(error.message)
+    }
+
+    return ((data ?? []) as unknown as StockMovement[]).map(normalizeStockMovement)
   }
 
-  return ((data ?? []) as StockMovement[]).map((movement) => ({
-    ...movement,
-    product: movement.product ? normalizeProduct(movement.product) : null,
-  }))
+  return []
 }
 
 export interface SaleLineInput {
@@ -1043,6 +1469,14 @@ export interface SalePaymentInput {
   installmentValue?: number
 }
 
+export interface PromissoryPlanInput {
+  installmentsCount: number
+  intervalDays: number
+  firstDueDate: string
+  entryAmount?: number | null
+  notes?: string | null
+}
+
 export interface CashExpenseInput {
   description: string
   amount: number
@@ -1051,6 +1485,7 @@ export interface CashExpenseInput {
   notes?: string | null
   user?: User | null
   cashSessionId?: string | null
+  confirmationPin?: string
 }
 
 export interface CashIncomeInput {
@@ -1061,6 +1496,7 @@ export interface CashIncomeInput {
   notes?: string | null
   user?: User | null
   cashSessionId?: string | null
+  confirmationPin?: string
 }
 
 export interface SaleRegistrationInput {
@@ -1068,11 +1504,28 @@ export interface SaleRegistrationInput {
   payments?: SalePaymentInput[]
   paymentMethod?: PaymentMethod
   installmentsCount?: number
+  promissoryPlan?: PromissoryPlanInput | null
   customerId?: string | null
   movementDate: string
   notes?: string | null
   user?: User | null
   cashSessionId?: string | null
+  confirmationPin?: string
+}
+
+export interface PromissoryNoteFilters {
+  status?: PromissoryNoteStatus | 'all'
+  query?: string
+}
+
+export interface PromissoryInstallmentPaymentInput {
+  promissoryInstallmentId: string
+  paymentMethod: PaymentMethod
+  movementDate: string
+  notes?: string | null
+  user?: User | null
+  cashSessionId?: string | null
+  confirmationPin?: string
 }
 
 export interface CustomerInput {
@@ -1088,6 +1541,7 @@ export interface OpenCashSessionInput {
   openingAmount: number
   notes?: string | null
   user?: User | null
+  confirmationPin?: string
 }
 
 export interface CloseCashSessionInput {
@@ -1097,6 +1551,7 @@ export interface CloseCashSessionInput {
   differenceAmount: number
   notes?: string | null
   user?: User | null
+  confirmationPin?: string
 }
 
 export interface CashMovementFilters {
@@ -1129,11 +1584,44 @@ export interface CashHistorySearchResult {
   pageSize: number
 }
 
-const cashMovementSelect = `
-  *,
-  sale:sales(${saleSelect}),
-  sale_payment:sale_payments!cash_movements_sale_payment_id_fkey(${salePaymentSelect})
-`
+export interface CustomerSalesSearchResult {
+  data: Sale[]
+  count: number
+  page: number
+  pageSize: number
+}
+
+function buildCashMovementSelect(includeProductSnapshot = true) {
+  return `
+    *,
+    sale:sales(${buildSaleSelect(includeProductSnapshot)}),
+    sale_payment:sale_payments!cash_movements_sale_payment_id_fkey(${salePaymentSelect})
+  `
+}
+
+async function executeWithProductSnapshotFallback(
+  executor: (includeProductSnapshot: boolean) => unknown,
+) {
+  for (const includeProductSnapshot of [true, false] as const) {
+    const response = (await executor(includeProductSnapshot)) as {
+      error?: { message: string } | null
+      data?: unknown
+      count?: number | null
+    }
+
+    if (response.error) {
+      if (includeProductSnapshot && isMissingProductSnapshotColumnError(response.error)) {
+        continue
+      }
+
+      throw new Error(response.error.message)
+    }
+
+    return response
+  }
+
+  return null
+}
 
 function normalizeCashSession(session: CashSession): CashSession {
   return {
@@ -1206,6 +1694,83 @@ export async function listCustomers() {
   }
 
   return (data ?? []) as Customer[]
+}
+
+export async function getCashMovementBySaleId(saleId: string) {
+  const client = getSupabase()
+  const movementResponse = await executeWithProductSnapshotFallback((includeProductSnapshot) =>
+    client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .eq('sale_id', saleId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  )
+
+  if (movementResponse?.data) {
+    return normalizeCashHistoryMovement(movementResponse.data as CashMovement)
+  }
+
+  for (const includeProductSnapshot of [true, false] as const) {
+    const saleResponse = await client
+      .from('sales')
+      .select(buildSaleSelect(includeProductSnapshot))
+      .eq('id', saleId)
+      .maybeSingle()
+
+    if (saleResponse.error) {
+      if (includeProductSnapshot && isMissingProductSnapshotColumnError(saleResponse.error)) {
+        continue
+      }
+
+      throw new Error(saleResponse.error.message)
+    }
+
+    return saleResponse.data ? buildCashHistoryMovementFromSale(saleResponse.data as unknown as Sale) : null
+  }
+
+  return null
+}
+
+export async function listSalesByCustomer(customerId: string, page = 1, pageSize = 5): Promise<CustomerSalesSearchResult> {
+  const client = getSupabase()
+  const safePage = Math.max(1, Math.floor(page))
+  const safePageSize = Math.max(1, Math.floor(pageSize))
+  const from = (safePage - 1) * safePageSize
+  const to = from + safePageSize - 1
+
+  for (const includeProductSnapshot of [true, false] as const) {
+    const { data, error, count } = await client
+      .from('sales')
+      .select(buildSaleSelect(includeProductSnapshot), { count: 'exact' })
+      .eq('customer_id', customerId)
+      .order('sale_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (error) {
+      if (includeProductSnapshot && isMissingProductSnapshotColumnError(error)) {
+        continue
+      }
+
+      throw new Error(error.message)
+    }
+
+    return {
+      data: ((data ?? []) as unknown as Sale[]).map(normalizeSaleWithRelations),
+      count: count ?? 0,
+      page: safePage,
+      pageSize: safePageSize,
+    }
+  }
+
+  return {
+    data: [],
+    count: 0,
+    page: safePage,
+    pageSize: safePageSize,
+  }
 }
 
 export async function searchCustomers(query: string) {
@@ -1363,10 +1928,17 @@ export async function getLastClosedCashSession() {
 
 export async function openCashSession(input: OpenCashSessionInput) {
   const client = getSupabase()
+  const confirmationPin = input.confirmationPin?.trim()
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de abrir o caixa.')
+  }
+
+  const today = todayISODate()
   const existingOpenSession = await client
     .from('cash_sessions')
     .select('id, session_date, opened_at')
     .eq('status', 'open')
+    .eq('session_date', today)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -1384,79 +1956,94 @@ export async function openCashSession(input: OpenCashSessionInput) {
     )
   }
 
-  const { data, error } = await client
-    .from('cash_sessions')
-    .insert({
-      session_date: todayISODate(),
-      opening_amount: input.openingAmount,
-      status: 'open',
-      opened_by: input.user?.id ?? null,
-      notes: normalizeNullable(input.notes),
-    })
-    .select()
-    .single()
+  const { data, error } = await client.rpc('open_cash_session_with_pin', {
+    p_opening_amount: input.openingAmount,
+    p_notes: normalizeNullable(input.notes),
+    p_pin: confirmationPin,
+    p_user_id: input.user?.id ?? null,
+  } as never)
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return normalizeCashSession(data as CashSession)
+  const sessionId = (data as { session_id?: string } | null)?.session_id
+  if (!sessionId) {
+    throw new Error('Não foi possível abrir o caixa.')
+  }
+
+  const sessionResponse = await client.from('cash_sessions').select('*').eq('id', sessionId).single()
+  if (sessionResponse.error) {
+    throw new Error(sessionResponse.error.message)
+  }
+
+  return normalizeCashSession(sessionResponse.data as CashSession)
 }
 
 export async function closeCashSession(input: CloseCashSessionInput) {
   const client = getSupabase()
   const sessionId = requireUuid(input.sessionId)
-  const { data, error } = await client
-    .from('cash_sessions')
-    .update({
-      closing_amount: input.closingAmount,
-      expected_amount: input.expectedAmount,
-      difference_amount: input.differenceAmount,
-      status: 'closed',
-      closed_at: getNowLocalTimestamp(),
-      closed_by: input.user?.id ?? null,
-      notes: normalizeNullable(input.notes),
-    })
-    .eq('id', sessionId)
-    .select()
-    .single()
+  const confirmationPin = input.confirmationPin?.trim()
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de fechar o caixa.')
+  }
+
+  const { data, error } = await client.rpc('close_cash_session_with_pin', {
+    p_session_id: sessionId,
+    p_closing_amount: input.closingAmount,
+    p_expected_amount: input.expectedAmount,
+    p_difference_amount: input.differenceAmount,
+    p_notes: normalizeNullable(input.notes),
+    p_pin: confirmationPin,
+    p_user_id: input.user?.id ?? null,
+  } as never)
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return normalizeCashSession(data as CashSession)
+  const returnedSessionId = (data as { session_id?: string } | null)?.session_id ?? sessionId
+  const sessionResponse = await client.from('cash_sessions').select('*').eq('id', returnedSessionId).single()
+  if (sessionResponse.error) {
+    throw new Error(sessionResponse.error.message)
+  }
+
+  return normalizeCashSession(sessionResponse.data as CashSession)
 }
 
 export async function listTodayCashMovements(date = todayISODate()) {
   const client = getSupabase()
-  const { data, error } = await client
-    .from('cash_movements')
-    .select(cashMovementSelect)
-    .eq('movement_date', date)
-    .order('created_at', { ascending: false })
+  const response = await executeWithProductSnapshotFallback((includeProductSnapshot) =>
+    client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .eq('movement_date', date)
+      .order('created_at', { ascending: false }),
+  )
 
-  if (error) {
-    throw new Error(error.message)
+  if (!response) {
+    return []
   }
 
-  return ((data ?? []) as CashMovement[]).map(normalizeCashMovement)
+  return ((response.data ?? []) as CashMovement[]).map(normalizeCashMovement)
 }
 
 export async function listCashMovementsForSession(sessionId: string, openedAt: string) {
   const client = getSupabase()
-  const { data, error } = await client
-    .from('cash_movements')
-    .select(cashMovementSelect)
-    .eq('cash_session_id', sessionId)
-    .gte('created_at', openedAt)
-    .order('created_at', { ascending: false })
+  const response = await executeWithProductSnapshotFallback((includeProductSnapshot) =>
+    client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .eq('cash_session_id', sessionId)
+      .gte('created_at', openedAt)
+      .order('created_at', { ascending: false }),
+  )
 
-  if (error) {
-    throw new Error(error.message)
+  if (!response) {
+    return []
   }
 
-  return ((data ?? []) as CashMovement[]).map(normalizeCashMovement)
+  return ((response.data ?? []) as CashMovement[]).map(normalizeCashMovement)
 }
 
 export async function listCashSessionHistoryEvents(date = todayISODate()) {
@@ -1506,50 +2093,57 @@ export async function searchCashMovements(filters: CashMovementFilters): Promise
   const to = from + pageSize - 1
   const movementType = filters.type === 'income' || filters.type === 'expense' ? filters.type : 'all'
 
-  let request = client
-    .from('cash_movements')
-    .select(cashMovementSelect, { count: 'exact' })
-    .order('movement_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .range(from, to)
+  const response = await executeWithProductSnapshotFallback((includeProductSnapshot) => {
+    let request = client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot), { count: 'exact' })
+      .order('movement_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(from, to)
 
-  if (movementType !== 'all') {
-    request = request.eq('type', movementType)
-  }
+    if (movementType !== 'all') {
+      request = request.eq('type', movementType)
+    }
 
-  if (filters.description?.trim()) {
-    request = request.ilike('description', `%${filters.description.trim()}%`)
-  }
+    if (filters.description?.trim()) {
+      request = request.ilike('description', `%${filters.description.trim()}%`)
+    }
 
-  if (filters.minAmount !== null && filters.minAmount !== undefined) {
-    request = request.gte('amount', filters.minAmount)
-  }
+    if (filters.minAmount !== null && filters.minAmount !== undefined) {
+      request = request.gte('amount', filters.minAmount)
+    }
 
-  if (filters.maxAmount !== null && filters.maxAmount !== undefined) {
-    request = request.lte('amount', filters.maxAmount)
-  }
+    if (filters.maxAmount !== null && filters.maxAmount !== undefined) {
+      request = request.lte('amount', filters.maxAmount)
+    }
 
-  if (filters.startDate) {
-    request = request.gte('movement_date', filters.startDate)
-  }
+    if (filters.startDate) {
+      request = request.gte('movement_date', filters.startDate)
+    }
 
-  if (filters.endDate) {
-    request = request.lte('movement_date', filters.endDate)
-  }
+    if (filters.endDate) {
+      request = request.lte('movement_date', filters.endDate)
+    }
 
-  if (filters.paymentMethod && filters.paymentMethod !== 'all') {
-    request = request.eq('payment_method', filters.paymentMethod)
-  }
+    if (filters.paymentMethod && filters.paymentMethod !== 'all') {
+      request = request.eq('payment_method', filters.paymentMethod)
+    }
 
-  const { data, error, count } = await request
+    return request
+  })
 
-  if (error) {
-    throw new Error(error.message)
+  if (!response) {
+    return {
+      data: [],
+      count: 0,
+      page,
+      pageSize,
+    }
   }
 
   return {
-    data: ((data ?? []) as CashMovement[]).map(normalizeCashMovement),
-    count: count ?? 0,
+    data: ((response.data ?? []) as CashMovement[]).map(normalizeCashMovement),
+    count: response.count ?? 0,
     page,
     pageSize,
   }
@@ -1563,47 +2157,49 @@ async function listCashMovementsForHistory(filters: CashHistoryFilters) {
   const client = getSupabase()
   const movementType = filters.type === 'income' || filters.type === 'expense' ? filters.type : 'all'
 
-  let request = client
-    .from('cash_movements')
-    .select(cashMovementSelect)
-    .order('movement_date', { ascending: false })
-    .order('created_at', { ascending: false })
+  const response = await executeWithProductSnapshotFallback((includeProductSnapshot) => {
+    let request = client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .order('movement_date', { ascending: false })
+      .order('created_at', { ascending: false })
 
-  if (movementType !== 'all') {
-    request = request.eq('type', movementType)
+    if (movementType !== 'all') {
+      request = request.eq('type', movementType)
+    }
+
+    if (filters.description?.trim()) {
+      request = request.ilike('description', `%${filters.description.trim()}%`)
+    }
+
+    if (filters.minAmount !== null && filters.minAmount !== undefined) {
+      request = request.gte('amount', filters.minAmount)
+    }
+
+    if (filters.maxAmount !== null && filters.maxAmount !== undefined) {
+      request = request.lte('amount', filters.maxAmount)
+    }
+
+    if (filters.startDate) {
+      request = request.gte('movement_date', filters.startDate)
+    }
+
+    if (filters.endDate) {
+      request = request.lte('movement_date', filters.endDate)
+    }
+
+    if (filters.paymentMethod && filters.paymentMethod !== 'all') {
+      request = request.eq('payment_method', filters.paymentMethod)
+    }
+
+    return request
+  })
+
+  if (!response) {
+    return []
   }
 
-  if (filters.description?.trim()) {
-    request = request.ilike('description', `%${filters.description.trim()}%`)
-  }
-
-  if (filters.minAmount !== null && filters.minAmount !== undefined) {
-    request = request.gte('amount', filters.minAmount)
-  }
-
-  if (filters.maxAmount !== null && filters.maxAmount !== undefined) {
-    request = request.lte('amount', filters.maxAmount)
-  }
-
-  if (filters.startDate) {
-    request = request.gte('movement_date', filters.startDate)
-  }
-
-  if (filters.endDate) {
-    request = request.lte('movement_date', filters.endDate)
-  }
-
-  if (filters.paymentMethod && filters.paymentMethod !== 'all') {
-    request = request.eq('payment_method', filters.paymentMethod)
-  }
-
-  const { data, error } = await request
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return ((data ?? []) as CashMovement[]).map(normalizeCashHistoryMovement)
+  return ((response.data ?? []) as CashMovement[]).map(normalizeCashHistoryMovement)
 }
 
 async function listCashSessionHistoryEventsForSearch(filters: CashHistoryFilters) {
@@ -1741,55 +2337,91 @@ export async function getAllTimeCashExpenseTotal() {
 export async function createCashExpense(input: CashExpenseInput) {
   const sessionId = requireUuid(input.cashSessionId)
   const client = getSupabase()
+  const confirmationPin = input.confirmationPin?.trim()
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de registrar a despesa.')
+  }
+
   const { data, error } = await client
-    .from('cash_movements')
-    .insert({
-      user_id: input.user?.id ?? null,
-      created_by: input.user?.id ?? null,
-      cash_session_id: sessionId,
-      type: 'expense',
-      origin: 'manual_expense',
-      description: input.description.trim(),
-      amount: Math.abs(input.amount),
-      movement_date: input.movementDate,
-      payment_method: input.paymentMethod,
-      notes: normalizeNullable(input.notes),
+    .rpc('register_cash_expense_with_pin', {
+      p_cash_session_id: sessionId,
+      p_description: input.description.trim(),
+      p_amount: Math.abs(input.amount),
+      p_movement_date: input.movementDate,
+      p_payment_method: input.paymentMethod,
+      p_notes: normalizeNullable(input.notes),
+      p_pin: confirmationPin,
+      p_user_id: null,
     } as never)
-    .select(cashMovementSelect)
     .single()
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return normalizeCashMovement(data as CashMovement)
+  const movementId = (data as { cash_movement_id?: string } | null)?.cash_movement_id
+  if (!movementId) {
+    throw new Error('Não foi possível registrar a despesa.')
+  }
+
+  const movementResponse = await executeWithProductSnapshotFallback((includeProductSnapshot) =>
+    client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .eq('id', movementId)
+      .single(),
+  )
+
+  if (!movementResponse?.data) {
+    throw new Error('Não foi possível registrar a despesa.')
+  }
+
+  return normalizeCashMovement(movementResponse.data as CashMovement)
 }
 
 export async function createCashIncome(input: CashIncomeInput) {
   const sessionId = requireUuid(input.cashSessionId)
   const client = getSupabase()
+  const confirmationPin = input.confirmationPin?.trim()
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de registrar a entrada.')
+  }
+
   const { data, error } = await client
-    .from('cash_movements')
-    .insert({
-      user_id: input.user?.id ?? null,
-      created_by: input.user?.id ?? null,
-      cash_session_id: sessionId,
-      type: 'income',
-      origin: 'manual_income',
-      description: input.description.trim(),
-      amount: Math.abs(input.amount),
-      movement_date: input.movementDate,
-      payment_method: input.paymentMethod,
-      notes: normalizeNullable(input.notes),
+    .rpc('register_cash_income_with_pin', {
+      p_cash_session_id: sessionId,
+      p_description: input.description.trim(),
+      p_amount: Math.abs(input.amount),
+      p_movement_date: input.movementDate,
+      p_payment_method: input.paymentMethod,
+      p_notes: normalizeNullable(input.notes),
+      p_pin: confirmationPin,
+      p_user_id: null,
     } as never)
-    .select(cashMovementSelect)
     .single()
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return normalizeCashMovement(data as CashMovement)
+  const movementId = (data as { cash_movement_id?: string } | null)?.cash_movement_id
+  if (!movementId) {
+    throw new Error('Não foi possível registrar a entrada.')
+  }
+
+  const movementResponse = await executeWithProductSnapshotFallback((includeProductSnapshot) =>
+    client
+      .from('cash_movements')
+      .select(buildCashMovementSelect(includeProductSnapshot))
+      .eq('id', movementId)
+      .single(),
+  )
+
+  if (!movementResponse?.data) {
+    throw new Error('Não foi possível registrar a entrada.')
+  }
+
+  return normalizeCashMovement(movementResponse.data as CashMovement)
 }
 
 export async function registerSaleWithCashAndStock(input: SaleRegistrationInput) {
@@ -1798,6 +2430,10 @@ export async function registerSaleWithCashAndStock(input: SaleRegistrationInput)
   }
 
   const sessionId = requireUuid(input.cashSessionId)
+  const confirmationPin = input.confirmationPin?.trim()
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de finalizar a venda.')
+  }
 
   const client = getSupabase()
   const rpcItems = input.items.map((item) => {
@@ -1888,10 +2524,20 @@ export async function registerSaleWithCashAndStock(input: SaleRegistrationInput)
     p_payments: normalizedPayments,
     p_payment_method: summaryPaymentMethod,
     p_installments_count: summaryInstallments,
+    p_promissory_plan: input.promissoryPlan
+      ? {
+          installments_count: input.promissoryPlan.installmentsCount,
+          interval_days: input.promissoryPlan.intervalDays,
+          first_due_date: input.promissoryPlan.firstDueDate,
+          entry_amount: roundCurrency(input.promissoryPlan.entryAmount ?? 0),
+          notes: normalizeNullable(input.promissoryPlan.notes),
+        }
+      : null,
     p_movement_date: input.movementDate,
     p_notes: normalizeNullable(input.notes),
-    p_user_id: input.user?.id ?? null,
+    p_user_id: null,
     p_cash_session_id: sessionId,
+    p_confirmation_pin: confirmationPin,
   } as never)
 
   if (error) {
@@ -1901,16 +2547,80 @@ export async function registerSaleWithCashAndStock(input: SaleRegistrationInput)
   return data as { sale_id: string; cash_movement_id: string | null; movement_code: string | null }
 }
 
+export async function listPromissoryNotes(filters: PromissoryNoteFilters = {}) {
+  const client = getSupabase()
+  let request = client.from('promissory_notes').select(promissoryNoteSelect).order('created_at', { ascending: false })
+
+  if (filters.status && filters.status !== 'all') {
+    request = request.eq('status', filters.status)
+  }
+
+  const { data, error } = await request
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  let notes = ((data ?? []) as unknown as PromissoryNote[]).map(normalizePromissoryNote)
+  const query = filters.query?.trim().toLowerCase()
+
+  if (query) {
+    notes = notes.filter((note) => {
+      const customerName = note.customer?.name?.toLowerCase() ?? ''
+      const saleId = note.sale_id.toLowerCase()
+      const notesText = note.notes?.toLowerCase() ?? ''
+      const saleText = String(note.sale?.sale_date ?? '').toLowerCase()
+
+      return [customerName, saleId, notesText, saleText].some((value) => value.includes(query))
+    })
+  }
+
+  return notes
+}
+
+export async function registerPromissoryInstallmentPayment(input: PromissoryInstallmentPaymentInput) {
+  const client = getSupabase()
+  const installmentId = requireUuid(input.promissoryInstallmentId)
+  const confirmationPin = input.confirmationPin?.trim()
+
+  if (!confirmationPin) {
+    throw new Error('Confirme a operação com o PIN antes de receber a promissória.')
+  }
+
+  const cashSessionId = input.cashSessionId?.trim()
+  if (!cashSessionId) {
+    throw new Error('Abra o caixa para receber a promissória.')
+  }
+
+  const { data, error } = await client.rpc('register_promissory_installment_payment_with_cash', {
+    p_installment_id: installmentId,
+    p_payment_method: input.paymentMethod,
+    p_movement_date: input.movementDate,
+    p_notes: normalizeNullable(input.notes),
+    p_user_id: input.user?.id ?? null,
+    p_cash_session_id: cashSessionId,
+    p_confirmation_pin: confirmationPin,
+  } as never)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data as { installment_id: string; note_id: string; cash_movement_id: string | null }
+}
+
 export async function finalizeSale(
   items: SaleLineInput[],
   paymentMethod: PaymentMethod,
   user: User | null,
+  confirmationPin: string,
 ) {
   await registerSaleWithCashAndStock({
     items,
     paymentMethod,
     movementDate: todayISODate(),
     user,
+    confirmationPin,
   })
 }
 

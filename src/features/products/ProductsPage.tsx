@@ -1,4 +1,4 @@
-import { Plus, Search } from 'lucide-react'
+import { BookOpenText, Plus, Search, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarcodeResultModal, type BarcodeLookupResult } from '../../components/barcode/BarcodeResultModal'
@@ -7,15 +7,18 @@ import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
+import { SearchableSelect, type SelectOption } from '../../components/ui/SearchableSelect'
 import {
   createProduct,
   createRegistryItem,
   deleteProduct,
   findBarcodeLookup,
   friendlyCatalogError,
+  getProductDeleteImpact,
   listProducts,
   loadProductRegistries,
   updateProduct,
+  type ProductDeleteImpact,
   type ProductInput,
   type RegistryInput,
 } from '../../lib/catalog'
@@ -27,6 +30,7 @@ import {
   type ProductEditorFormValues,
   type ProductEditorSubmitMode,
 } from './ProductEditorForm'
+import { ProductDeleteModal } from './ProductDeleteModal'
 import { ProductTable } from './ProductTable'
 
 interface ProductRegistries {
@@ -46,7 +50,7 @@ const emptyRegistries: ProductRegistries = {
 export function ProductsPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [registries, setRegistries] = useState<ProductRegistries>(emptyRegistries)
   const [query, setQuery] = useState('')
@@ -63,9 +67,15 @@ export function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [initialBarcode, setInitialBarcode] = useState('')
   const [barcodeResult, setBarcodeResult] = useState<BarcodeLookupResult | null>(null)
+  const [deleteModalProduct, setDeleteModalProduct] = useState<Product | null>(null)
+  const [deleteImpact, setDeleteImpact] = useState<ProductDeleteImpact | null>(null)
+  const [deleteImpactLoading, setDeleteImpactLoading] = useState(false)
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const createBarcodeParam = searchParams.get('barcode') ?? ''
   const shouldOpenCreate = searchParams.get('create') === '1'
+  const statusFilter = isAdmin ? activeFilter : 'active'
 
   useEffect(() => {
     const q = searchParams.get('q') ?? ''
@@ -78,11 +88,15 @@ export function ProductsPage() {
       return
     }
 
+    if (!isAdmin) {
+      return
+    }
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setEditingProduct(null)
     setInitialBarcode(createBarcodeParam)
     setModalOpen(true)
-  }, [createBarcodeParam, shouldOpenCreate])
+  }, [createBarcodeParam, isAdmin, shouldOpenCreate])
 
   const filters = useMemo(
     () => ({
@@ -91,11 +105,23 @@ export function ProductsPage() {
       clothingTypeId: clothingTypeId || undefined,
       sizeId: sizeId || undefined,
       colorId: colorId || undefined,
-      active: activeFilter === '' ? null : activeFilter === 'active',
+      active: isAdmin ? (activeFilter === '' ? null : activeFilter === 'active') : true,
       lowStock,
     }),
-    [activeFilter, brandId, clothingTypeId, colorId, lowStock, query, sizeId],
+    [activeFilter, brandId, clothingTypeId, colorId, isAdmin, lowStock, query, sizeId],
   )
+
+  const hasActiveFilters =
+    query.trim() !== '' ||
+    brandId !== '' ||
+    clothingTypeId !== '' ||
+    sizeId !== '' ||
+    colorId !== '' ||
+    (isAdmin && activeFilter !== '') ||
+    lowStock
+  const filterGridClassName = isAdmin
+    ? 'grid gap-3 xl:grid-cols-[1.15fr_160px_180px_130px_150px_150px]'
+    : 'grid gap-3 xl:grid-cols-[1.15fr_160px_180px_130px_150px]'
 
   const loadRegistries = useCallback(async () => {
     setRegistries(await loadProductRegistries())
@@ -147,12 +173,22 @@ export function ProductsPage() {
   }, [filters])
 
   function openCreateModal() {
+    if (!isAdmin) {
+      setError('Apenas a administradora pode cadastrar produtos.')
+      return
+    }
+
     setEditingProduct(null)
     setInitialBarcode('')
     setModalOpen(true)
   }
 
   function openEditModal(product: Product) {
+    if (!isAdmin) {
+      setError('Apenas a administradora pode editar produtos.')
+      return
+    }
+
     setEditingProduct(product)
     setInitialBarcode('')
     setModalOpen(true)
@@ -174,7 +210,20 @@ export function ProductsPage() {
     setInitialBarcode('')
   }
 
+  function closeDeleteModal() {
+    setDeleteModalProduct(null)
+    setDeleteImpact(null)
+    setDeleteImpactLoading(false)
+    setDeleteSubmitting(false)
+    setDeleteError('')
+  }
+
   async function handleSubmit(values: ProductEditorFormValues, mode: ProductEditorSubmitMode) {
+    if (!isAdmin) {
+      setError('Apenas a administradora pode criar ou editar produtos.')
+      return false
+    }
+
     const payload: ProductInput = {
       name: values.name,
       barcode: values.barcode,
@@ -218,35 +267,87 @@ export function ProductsPage() {
   }
 
   async function handleQuickCreate(kind: RegistryKind, values: RegistryInput) {
+    if (!isAdmin) {
+      throw new Error('Apenas a administradora pode criar cadastros auxiliares.')
+    }
+
     const item = await createRegistryItem(kind, values)
     await loadRegistries()
     return item
   }
 
   async function handleDelete(product: Product) {
-    const confirmed = window.confirm(`Excluir o produto "${product.name}"?`)
-    if (!confirmed) {
+    if (!isAdmin) {
+      setError('Apenas a administradora pode excluir produtos.')
       return
     }
 
     setError('')
+    setDeleteError('')
+    setDeleteModalProduct(product)
+    setDeleteImpact(null)
+    setDeleteImpactLoading(true)
 
     try {
-      await deleteProduct(product.id)
+      const impact = await getProductDeleteImpact(product.id)
+      setDeleteImpact(impact)
+    } catch (err) {
+      setDeleteError(friendlyCatalogError(err))
+    } finally {
+      setDeleteImpactLoading(false)
+    }
+  }
+
+  async function confirmDeleteProduct(pin: string) {
+    if (!deleteModalProduct) {
+      return
+    }
+
+    setDeleteSubmitting(true)
+    setDeleteError('')
+
+    try {
+      await deleteProduct(deleteModalProduct.id, pin)
+      closeDeleteModal()
       await loadProducts()
     } catch (err) {
-      setError(friendlyCatalogError(err))
+      setDeleteError(friendlyCatalogError(err))
+    } finally {
+      setDeleteSubmitting(false)
     }
+  }
+
+  function clearAllFilters() {
+    setLoading(true)
+    setQuery('')
+    setBrandId('')
+    setClothingTypeId('')
+    setSizeId('')
+    setColorId('')
+    setActiveFilter(isAdmin ? '' : 'active')
+    setLowStock(false)
   }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <BarcodeScanButton label="Ler código" variant="secondary" tone="light" onScan={handleBarcodeScan} />
-        <Button onClick={openCreateModal}>
-          <Plus className="h-4 w-4" />
-          Adicionar produto
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="whitespace-nowrap"
+          onClick={() => navigate('/tutoriais/cadastrar-produto')}
+        >
+          <BookOpenText className="h-4 w-4" />
+          Ver tutorial de cadastro
         </Button>
+        <BarcodeScanButton label="Ler código" variant="secondary" tone="light" onScan={handleBarcodeScan} />
+        {isAdmin ? (
+          <Button onClick={openCreateModal}>
+            <Plus className="h-4 w-4" />
+            Adicionar produto
+          </Button>
+        ) : null}
       </div>
 
       {error ? (
@@ -256,16 +357,27 @@ export function ProductsPage() {
       ) : null}
 
       <section className="overflow-hidden rounded-xl border-2 border-gray-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-        <div className="border-b-2 border-gray-100 px-5 py-4 text-left">
+        <div className="flex items-center justify-between gap-3 border-b-2 border-gray-100 px-5 py-4 text-left">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-500">
             Filtros
           </p>
+          {hasActiveFilters ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={clearAllFilters}
+              className="shadow-sm"
+            >
+              <X className="h-4 w-4" />
+              Limpar filtros
+            </Button>
+          ) : null}
         </div>
 
         <div className="space-y-4 px-5 py-4">
-          <div className="grid gap-3 xl:grid-cols-[1.15fr_160px_180px_130px_150px_150px_auto]">
+          <div className={filterGridClassName}>
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-600" />
               <Input
                 className="pl-9"
                 placeholder="Buscar por nome, código, marca, tipo, cor ou tamanho"
@@ -276,44 +388,52 @@ export function ProductsPage() {
                 }}
               />
             </div>
-            <FilterSelect
+            <SearchableSelect
               value={brandId}
               onChange={setBrandId}
-              label="Todas as marcas"
-              items={registries.brands}
+              placeholder="Marcas"
+              options={registries.brands.map(toSelectOption)}
+              clearLabel="Limpar"
             />
-            <FilterSelect
+            <SearchableSelect
               value={clothingTypeId}
               onChange={setClothingTypeId}
-              label="Todos os tipos"
-              items={registries.clothingTypes}
+              placeholder="Tipos"
+              options={registries.clothingTypes.map(toSelectOption)}
+              clearLabel="Limpar"
             />
-            <FilterSelect value={sizeId} onChange={setSizeId} label="Tamanhos" items={registries.sizes} />
-            <FilterSelect value={colorId} onChange={setColorId} label="Cores" items={registries.colors} />
-            <select
-              className="h-9 rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
-              value={activeFilter}
-              onChange={(event) => {
-                setLoading(true)
-                setActiveFilter(event.target.value)
-              }}
-            >
-              <option value="">Todos os status</option>
-              <option value="active">Ativos</option>
-              <option value="inactive">Inativos</option>
-            </select>
-            <label className="flex h-9 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={lowStock}
+            <SearchableSelect
+              value={sizeId}
+              onChange={setSizeId}
+              placeholder="Tamanhos"
+              options={registries.sizes.map(toSelectOption)}
+              clearLabel="Limpar"
+            />
+            <SearchableSelect
+              value={colorId}
+              onChange={setColorId}
+              placeholder="Cores"
+              options={registries.colors.map(toSelectOption)}
+              clearLabel="Limpar"
+            />
+            {isAdmin ? (
+              <select
+                className="h-10 rounded-md border-2 border-gray bg-white px-3 text-sm font-medium text-gray-900 shadow-sm outline-none transition hover:border-gray-500 focus:border-black focus:ring-2 focus:ring-gray-100"
+                value={statusFilter}
                 onChange={(event) => {
                   setLoading(true)
-                  setLowStock(event.target.checked)
+                  setActiveFilter(event.target.value)
                 }}
-                className="h-4 w-4 rounded border-gray-300 accent-gray-900"
-              />
-              Baixo
-            </label>
+              >
+                <option value="">Todos os status</option>
+                <option value="active">Ativos</option>
+                <option value="inactive">Inativos</option>
+              </select>
+            ) : (
+              <div className="flex h-10 items-center rounded-md border-2 border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700 shadow-sm">
+                Somente ativos
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -326,11 +446,16 @@ export function ProductsPage() {
             <EmptyState
               title="Nenhum produto encontrado."
               description="Cadastre um produto ou ajuste os filtros da busca."
-              action={<Button onClick={openCreateModal}>Adicionar produto</Button>}
+              action={isAdmin ? <Button onClick={openCreateModal}>Adicionar produto</Button> : undefined}
             />
           </div>
         ) : (
-          <ProductTable products={products} onEdit={openEditModal} onDelete={(product) => void handleDelete(product)} />
+          <ProductTable
+            products={products}
+            onEdit={openEditModal}
+            onDelete={(product) => void handleDelete(product)}
+            readOnly={!isAdmin}
+          />
         )}
       </section>
 
@@ -347,11 +472,24 @@ export function ProductsPage() {
           registries={registries}
           submitting={submitting}
           initialBarcode={initialBarcode}
+          error={error}
           onCancel={closeModal}
           onSubmit={handleSubmit}
           onQuickCreate={handleQuickCreate}
         />
       </Modal>
+
+      <ProductDeleteModal
+        key={deleteModalProduct?.id ?? 'closed'}
+        open={deleteModalProduct !== null}
+        product={deleteModalProduct}
+        impact={deleteImpact}
+        loadingImpact={deleteImpactLoading}
+        submitting={deleteSubmitting}
+        error={deleteError}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDeleteProduct}
+      />
 
       <BarcodeResultModal
         open={barcodeResult !== null}
@@ -361,27 +499,53 @@ export function ProductsPage() {
           barcodeResult?.kind === 'found'
             ? [
                 {
-                  label: 'Editar produto',
+                  label: 'Ver produto',
                   onClick: () => {
                     if (!barcodeResult) {
                       return
                     }
 
                     setBarcodeResult(null)
-                    setEditingProduct(barcodeResult.product)
-                    setInitialBarcode('')
-                    setModalOpen(true)
+                    navigate(`/produtos?q=${encodeURIComponent(barcodeResult.code)}`)
                   },
                 },
+                ...(isAdmin
+                  ? [
+                      {
+                        label: 'Editar produto',
+                        onClick: () => {
+                          if (!barcodeResult) {
+                            return
+                          }
+
+                          setBarcodeResult(null)
+                          setEditingProduct(barcodeResult.product)
+                          setInitialBarcode('')
+                          setModalOpen(true)
+                        },
+                      },
+                      {
+                        label: 'Atualizar estoque',
+                        onClick: () => {
+                          if (!barcodeResult) {
+                            return
+                          }
+
+                          setBarcodeResult(null)
+                          navigate(`/estoque?barcode=${encodeURIComponent(barcodeResult.code)}&auto=1`)
+                        },
+                      },
+                    ]
+                  : []),
                 {
-                  label: 'Atualizar estoque',
+                  label: 'Nova venda',
                   onClick: () => {
                     if (!barcodeResult) {
                       return
                     }
 
                     setBarcodeResult(null)
-                    navigate(`/estoque?barcode=${encodeURIComponent(barcodeResult.code)}&auto=1`)
+                    navigate(`/caixa?acao=nova-venda&barcode=${encodeURIComponent(barcodeResult.code)}`)
                   },
                 },
                 {
@@ -391,19 +555,23 @@ export function ProductsPage() {
                 },
               ]
             : [
-                {
-                  label: 'Cadastrar este código',
-                  onClick: () => {
-                    if (!barcodeResult) {
-                      return
-                    }
+                ...(isAdmin
+                  ? [
+                      {
+                        label: 'Cadastrar este código',
+                        onClick: () => {
+                          if (!barcodeResult) {
+                            return
+                          }
 
-                    setBarcodeResult(null)
-                    setEditingProduct(null)
-                    setInitialBarcode(barcodeResult.code)
-                    setModalOpen(true)
-                  },
-                },
+                          setBarcodeResult(null)
+                          setEditingProduct(null)
+                          setInitialBarcode(barcodeResult.code)
+                          setModalOpen(true)
+                        },
+                      },
+                    ]
+                  : []),
                 {
                   label: 'Fechar',
                   variant: 'secondary',
@@ -416,29 +584,9 @@ export function ProductsPage() {
   )
 }
 
-function FilterSelect({
-  value,
-  onChange,
-  label,
-  items,
-}: {
-  value: string
-  onChange: (value: string) => void
-  label: string
-  items: Array<{ id: string; name: string }>
-}) {
-  return (
-    <select
-      className="h-9 rounded-md border-2 border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    >
-      <option value="">{label}</option>
-      {items.map((item) => (
-        <option key={item.id} value={item.id}>
-          {item.name}
-        </option>
-      ))}
-    </select>
-  )
+function toSelectOption(item: { id: string; name: string }): SelectOption {
+  return {
+    value: item.id,
+    label: item.name,
+  }
 }

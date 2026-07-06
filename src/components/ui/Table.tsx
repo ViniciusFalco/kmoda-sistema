@@ -30,7 +30,7 @@ export function Table<T extends { id: string }>({
     <div className={`w-full overflow-hidden rounded-xl ${tone === 'dark' ? 'border-2 border-gray-200' : 'border-2 border-gray-200'}`}>
       <div className="overflow-x-auto">
         <table className={`w-full min-w-[720px] border-collapse text-left text-sm ${tone === 'dark' ? 'bg-white text-gray-700' : 'bg-white text-gray-700'}`}>
-          <thead className={`text-[11px] uppercase tracking-[0.14em] ${headerClassName ?? (tone === 'dark' ? 'bg-gray-50 text-gray-500' : 'bg-gray-50 text-gray-500')}`}>
+         <thead className={`bg-black text-[11px] uppercase tracking-[0.14em] text-white ${headerClassName ?? ''}`}>
             <tr>
               {columns.map((column) => (
                 <th key={column.key} className="px-4 py-3 font-semibold">

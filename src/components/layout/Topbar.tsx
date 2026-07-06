@@ -1,27 +1,40 @@
-import { Eye, LogOut, PackagePlus, ShoppingCart } from 'lucide-react'
+import { Eye, EyeOff, LogOut, PackagePlus, ShoppingCart } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { BarcodeResultModal, type BarcodeLookupResult } from '../barcode/BarcodeResultModal'
 import { BarcodeScanButton } from '../barcode/BarcodeScanButton'
 import { useAuth } from '../../hooks/useAuth'
+import { useSensitiveValuesHidden } from '../../hooks/useAppSettings'
 import { findBarcodeLookup, findBarcodeLookupByProductId } from '../../lib/catalog'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/Button'
 import { QuickSearch } from '../ui/QuickSearch'
 
-const navItems = [
+const adminNavItems = [
   { label: 'Início', path: '/' },
   { label: 'Caixa', path: '/caixa' },
+  { label: 'Promissórias', path: '/promissorias' },
   { label: 'Estoque', path: '/estoque' },
   { label: 'Produtos', path: '/produtos' },
   { label: 'Clientes', path: '/clientes' },
+  { label: 'Usuários', path: '/usuarios' },
   { label: 'Cadastros', path: '/categorias' },
   { label: 'Configurações', path: '/configuracoes' },
+  { label: 'Tutoriais', path: '/tutoriais' },
+]
+
+const cashierNavItems = [
+  { label: 'Caixa', path: '/' },
+  { label: 'Promissórias', path: '/promissorias' },
+  { label: 'Produtos', path: '/produtos' },
+  { label: 'Clientes', path: '/clientes' },
+  { label: 'Tutoriais', path: '/tutoriais' },
 ]
 
 export function Topbar() {
-  const { signOut } = useAuth()
+  const { signOut, isAdmin, profile } = useAuth()
   const navigate = useNavigate()
+  const [sensitiveValuesHidden, setSensitiveValuesHidden] = useSensitiveValuesHidden()
   const [barcodeResult, setBarcodeResult] = useState<BarcodeLookupResult | null>(null)
   const [barcodeResultOpen, setBarcodeResultOpen] = useState(false)
   const [quickSearchValue, setQuickSearchValue] = useState('')
@@ -86,6 +99,14 @@ export function Topbar() {
             >
               Moda Feminina
             </p>
+            <span className="hidden rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-600 lg:inline-flex">
+              {isAdmin ? 'Admin' : 'Caixa'}
+            </span>
+            {profile?.name ? (
+              <span className="hidden max-w-[180px] truncate rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 lg:inline-flex">
+                {profile.name}
+              </span>
+            ) : null}
           </div>
 
           <div className="hidden min-w-0 justify-self-center lg:flex lg:w-full lg:max-w-3xl">
@@ -100,22 +121,42 @@ export function Topbar() {
             </div>
           </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={async () => {
-              await signOut()
-            }}
-            className="ml-auto text-gray-600 hover:bg-gray-100 hover:text-gray-950"
-          >
-            <LogOut className="h-4 w-4" />
-            Sair
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setSensitiveValuesHidden((current) => !current)}
+              className={cn(
+                'h-10 shrink-0 px-3 text-xs font-semibold shadow-sm sm:h-11 sm:px-4',
+                sensitiveValuesHidden
+                  ? '!border-gray-950 !bg-white !text-gray-950 ring-2 ring-gray-950/15 hover:!bg-gray-50 hover:!text-gray-950'
+                  : '!border-gray-950 !bg-gray-950 !text-white hover:!bg-black hover:!text-white',
+              )}
+              aria-label={sensitiveValuesHidden ? 'Mostrar valores' : 'Ocultar valores'}
+              title={sensitiveValuesHidden ? 'Mostrar valores' : 'Ocultar valores'}
+            >
+              {sensitiveValuesHidden ? <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" /> : <Eye className="h-4 w-4 sm:h-5 sm:w-5" />}
+              <span className="hidden sm:inline">{sensitiveValuesHidden ? 'Mostrar valores' : 'Esconder valores'}</span>
+              <span className="sm:hidden">Valores</span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await signOut()
+              }}
+              className="shrink-0 text-gray-600 hover:bg-gray-100 hover:text-gray-950"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sair</span>
+            </Button>
+          </div>
         </div>
 
         <div className="border-t border-gray-200 bg-gray-50 px-0">
           <div className="flex min-w-max items-stretch overflow-x-auto">
-            {navItems.map((item) => (
+            {(isAdmin ? adminNavItems : cashierNavItems).map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
@@ -169,19 +210,23 @@ export function Topbar() {
                     navigate(`/produtos?q=${encodeURIComponent(barcodeResult.code)}`)
                   },
                 },
-                {
-                  label: 'Atualizar estoque',
-                  icon: <PackagePlus className="h-4 w-4" />,
-                  variant: 'info',
-                  onClick: () => {
-                    if (!barcodeResult) {
-                      return
-                    }
+                ...(isAdmin
+                  ? [
+                      {
+                        label: 'Atualizar estoque',
+                        icon: <PackagePlus className="h-4 w-4" />,
+                        variant: 'info' as const,
+                        onClick: () => {
+                          if (!barcodeResult) {
+                            return
+                          }
 
-                    closeBarcodeResult()
-                    navigate(`/estoque?barcode=${encodeURIComponent(barcodeResult.code)}&auto=1`)
-                  },
-                },
+                          closeBarcodeResult()
+                          navigate(`/estoque?barcode=${encodeURIComponent(barcodeResult.code)}&auto=1`)
+                        },
+                      },
+                    ]
+                  : []),
                 {
                   label: 'Nova venda',
                   icon: <ShoppingCart className="h-4 w-4" />,
@@ -202,17 +247,21 @@ export function Topbar() {
                 },
               ]
             : [
-                {
-                  label: 'Cadastrar produto com este código',
-                  onClick: () => {
-                    if (!barcodeResult) {
-                      return
-                    }
+                ...(isAdmin
+                  ? [
+                      {
+                        label: 'Cadastrar produto com este código',
+                        onClick: () => {
+                          if (!barcodeResult) {
+                            return
+                          }
 
-                    closeBarcodeResult()
-                    navigate(`/produtos?create=1&barcode=${encodeURIComponent(barcodeResult.code)}`)
-                  },
-                },
+                          closeBarcodeResult()
+                          navigate(`/produtos?create=1&barcode=${encodeURIComponent(barcodeResult.code)}`)
+                        },
+                      },
+                    ]
+                  : []),
                 {
                   label: 'Fechar',
                   variant: 'secondary',

@@ -146,11 +146,17 @@ export function Modal({
               tone === 'dark' ? 'border-gray-200 bg-white' : 'border-gray-200 bg-white'
             }`}
             style={{
-              gridTemplateColumns: showTitle ? 'minmax(0,1fr) minmax(0,1.2fr) auto' : 'minmax(0,1fr) auto',
+              gridTemplateColumns: showTitle
+                ? headerCenter
+                  ? 'minmax(0,1fr) minmax(0,1.2fr) auto'
+                  : 'minmax(0,1fr) auto'
+                : 'minmax(0,1fr) auto',
             }}
           >
             {showTitle ? (
-              <h2 className="truncate text-sm font-semibold uppercase tracking-[0.18em] text-gray-950 sm:text-base">{title}</h2>
+              <h2 className="min-w-0 break-words text-sm font-semibold uppercase tracking-[0.18em] leading-tight text-gray-950 sm:text-base">
+                {title}
+              </h2>
             ) : null}
             {headerCenter ? (
               <div className="min-w-0 justify-self-center overflow-hidden text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500 sm:text-[11px]">

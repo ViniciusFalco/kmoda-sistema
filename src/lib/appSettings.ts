@@ -1,5 +1,7 @@
 const DISPLAY_NAME_KEY = 'kmoda.displayName'
 const DISPLAY_NAME_EVENT = 'kmoda-display-name-change'
+const SENSITIVE_VALUES_HIDDEN_KEY = 'kmoda.sensitiveValuesHidden'
+const SENSITIVE_VALUES_HIDDEN_EVENT = 'kmoda-sensitive-values-hidden-change'
 
 export function getDisplayName() {
   if (typeof window === 'undefined') {
@@ -59,5 +61,42 @@ export function subscribeDisplayNameChange(listener: () => void) {
   return () => {
     window.removeEventListener('storage', handleStorage)
     window.removeEventListener(DISPLAY_NAME_EVENT, listener)
+  }
+}
+
+export function getSensitiveValuesHidden() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return window.localStorage.getItem(SENSITIVE_VALUES_HIDDEN_KEY) === 'true'
+}
+
+export function setSensitiveValuesHidden(hidden: boolean) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(SENSITIVE_VALUES_HIDDEN_KEY, hidden ? 'true' : 'false')
+  window.dispatchEvent(new Event(SENSITIVE_VALUES_HIDDEN_EVENT))
+}
+
+export function subscribeSensitiveValuesHiddenChange(listener: () => void) {
+  if (typeof window === 'undefined') {
+    return () => {}
+  }
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === SENSITIVE_VALUES_HIDDEN_KEY) {
+      listener()
+    }
+  }
+
+  window.addEventListener('storage', handleStorage)
+  window.addEventListener(SENSITIVE_VALUES_HIDDEN_EVENT, listener)
+
+  return () => {
+    window.removeEventListener('storage', handleStorage)
+    window.removeEventListener(SENSITIVE_VALUES_HIDDEN_EVENT, listener)
   }
 }

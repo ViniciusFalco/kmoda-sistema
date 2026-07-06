@@ -1,15 +1,14 @@
-import { Boxes, PackagePlus, Receipt, ShoppingCart, Users, Wallet } from 'lucide-react'
+import { Boxes, ChevronDown, ChevronUp, PackagePlus, Receipt, ShoppingCart, Users, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ActionCard } from '../../components/ui/ActionCard'
+import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { Modal } from '../../components/ui/Modal'
 import { SummaryCard } from '../../components/ui/SummaryCard'
 import { Table } from '../../components/ui/Table'
+import { useSensitiveValuesHidden } from '../../hooks/useAppSettings'
 import {
-  createProduct,
-  createRegistryItem,
   friendlyCatalogError,
   getMonthSalesTotal,
   getTodayCashSession,
@@ -19,8 +18,6 @@ import {
   listStockMovements,
   listTodayCashMovements,
   loadProductRegistries,
-  type ProductInput,
-  type RegistryInput,
 } from '../../lib/catalog'
 import { formatCurrency, formatDateBR, todayISODate } from '../../lib/utils'
 import type {
@@ -31,12 +28,9 @@ import type {
   Color,
   Customer,
   Product,
-  RegistryKind,
   Size,
   StockMovement,
 } from '../../types/database'
-import { useAuth } from '../../hooks/useAuth'
-import { ProductForm, type ProductFormValues, type ProductSubmitMode } from '../products/ProductForm'
 
 interface ProductRegistries {
   brands: Brand[]
@@ -63,9 +57,9 @@ interface DashboardMovementRow {
 }
 
 export function DashboardPage() {
-  const { user } = useAuth()
   const navigate = useNavigate()
-  const [productModalOpen, setProductModalOpen] = useState(false)
+  const [sensitiveValuesHidden] = useSensitiveValuesHidden()
+  const [latestMovementsOpen, setLatestMovementsOpen] = useState(false)
   const [registries, setRegistries] = useState<ProductRegistries>(emptyRegistries)
   const [cashSession, setCashSession] = useState<CashSession | null>(null)
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([])
@@ -74,8 +68,6 @@ export function DashboardPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [salesTodayTotal, setSalesTodayTotal] = useState(0)
   const [monthSalesTotal, setMonthSalesTotal] = useState(0)
-  const [productBarcodePrefill, setProductBarcodePrefill] = useState('')
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   const incomeToday = useMemo(
@@ -105,7 +97,14 @@ export function DashboardPage() {
       createdAt: movement.created_at,
       time: formatTime(movement.created_at),
       source: 'Caixa',
-      type: movement.type === 'income' ? (movement.origin === 'sale' ? 'Venda' : 'Entrada') : 'Despesa',
+      type:
+        movement.type === 'income'
+          ? movement.origin === 'sale'
+            ? 'Venda'
+            : movement.origin === 'promissory'
+              ? 'Promissória'
+              : 'Entrada'
+          : 'Despesa',
       description: movementDescription(movement),
       detail:
         movement.type === 'expense'
@@ -274,52 +273,6 @@ export function DashboardPage() {
     }
   }, [loadData])
 
-  async function handleProductSubmit(values: ProductFormValues, mode: ProductSubmitMode) {
-    const payload: ProductInput = {
-      name: values.name,
-      barcode: values.barcode,
-      brand_id: values.brand_id,
-      clothing_type_id: values.clothing_type_id,
-      family: values.family,
-      size_id: values.size_id,
-      color_id: values.color_id,
-      reference: values.reference,
-      cost_price: Number(values.cost_price || 0),
-      sale_price: Number(values.sale_price),
-      suggested_price: values.suggested_price === '' ? 0 : Number(values.suggested_price),
-      stock_quantity: Number(values.stock_quantity),
-      min_stock: Number(values.min_stock),
-      description: values.description,
-      active: values.active,
-    }
-
-    setSubmitting(true)
-    setError('')
-
-    try {
-      await createProduct(payload, user)
-      await loadData()
-
-      if (mode === 'close') {
-        setProductModalOpen(false)
-        setProductBarcodePrefill('')
-      }
-
-      return true
-    } catch (err) {
-      setError(friendlyCatalogError(err))
-      return false
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleQuickCreate(kind: RegistryKind, values: RegistryInput) {
-    const item = await createRegistryItem(kind, values)
-    await loadData()
-    return item
-  }
-
   return (
     <div className="space-y-5">
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
@@ -329,10 +282,7 @@ export function DashboardPage() {
           description="Cadastre uma nova peça no estoque"
           icon={<PackagePlus className="h-6 w-6" />}
           appearance="classic"
-          onClick={() => {
-            setProductBarcodePrefill('')
-            setProductModalOpen(true)
-          }}
+          onClick={() => navigate('/produtos?create=1')}
         />
         <ActionCard
           compact
@@ -365,58 +315,74 @@ export function DashboardPage() {
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-3">
-        <SummaryCard label="Vendas de hoje" value={formatCurrency(salesTodayTotal)} icon={<Receipt className="h-5 w-5" />} />
-        <SummaryCard label="Saldo do caixa" value={formatCurrency(balanceToday)} icon={<Wallet className="h-5 w-5" />} />
-        <SummaryCard label="Total de vendas do mês" value={formatCurrency(monthSalesTotal)} icon={<ShoppingCart className="h-5 w-5" />} />
+        <SummaryCard
+          label="Vendas de hoje"
+          value={formatCurrency(salesTodayTotal)}
+          icon={<Receipt className="h-5 w-5" />}
+          blurred={sensitiveValuesHidden}
+        />
+        <SummaryCard
+          label="Saldo do caixa"
+          value={formatCurrency(balanceToday)}
+          icon={<Wallet className="h-5 w-5" />}
+          blurred={sensitiveValuesHidden}
+        />
+        <SummaryCard
+          label="Total de vendas do mês"
+          value={formatCurrency(monthSalesTotal)}
+          icon={<ShoppingCart className="h-5 w-5" />}
+          blurred={sensitiveValuesHidden}
+        />
       </div>
 
-      <Card>
-        <div className="mb-3 border-b-2 border-gray-100 pb-3 text-center">
-          <h2 className="text-sm font-semibold text-gray-950 sm:text-base">Últimas movimentações</h2>
-        </div>
-        {latestMovements.length === 0 ? (
-          <EmptyState title="Nenhuma movimentação hoje." />
-        ) : (
-          <Table
-            headerClassName="bg-black text-white"
-            data={latestMovements}
-            columns={[
-              {
-                key: 'time',
-                header: 'Data e Hora',
-                render: (row) => `${formatDateBR(row.createdAt)} às ${row.time}`,
-              },
-              { key: 'source', header: 'Fonte', render: (row) => row.source },
-              { key: 'type', header: 'Evento', render: (row) => row.type },
-              { key: 'description', header: 'Descrição', render: (row) => row.description },
-              { key: 'detail', header: 'Detalhe', render: (row) => row.detail },
-            ]}
-          />
-        )}
-      </Card>
+      <Card className="p-0 sm:p-0">
+        <div className="flex flex-col gap-3 border-b-2 border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-gray-950 sm:text-base">Últimas movimentações</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              {latestMovements.length === 0
+                ? 'Nenhum registro recente.'
+                : `${latestMovements.length} ${latestMovements.length === 1 ? 'registro recente' : 'registros recentes'}`}
+            </p>
+          </div>
 
-      <Modal
-        open={productModalOpen}
-        title="Novo produto"
-        onClose={() => {
-          setProductBarcodePrefill('')
-          setProductModalOpen(false)
-        }}
-        size="6xl"
-      >
-        <ProductForm
-          key={productBarcodePrefill || 'new-product'}
-          registries={registries}
-          submitting={submitting}
-          initialBarcode={productBarcodePrefill}
-          onCancel={() => {
-            setProductBarcodePrefill('')
-            setProductModalOpen(false)
-          }}
-          onSubmit={handleProductSubmit}
-          onQuickCreate={handleQuickCreate}
-        />
-      </Modal>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setLatestMovementsOpen((current) => !current)}
+            aria-expanded={latestMovementsOpen}
+            className="shrink-0 border-gray-300 bg-white text-gray-800 hover:border-gray-900 hover:text-gray-950"
+          >
+            {latestMovementsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {latestMovementsOpen ? 'Ocultar' : 'Mostrar'}
+          </Button>
+        </div>
+
+        {latestMovementsOpen ? (
+          <div className="p-4 sm:p-5">
+            {latestMovements.length === 0 ? (
+              <EmptyState title="Nenhuma movimentação hoje." />
+            ) : (
+              <Table
+                headerClassName="bg-black text-white"
+                data={latestMovements}
+                columns={[
+                  {
+                    key: 'time',
+                    header: 'Data e Hora',
+                    render: (row) => `${formatDateBR(row.createdAt)} às ${row.time}`,
+                  },
+                  { key: 'source', header: 'Fonte', render: (row) => row.source },
+                  { key: 'type', header: 'Evento', render: (row) => row.type },
+                  { key: 'description', header: 'Descrição', render: (row) => row.description },
+                  { key: 'detail', header: 'Detalhe', render: (row) => row.detail },
+                ]}
+              />
+            )}
+          </div>
+        ) : null}
+      </Card>
 
     </div>
   )

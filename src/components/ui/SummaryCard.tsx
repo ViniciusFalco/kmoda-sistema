@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { SensitiveValue } from './SensitiveValue'
 
 interface SummaryCardProps {
   label: string
@@ -6,9 +7,10 @@ interface SummaryCardProps {
   icon?: ReactNode
   tone?: 'light' | 'dark'
   accent?: 'default' | 'green' | 'red'
+  blurred?: boolean
 }
 
-export function SummaryCard({ label, value, icon, tone = 'light', accent = 'default' }: SummaryCardProps) {
+export function SummaryCard({ label, value, icon, tone = 'light', accent = 'default', blurred = false }: SummaryCardProps) {
   const isDark = tone === 'dark'
   const isGreen = accent === 'green'
   const isRed = accent === 'red'
@@ -33,15 +35,15 @@ export function SummaryCard({ label, value, icon, tone = 'light', accent = 'defa
             {label}
           </p>
 
-          <p
+          <SensitiveValue
+            value={value}
+            hidden={blurred}
             className={
               isDark
                 ? 'mt-3 text-2xl font-semibold tracking-[-0.05em] text-gray-950 sm:text-3xl'
                 : 'mt-3 text-2xl font-semibold tracking-[-0.05em] text-gray-950 sm:text-3xl'
             }
-          >
-            {value}
-          </p>
+          />
         </div>
 
         {icon ? (

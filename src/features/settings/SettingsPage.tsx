@@ -4,13 +4,14 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
+import { PinCodeInput } from '../../components/auth/PinCodeInput'
 import { useAuth } from '../../hooks/useAuth'
 import { formatDateTimeBR } from '../../lib/utils'
 import { loadAppPauseRisk, loadKmodaStorageUsage, getMonitoringPauseLabel, getMonitoringSpaceLabel } from '../../lib/monitoring'
-import { loadDisplayName, saveDisplayName } from '../../lib/profileSettings'
+import { loadDisplayName, saveDisplayName, setMyPin } from '../../lib/profileSettings'
 import { isSupabaseConfigured } from '../../lib/supabase'
-import { usePwaInstall } from '../../hooks/usePwaInstall'
 import type { AppPauseRisk, KmodaStorageUsage, MonitoringPauseRisk, MonitoringSpaceStatus } from '../../types/database'
+import { SecurityDataSection } from './SecurityDataSection'
 
 type SettingsTab = 'geral' | 'monitoramento'
 
@@ -140,13 +141,17 @@ function MonitoringMetricCard({
 
 export function SettingsPage() {
   const { user } = useAuth()
-  const { installed, supportsPrompt, canPromptInstall, message, promptInstall, clearMessage } = usePwaInstall()
   const [activeTab, setActiveTab] = useState<SettingsTab>('geral')
   const [supportPolicyOpen, setSupportPolicyOpen] = useState(false)
   const [displayName, setDisplayNameState] = useState('Administrador')
   const [loadingName, setLoadingName] = useState(true)
   const [savingName, setSavingName] = useState(false)
   const [savedMessage, setSavedMessage] = useState('')
+  const [pin, setPin] = useState('')
+  const [pinConfirmation, setPinConfirmation] = useState('')
+  const [savingPin, setSavingPin] = useState(false)
+  const [pinMessage, setPinMessage] = useState('')
+  const [pinError, setPinError] = useState('')
   const [error, setError] = useState('')
   const [storageUsage, setStorageUsage] = useState<KmodaStorageUsage | null>(null)
   const [pauseRisk, setPauseRisk] = useState<AppPauseRisk | null>(null)
@@ -255,6 +260,41 @@ export function SettingsPage() {
     }
   }
 
+  async function handlePinSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!user) {
+      setPinError('Usuário não autenticado.')
+      return
+    }
+
+    if (!/^\d{6}$/.test(pin)) {
+      setPinError('O PIN precisa ter 6 dígitos.')
+      return
+    }
+
+    if (pin !== pinConfirmation) {
+      setPinError('A confirmação do PIN não confere.')
+      return
+    }
+
+    setSavingPin(true)
+    setPinError('')
+    setPinMessage('')
+
+    try {
+      await setMyPin(user.id, pin)
+      setPinMessage('PIN atualizado com sucesso.')
+      setPin('')
+      setPinConfirmation('')
+      window.setTimeout(() => setPinMessage(''), 2500)
+    } catch (saveError) {
+      setPinError(saveError instanceof Error ? saveError.message : 'Não foi possível atualizar o PIN.')
+    } finally {
+      setSavingPin(false)
+    }
+  }
+
   const storagePercent = storageUsage?.percent_used ?? 0
   const storageRemaining = storageUsage ? Math.max(storageUsage.limit_mb - storageUsage.used_mb, 0) : null
   const storageStatus = storageUsage?.status ?? 'indisponivel'
@@ -283,7 +323,7 @@ export function SettingsPage() {
       </div>
 
       {activeTab === 'geral' ? (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="space-y-5">
           <Card title="Perfil rápido" description="Nome exibido no topo e no menu, salvo no seu usuário do Supabase.">
             <form className="space-y-4" onSubmit={handleSubmit}>
               <Input
@@ -302,48 +342,33 @@ export function SettingsPage() {
               </div>
             </form>
           </Card>
-
-          <Card title="Aplicativo" description="Atalho de instalação e status do PWA desta loja.">
-            <div className="space-y-3">
-              <div className="rounded-xl border-2 border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-                {installed
-                  ? 'Aplicativo instalado neste dispositivo.'
-                  : supportsPrompt
-                    ? 'Instalação disponível. Você pode adicionar o sistema à tela inicial.'
-                    : 'Instalação indisponível neste navegador. Em celulares, use o menu do navegador.'}
+          <Card title="PIN de acesso" description="Esse PIN entra no login e também confirma vendas, despesas e caixas.">
+            <form className="space-y-4" onSubmit={handlePinSubmit}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <PinCodeInput
+                  label="Novo PIN"
+                  value={pin}
+                  onChange={setPin}
+                  autoFocus
+                  required
+                />
+                <PinCodeInput
+                  label="Confirmar PIN"
+                  value={pinConfirmation}
+                  onChange={setPinConfirmation}
+                  required
+                />
               </div>
-              {!installed ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full justify-center"
-                  disabled={!canPromptInstall}
-                  onClick={async () => {
-                    await promptInstall()
-                  }}
-                >
-                  {canPromptInstall ? 'Instalar aplicativo' : 'Aguardando instalação'}
+              {pinError ? <p className="text-sm text-red-600">{pinError}</p> : null}
+              {pinMessage ? <p className="text-sm text-emerald-700">{pinMessage}</p> : null}
+              <div className="flex justify-end">
+                <Button type="submit" disabled={savingPin || !user}>
+                  {savingPin ? 'Atualizando...' : 'Salvar PIN'}
                 </Button>
-              ) : null}
-              {!supportsPrompt && message ? (
-                <button
-                  type="button"
-                  className="text-left text-sm text-gray-500"
-                  onClick={clearMessage}
-                >
-                  {message}
-                </button>
-              ) : null}
-            </div>
+              </div>
+            </form>
           </Card>
-
-          <Card title="Supabase" description="Status da conexão configurada via variáveis de ambiente.">
-            <div className="rounded-md border-2 border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-              {isSupabaseConfigured
-                ? 'Variáveis encontradas. O login pode usar Supabase Auth.'
-                : 'Variáveis ausentes. Crie um arquivo .env com VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.'}
-            </div>
-          </Card>
+          <SecurityDataSection key={user?.id ?? 'anonymous'} userId={user?.id ?? null} />
         </div>
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">

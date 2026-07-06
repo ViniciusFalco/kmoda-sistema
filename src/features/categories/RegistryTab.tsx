@@ -1,9 +1,10 @@
 import { Edit, Plus, Trash2 } from 'lucide-react'
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
+import { Pagination } from '../../components/ui/Pagination'
 import { Table } from '../../components/ui/Table'
 import type { RegistryInput } from '../../lib/catalog'
 import type { Color, RegistryItem, RegistryKind, Size } from '../../types/database'
@@ -37,6 +38,9 @@ export function RegistryTab<T extends RegistryItem>({
   const [modalOpen, setModalOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<T | null>(null)
 
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+
   const filteredItems = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     if (!normalized) {
@@ -45,6 +49,27 @@ export function RegistryTab<T extends RegistryItem>({
 
     return items.filter((item) => item.name.toLowerCase().includes(normalized))
   }, [items, query])
+
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage)
+
+  const paginatedItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = currentPage * itemsPerPage
+
+    return filteredItems.slice(startIndex, endIndex)
+  }, [filteredItems, currentPage, itemsPerPage])
+
+  const firstRecord =
+    filteredItems.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0
+
+  const lastRecord = Math.min(
+    currentPage * itemsPerPage,
+    filteredItems.length,
+  )
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [query, kind, items.length])
 
   function openCreateModal() {
     setEditingItem(null)
@@ -96,36 +121,53 @@ export function RegistryTab<T extends RegistryItem>({
           action={<Button onClick={openCreateModal}>{createLabel}</Button>}
         />
       ) : (
-        <Table
-          data={filteredItems}
-          columns={[
-            { key: 'name', header: 'Nome', render: (item) => item.name },
-            {
-              key: 'extra',
-              header: kind === 'sizes' ? 'Ordem' : kind === 'colors' ? 'Cor' : 'Descrição',
-              render: (item) => renderExtra(kind, item),
-            },
-            {
-              key: 'active',
-              header: 'Status',
-              render: (item) => (item.active ? 'Ativo' : 'Inativo'),
-            },
-            {
-              key: 'actions',
-              header: 'Ações',
-              render: (item) => (
-                <div className="flex gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => openEditModal(item)}>
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => void onDelete(kind, item)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ),
-            },
-          ]}
-        />
+        <div className="space-y-3">
+          <Table
+            data={paginatedItems}
+            columns={[
+              { key: 'name', header: 'Nome', render: (item) => item.name },
+              {
+                key: 'extra',
+                header: kind === 'sizes' ? 'Ordem' : kind === 'colors' ? 'Cor' : 'Descrição',
+                render: (item) => renderExtra(kind, item),
+              },
+              {
+                key: 'active',
+                header: 'Status',
+                render: (item) => (item.active ? 'Ativo' : 'Inativo'),
+              },
+              {
+                key: 'actions',
+                header: 'Ações',
+                render: (item) => (
+                  <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => openEditModal(item)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => void onDelete(kind, item)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+          />
+
+          <div className="flex flex-col gap-3 rounded-xl border-2 border-gray-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-xs text-gray-500">
+              Exibindo {firstRecord}–{lastRecord} de {filteredItems.length}{' '}
+              {filteredItems.length === 1 ? 'registro' : 'registros'}
+              <span className="text-gray-400"> • </span>
+              {itemsPerPage} por página
+            </span>
+
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          </div>
+        </div>
       )}
 
       <Modal

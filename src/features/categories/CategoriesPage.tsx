@@ -142,11 +142,10 @@ export function CategoriesPage() {
             key={tab.key}
             type="button"
             onClick={() => setActiveTab(tab.key)}
-            className={`rounded-md border px-3 py-2 text-sm font-medium transition ${
-              activeTab === tab.key
-                ? 'border-gray-300 bg-white text-gray-950 shadow-sm'
-                : 'border-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-950'
-            }`}
+            className={`rounded-md border-2 px-3 py-2 text-sm font-semibold transition ${activeTab === tab.key
+                ? 'border-black bg-black text-white shadow-sm'
+                : 'border-gray-400 bg-white text-gray-700 hover:border-black hover:bg-gray-100 hover:text-black'
+              }`}
           >
             {tab.label}
           </button>

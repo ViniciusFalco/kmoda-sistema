@@ -1,6 +1,6 @@
-import { PackagePlus, Search } from 'lucide-react'
+import { BookOpenText, PackagePlus, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarcodeScanButton } from '../../components/barcode/BarcodeScanButton'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -16,6 +16,7 @@ import { formatCurrencyBRL, formatDateBR } from '../../lib/utils'
 import type { Product, StockMovement, StockMovementReason, StockMovementType } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import { StockMovementForm, type StockMovementFormValues } from './StockMovementForm'
+import { Pagination } from '../../components/ui/Pagination'
 
 type StockTab = 'products' | 'history'
 type HistoryReasonFilter = 'all' | StockMovementReason
@@ -81,13 +82,12 @@ function StockTable<T extends { id: string }>({
       <div className="overflow-x-auto">
         <table className={`w-full border-collapse bg-white text-sm ${minWidthClassName}`}>
           <thead>
-            <tr className="bg-gray-50 text-gray-700">
+            <tr className="bg-black text-white">
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className={`px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.18em] sm:py-5 ${
-                    column.align === 'left' ? 'text-left' : 'text-center'
-                  }`}
+                  className={`px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.18em] sm:py-5 ${column.align === 'left' ? 'text-left' : 'text-center'
+                    }`}
                 >
                   {column.header}
                 </th>
@@ -110,11 +110,11 @@ function StockTable<T extends { id: string }>({
                   onKeyDown={
                     onRowClick
                       ? (event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            onRowClick(row)
-                          }
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          onRowClick(row)
                         }
+                      }
                       : undefined
                   }
                   tabIndex={onRowClick ? 0 : undefined}
@@ -124,9 +124,8 @@ function StockTable<T extends { id: string }>({
                   {columns.map((column) => (
                     <td
                       key={column.key}
-                      className={`px-5 py-5 align-middle text-zinc-700 ${
-                        column.align === 'left' ? 'text-left' : 'text-center'
-                      }`}
+                      className={`px-5 py-5 align-middle text-zinc-700 ${column.align === 'left' ? 'text-left' : 'text-center'
+                        }`}
                     >
                       {column.render(row)}
                     </td>
@@ -155,7 +154,8 @@ function getStockMovementTitle(movement: StockMovement) {
 }
 
 export function StockPage() {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [products, setProducts] = useState<Product[]>([])
   const [movements, setMovements] = useState<StockMovement[]>([])
@@ -173,6 +173,10 @@ export function StockPage() {
   const [historyTypeFilter, setHistoryTypeFilter] = useState<HistoryTypeFilter>('all')
   const [historyReasonFilter, setHistoryReasonFilter] = useState<HistoryReasonFilter>('all')
 
+  const [productPage, setProductPage] = useState(1)
+  const [movementPage, setMovementPage] = useState(1)
+  const stockItemsPerPage = 10
+
   const autoMovementBarcode = searchParams.get('barcode') ?? ''
   const autoOpenMovement = searchParams.get('auto') === '1'
 
@@ -180,27 +184,25 @@ export function StockPage() {
     const term = productQuery.trim().toLowerCase()
 
     if (!term) {
-      return products.slice(0, 8)
+      return products
     }
 
-    return products
-      .filter((product) =>
-        [
-          product.name,
-          product.barcode,
-          product.reference,
-          product.product_model?.name,
-          product.product_model?.reference,
-          product.product_model?.family,
-          product.product_model?.brand?.name ?? product.brand?.name,
-          product.product_model?.category?.name ?? product.clothing_type?.name,
-          product.size?.name,
-          product.color?.name,
-        ]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(term)),
-      )
-      .slice(0, 12)
+    return products.filter((product) =>
+      [
+        product.name,
+        product.barcode,
+        product.reference,
+        product.product_model?.name,
+        product.product_model?.reference,
+        product.product_model?.family,
+        product.product_model?.brand?.name ?? product.brand?.name,
+        product.product_model?.category?.name ?? product.clothing_type?.name,
+        product.size?.name,
+        product.color?.name,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    )
   }, [productQuery, products])
 
   const filteredMovements = useMemo(() => {
@@ -226,6 +228,39 @@ export function StockPage() {
       return true
     })
   }, [historyEndDate, historyReasonFilter, historyStartDate, historyTypeFilter, movements])
+  const productTotalPages = Math.ceil(filteredProducts.length / stockItemsPerPage)
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (productPage - 1) * stockItemsPerPage
+    const endIndex = productPage * stockItemsPerPage
+
+    return filteredProducts.slice(startIndex, endIndex)
+  }, [filteredProducts, productPage, stockItemsPerPage])
+
+  const productFirstRecord =
+    filteredProducts.length > 0 ? (productPage - 1) * stockItemsPerPage + 1 : 0
+
+  const productLastRecord = Math.min(
+    productPage * stockItemsPerPage,
+    filteredProducts.length,
+  )
+
+  const movementTotalPages = Math.ceil(filteredMovements.length / stockItemsPerPage)
+
+  const paginatedMovements = useMemo(() => {
+    const startIndex = (movementPage - 1) * stockItemsPerPage
+    const endIndex = movementPage * stockItemsPerPage
+
+    return filteredMovements.slice(startIndex, endIndex)
+  }, [filteredMovements, movementPage, stockItemsPerPage])
+
+  const movementFirstRecord =
+    filteredMovements.length > 0 ? (movementPage - 1) * stockItemsPerPage + 1 : 0
+
+  const movementLastRecord = Math.min(
+    movementPage * stockItemsPerPage,
+    filteredMovements.length,
+  )
 
   const availableHistoryReasonOptions = useMemo(
     () =>
@@ -262,10 +297,15 @@ export function StockPage() {
   }, [])
 
   const openMovementModal = useCallback((productId = '') => {
+    if (!isAdmin) {
+      setError('Apenas a administradora pode atualizar o estoque manualmente.')
+      return
+    }
+
     setError('')
     setMovementProductId(productId)
     setMovementModalOpen(true)
-  }, [])
+  }, [isAdmin])
 
   const openProductDetails = useCallback((product: Product) => {
     setSelectedMovement(null)
@@ -294,6 +334,11 @@ export function StockPage() {
 
   const handleMovementBarcodeScan = useCallback(
     async (code: string) => {
+      if (!isAdmin) {
+        setError('Apenas a administradora pode atualizar o estoque manualmente.')
+        return
+      }
+
       setError('')
 
       try {
@@ -309,7 +354,7 @@ export function StockPage() {
         setError(friendlyCatalogError(err))
       }
     },
-    [openMovementModal],
+    [isAdmin, openMovementModal],
   )
 
   const handleProductBarcodeScan = useCallback(
@@ -359,6 +404,14 @@ export function StockPage() {
       setHistoryReasonFilter('all')
     }
   }, [historyReasonFilter, historyTypeFilter])
+
+  useEffect(() => {
+    setProductPage(1)
+  }, [productQuery])
+
+  useEffect(() => {
+    setMovementPage(1)
+  }, [historyStartDate, historyEndDate, historyTypeFilter, historyReasonFilter])
 
   async function handleSubmit(values: StockMovementFormValues) {
     if (!values.product_id) {
@@ -420,24 +473,38 @@ export function StockPage() {
       `}</style>
 
       <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => openMovementModal()}
-          className="group inline-flex w-full items-center justify-between gap-4 rounded-xl border-2 border-gray-300 bg-white px-4 py-3 text-left text-gray-950 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:bg-gray-50 lg:w-auto"
-        >
-          <span className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-900">
-              <PackagePlus className="h-5 w-5" />
-            </span>
-            <span className="flex flex-col items-start">
-              <span className="text-sm font-semibold leading-none">Atualizar estoque</span>
-              <span className="mt-1 text-xs text-gray-500">Entrada e saída</span>
-            </span>
-          </span>
-          <span className="text-lg text-gray-400 transition-transform duration-300 group-hover:translate-x-0.5">
-            →
-          </span>
-        </button>
+        <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="w-full whitespace-nowrap lg:w-auto"
+            onClick={() => navigate('/tutoriais/atualizar-estoque')}
+          >
+            <BookOpenText className="h-4 w-4" />
+            Ver tutorial de estoque
+          </Button>
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={() => openMovementModal()}
+              className="group inline-flex w-full items-center justify-between gap-4 rounded-xl border-2 border-gray-300 bg-white px-4 py-3 text-left text-gray-950 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:bg-gray-50 lg:w-auto"
+            >
+              <span className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-900">
+                  <PackagePlus className="h-5 w-5" />
+                </span>
+                <span className="flex flex-col items-start">
+                  <span className="text-sm font-semibold leading-none">Atualizar estoque</span>
+                  <span className="mt-1 text-xs text-gray-500">Entrada e saída</span>
+                </span>
+              </span>
+              <span className="text-lg text-gray-400 transition-transform duration-300 group-hover:translate-x-0.5">
+                →
+              </span>
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <section className="overflow-hidden rounded-xl border-2 border-gray-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
@@ -488,7 +555,7 @@ export function StockPage() {
 
                 <StockTable
                   emptyMessage={loading ? 'Carregando produtos...' : 'Nenhum produto encontrado.'}
-                  data={filteredProducts}
+                  data={paginatedProducts}
                   onRowClick={openProductDetails}
                   columns={[
                     {
@@ -526,12 +593,23 @@ export function StockPage() {
                     },
                   ]}
                 />
+                {filteredProducts.length > 0 ? (
+                  <div className="flex flex-col gap-3 rounded-xl border-2 border-gray-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-xs text-gray-500">
+                      Exibindo {productFirstRecord}–{productLastRecord} de {filteredProducts.length}{' '}
+                      {filteredProducts.length === 1 ? 'registro' : 'registros'}
+                      <span className="text-gray-400"> • </span>
+                      {stockItemsPerPage} por página
+                    </span>
 
-                {productQuery.trim() ? (
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-                    Mostrando <span className="font-semibold text-gray-950">{filteredProducts.length}</span> produtos filtrados
+                    <Pagination
+                      currentPage={productPage}
+                      totalPages={productTotalPages}
+                      onPageChange={setProductPage}
+                    />
                   </div>
                 ) : null}
+
               </div>
             ) : (
               <div className="space-y-4">
@@ -611,7 +689,7 @@ export function StockPage() {
 
                 <StockTable
                   emptyMessage={loading ? 'Carregando movimentações...' : 'Nenhuma movimentação encontrada.'}
-                  data={filteredMovements}
+                  data={paginatedMovements}
                   minWidthClassName="min-w-[980px]"
                   onRowClick={openMovementDetails}
                   columns={[
@@ -648,9 +726,20 @@ export function StockPage() {
                   ]}
                 />
 
-                {(historyStartDate || historyEndDate || historyTypeFilter !== 'all' || historyReasonFilter !== 'all') ? (
-                  <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-center text-sm text-gray-700 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-                    Mostrando <span className="font-semibold text-gray-950">{filteredMovements.length}</span> linhas filtradas
+                {filteredMovements.length > 0 ? (
+                  <div className="flex flex-col gap-3 rounded-xl border-2 border-gray-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-xs text-gray-500">
+                      Exibindo {movementFirstRecord}–{movementLastRecord} de {filteredMovements.length}{' '}
+                      {filteredMovements.length === 1 ? 'registro' : 'registros'}
+                      <span className="text-gray-400"> • </span>
+                      {stockItemsPerPage} por página
+                    </span>
+
+                    <Pagination
+                      currentPage={movementPage}
+                      totalPages={movementTotalPages}
+                      onPageChange={setMovementPage}
+                    />
                   </div>
                 ) : null}
               </div>
@@ -666,15 +755,22 @@ export function StockPage() {
       ) : null}
 
       <Modal open={movementModalOpen} title="Atualizar estoque" onClose={closeMovementModal} size="5xl">
-        <StockMovementForm
-          key={movementProductId || 'empty'}
-          products={products}
-          submitting={submitting}
-          initialProductId={movementProductId}
-          onBarcodeScan={handleMovementBarcodeScan}
-          onCancel={closeMovementModal}
-          onSubmit={handleSubmit}
-        />
+        {isAdmin ? (
+          <StockMovementForm
+            key={movementProductId || 'empty'}
+            products={products}
+            submitting={submitting}
+            initialProductId={movementProductId}
+            onBarcodeScan={handleMovementBarcodeScan}
+            onCancel={closeMovementModal}
+            submitError={error}
+            onSubmit={handleSubmit}
+          />
+        ) : (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+            A atualização manual de estoque está disponível apenas para a administradora.
+          </div>
+        )}
       </Modal>
 
       <Modal
